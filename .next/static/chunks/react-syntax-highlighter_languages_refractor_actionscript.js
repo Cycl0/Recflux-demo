@@ -1,0 +1,22 @@
+"use strict";
+/*
+ * ATTENTION: An "eval-source-map" devtool has been used.
+ * This devtool is neither made for production nor for readable output files.
+ * It uses "eval()" calls to create a separate source file with attached SourceMaps in the browser devtools.
+ * If you are trying to read the output file, select a different devtool (https://webpack.js.org/configuration/devtool/)
+ * or disable the default devtool with "devtool: false".
+ * If you are looking for production-ready output files, see mode: "production" (https://webpack.js.org/configuration/mode/).
+ */
+(self["webpackChunk_N_E"] = self["webpackChunk_N_E"] || []).push([["react-syntax-highlighter_languages_refractor_actionscript"],{
+
+/***/ "(app-pages-browser)/./node_modules/refractor/lang/actionscript.js":
+/*!*****************************************************!*\
+  !*** ./node_modules/refractor/lang/actionscript.js ***!
+  \*****************************************************/
+/***/ (function(module, __unused_webpack_exports, __webpack_require__) {
+
+eval(__webpack_require__.ts("\n\nmodule.exports = actionscript\nactionscript.displayName = 'actionscript'\nactionscript.aliases = []\nfunction actionscript(Prism) {\n  Prism.languages.actionscript = Prism.languages.extend('javascript', {\n    keyword:\n      /\\b(?:as|break|case|catch|class|const|default|delete|do|dynamic|each|else|extends|final|finally|for|function|get|if|implements|import|in|include|instanceof|interface|internal|is|namespace|native|new|null|override|package|private|protected|public|return|set|static|super|switch|this|throw|try|typeof|use|var|void|while|with)\\b/,\n    operator: /\\+\\+|--|(?:[+\\-*\\/%^]|&&?|\\|\\|?|<<?|>>?>?|[!=]=?)=?|[~?@]/\n  })\n  Prism.languages.actionscript['class-name'].alias = 'function' // doesn't work with AS because AS is too complex\n  delete Prism.languages.actionscript['parameter']\n  delete Prism.languages.actionscript['literal-property']\n  if (Prism.languages.markup) {\n    Prism.languages.insertBefore('actionscript', 'string', {\n      xml: {\n        pattern:\n          /(^|[^.])<\\/?\\w+(?:\\s+[^\\s>\\/=]+=(\"|')(?:\\\\[\\s\\S]|(?!\\2)[^\\\\])*\\2)*\\s*\\/?>/,\n        lookbehind: true,\n        inside: Prism.languages.markup\n      }\n    })\n  }\n}\n//# sourceURL=[module]\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiKGFwcC1wYWdlcy1icm93c2VyKS8uL25vZGVfbW9kdWxlcy9yZWZyYWN0b3IvbGFuZy9hY3Rpb25zY3JpcHQuanMiLCJtYXBwaW5ncyI6IkFBQVk7O0FBRVo7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBLEdBQUc7QUFDSDtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0EsS0FBSztBQUNMO0FBQ0EiLCJzb3VyY2VzIjpbIndlYnBhY2s6Ly9fTl9FLy4vbm9kZV9tb2R1bGVzL3JlZnJhY3Rvci9sYW5nL2FjdGlvbnNjcmlwdC5qcz8yYzIzIl0sInNvdXJjZXNDb250ZW50IjpbIid1c2Ugc3RyaWN0J1xuXG5tb2R1bGUuZXhwb3J0cyA9IGFjdGlvbnNjcmlwdFxuYWN0aW9uc2NyaXB0LmRpc3BsYXlOYW1lID0gJ2FjdGlvbnNjcmlwdCdcbmFjdGlvbnNjcmlwdC5hbGlhc2VzID0gW11cbmZ1bmN0aW9uIGFjdGlvbnNjcmlwdChQcmlzbSkge1xuICBQcmlzbS5sYW5ndWFnZXMuYWN0aW9uc2NyaXB0ID0gUHJpc20ubGFuZ3VhZ2VzLmV4dGVuZCgnamF2YXNjcmlwdCcsIHtcbiAgICBrZXl3b3JkOlxuICAgICAgL1xcYig/OmFzfGJyZWFrfGNhc2V8Y2F0Y2h8Y2xhc3N8Y29uc3R8ZGVmYXVsdHxkZWxldGV8ZG98ZHluYW1pY3xlYWNofGVsc2V8ZXh0ZW5kc3xmaW5hbHxmaW5hbGx5fGZvcnxmdW5jdGlvbnxnZXR8aWZ8aW1wbGVtZW50c3xpbXBvcnR8aW58aW5jbHVkZXxpbnN0YW5jZW9mfGludGVyZmFjZXxpbnRlcm5hbHxpc3xuYW1lc3BhY2V8bmF0aXZlfG5ld3xudWxsfG92ZXJyaWRlfHBhY2thZ2V8cHJpdmF0ZXxwcm90ZWN0ZWR8cHVibGljfHJldHVybnxzZXR8c3RhdGljfHN1cGVyfHN3aXRjaHx0aGlzfHRocm93fHRyeXx0eXBlb2Z8dXNlfHZhcnx2b2lkfHdoaWxlfHdpdGgpXFxiLyxcbiAgICBvcGVyYXRvcjogL1xcK1xcK3wtLXwoPzpbK1xcLSpcXC8lXl18JiY/fFxcfFxcfD98PDw/fD4+Pz4/fFshPV09Pyk9P3xbfj9AXS9cbiAgfSlcbiAgUHJpc20ubGFuZ3VhZ2VzLmFjdGlvbnNjcmlwdFsnY2xhc3MtbmFtZSddLmFsaWFzID0gJ2Z1bmN0aW9uJyAvLyBkb2Vzbid0IHdvcmsgd2l0aCBBUyBiZWNhdXNlIEFTIGlzIHRvbyBjb21wbGV4XG4gIGRlbGV0ZSBQcmlzbS5sYW5ndWFnZXMuYWN0aW9uc2NyaXB0WydwYXJhbWV0ZXInXVxuICBkZWxldGUgUHJpc20ubGFuZ3VhZ2VzLmFjdGlvbnNjcmlwdFsnbGl0ZXJhbC1wcm9wZXJ0eSddXG4gIGlmIChQcmlzbS5sYW5ndWFnZXMubWFya3VwKSB7XG4gICAgUHJpc20ubGFuZ3VhZ2VzLmluc2VydEJlZm9yZSgnYWN0aW9uc2NyaXB0JywgJ3N0cmluZycsIHtcbiAgICAgIHhtbDoge1xuICAgICAgICBwYXR0ZXJuOlxuICAgICAgICAgIC8oXnxbXi5dKTxcXC8/XFx3Kyg/OlxccytbXlxccz5cXC89XSs9KFwifCcpKD86XFxcXFtcXHNcXFNdfCg/IVxcMilbXlxcXFxdKSpcXDIpKlxccypcXC8/Pi8sXG4gICAgICAgIGxvb2tiZWhpbmQ6IHRydWUsXG4gICAgICAgIGluc2lkZTogUHJpc20ubGFuZ3VhZ2VzLm1hcmt1cFxuICAgICAgfVxuICAgIH0pXG4gIH1cbn1cbiJdLCJuYW1lcyI6W10sInNvdXJjZVJvb3QiOiIifQ==\n//# sourceURL=webpack-internal:///(app-pages-browser)/./node_modules/refractor/lang/actionscript.js\n"));
+
+/***/ })
+
+}]);

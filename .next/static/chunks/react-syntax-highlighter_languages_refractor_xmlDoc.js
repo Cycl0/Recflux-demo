@@ -1,0 +1,22 @@
+"use strict";
+/*
+ * ATTENTION: An "eval-source-map" devtool has been used.
+ * This devtool is neither made for production nor for readable output files.
+ * It uses "eval()" calls to create a separate source file with attached SourceMaps in the browser devtools.
+ * If you are trying to read the output file, select a different devtool (https://webpack.js.org/configuration/devtool/)
+ * or disable the default devtool with "devtool: false".
+ * If you are looking for production-ready output files, see mode: "production" (https://webpack.js.org/configuration/mode/).
+ */
+(self["webpackChunk_N_E"] = self["webpackChunk_N_E"] || []).push([["react-syntax-highlighter_languages_refractor_xmlDoc"],{
+
+/***/ "(app-pages-browser)/./node_modules/refractor/lang/xml-doc.js":
+/*!************************************************!*\
+  !*** ./node_modules/refractor/lang/xml-doc.js ***!
+  \************************************************/
+/***/ (function(module, __unused_webpack_exports, __webpack_require__) {
+
+eval(__webpack_require__.ts("\n\nmodule.exports = xmlDoc\nxmlDoc.displayName = 'xmlDoc'\nxmlDoc.aliases = []\nfunction xmlDoc(Prism) {\n  ;(function (Prism) {\n    /**\n     * If the given language is present, it will insert the given doc comment grammar token into it.\n     *\n     * @param {string} lang\n     * @param {any} docComment\n     */\n    function insertDocComment(lang, docComment) {\n      if (Prism.languages[lang]) {\n        Prism.languages.insertBefore(lang, 'comment', {\n          'doc-comment': docComment\n        })\n      }\n    }\n    var tag = Prism.languages.markup.tag\n    var slashDocComment = {\n      pattern: /\\/\\/\\/.*/,\n      greedy: true,\n      alias: 'comment',\n      inside: {\n        tag: tag\n      }\n    }\n    var tickDocComment = {\n      pattern: /'''.*/,\n      greedy: true,\n      alias: 'comment',\n      inside: {\n        tag: tag\n      }\n    }\n    insertDocComment('csharp', slashDocComment)\n    insertDocComment('fsharp', slashDocComment)\n    insertDocComment('vbnet', tickDocComment)\n  })(Prism)\n}\n//# sourceURL=[module]\n//# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJmaWxlIjoiKGFwcC1wYWdlcy1icm93c2VyKS8uL25vZGVfbW9kdWxlcy9yZWZyYWN0b3IvbGFuZy94bWwtZG9jLmpzIiwibWFwcGluZ3MiOiJBQUFZOztBQUVaO0FBQ0E7QUFDQTtBQUNBO0FBQ0EsR0FBRztBQUNIO0FBQ0E7QUFDQTtBQUNBLGVBQWUsUUFBUTtBQUN2QixlQUFlLEtBQUs7QUFDcEI7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBLFNBQVM7QUFDVDtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBO0FBQ0E7QUFDQTtBQUNBLEdBQUc7QUFDSCIsInNvdXJjZXMiOlsid2VicGFjazovL19OX0UvLi9ub2RlX21vZHVsZXMvcmVmcmFjdG9yL2xhbmcveG1sLWRvYy5qcz9hYmQ0Il0sInNvdXJjZXNDb250ZW50IjpbIid1c2Ugc3RyaWN0J1xuXG5tb2R1bGUuZXhwb3J0cyA9IHhtbERvY1xueG1sRG9jLmRpc3BsYXlOYW1lID0gJ3htbERvYydcbnhtbERvYy5hbGlhc2VzID0gW11cbmZ1bmN0aW9uIHhtbERvYyhQcmlzbSkge1xuICA7KGZ1bmN0aW9uIChQcmlzbSkge1xuICAgIC8qKlxuICAgICAqIElmIHRoZSBnaXZlbiBsYW5ndWFnZSBpcyBwcmVzZW50LCBpdCB3aWxsIGluc2VydCB0aGUgZ2l2ZW4gZG9jIGNvbW1lbnQgZ3JhbW1hciB0b2tlbiBpbnRvIGl0LlxuICAgICAqXG4gICAgICogQHBhcmFtIHtzdHJpbmd9IGxhbmdcbiAgICAgKiBAcGFyYW0ge2FueX0gZG9jQ29tbWVudFxuICAgICAqL1xuICAgIGZ1bmN0aW9uIGluc2VydERvY0NvbW1lbnQobGFuZywgZG9jQ29tbWVudCkge1xuICAgICAgaWYgKFByaXNtLmxhbmd1YWdlc1tsYW5nXSkge1xuICAgICAgICBQcmlzbS5sYW5ndWFnZXMuaW5zZXJ0QmVmb3JlKGxhbmcsICdjb21tZW50Jywge1xuICAgICAgICAgICdkb2MtY29tbWVudCc6IGRvY0NvbW1lbnRcbiAgICAgICAgfSlcbiAgICAgIH1cbiAgICB9XG4gICAgdmFyIHRhZyA9IFByaXNtLmxhbmd1YWdlcy5tYXJrdXAudGFnXG4gICAgdmFyIHNsYXNoRG9jQ29tbWVudCA9IHtcbiAgICAgIHBhdHRlcm46IC9cXC9cXC9cXC8uKi8sXG4gICAgICBncmVlZHk6IHRydWUsXG4gICAgICBhbGlhczogJ2NvbW1lbnQnLFxuICAgICAgaW5zaWRlOiB7XG4gICAgICAgIHRhZzogdGFnXG4gICAgICB9XG4gICAgfVxuICAgIHZhciB0aWNrRG9jQ29tbWVudCA9IHtcbiAgICAgIHBhdHRlcm46IC8nJycuKi8sXG4gICAgICBncmVlZHk6IHRydWUsXG4gICAgICBhbGlhczogJ2NvbW1lbnQnLFxuICAgICAgaW5zaWRlOiB7XG4gICAgICAgIHRhZzogdGFnXG4gICAgICB9XG4gICAgfVxuICAgIGluc2VydERvY0NvbW1lbnQoJ2NzaGFycCcsIHNsYXNoRG9jQ29tbWVudClcbiAgICBpbnNlcnREb2NDb21tZW50KCdmc2hhcnAnLCBzbGFzaERvY0NvbW1lbnQpXG4gICAgaW5zZXJ0RG9jQ29tbWVudCgndmJuZXQnLCB0aWNrRG9jQ29tbWVudClcbiAgfSkoUHJpc20pXG59XG4iXSwibmFtZXMiOltdLCJzb3VyY2VSb290IjoiIn0=\n//# sourceURL=webpack-internal:///(app-pages-browser)/./node_modules/refractor/lang/xml-doc.js\n"));
+
+/***/ })
+
+}]);

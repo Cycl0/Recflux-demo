@@ -1,0 +1,184 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 214, 219, 220;
+  --background-end-rgb: 255, 255, 255;
+  --blue: #60efff;
+  --green: #00ff87;
+  --dark-blue: #0048ff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  width: 100%;
+  max-width: 100vw;
+  overflow-x: hidden;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+@layer components {
+  /* shadow */
+  .shadow-gradient {
+    @apply relative;
+  }
+  .shadow-gradient::before {
+    content: "";
+    @apply absolute -z-10 inset-0 bg-gradient-to-br from-[var(--blue)] to-[var(--green)] scale-90 blur-xl opacity-70 transition-opacity duration-300 rounded-lg;
+    transform: translate3d(0px, 20px, 0);
+  }
+  .shadow-gradient::after {
+    content: "";
+    @apply absolute -z-10 inset-0 bg-inherit rounded-lg;
+  }
+
+  /* shadow 2*/
+  .shadow-gradient-2 {
+    @apply relative;
+  }
+  .shadow-gradient-2::before {
+    content: "";
+    @apply absolute -z-10 inset-0 bg-gradient-to-br from-[var(--blue)] to-[var(--green)] scale-90 blur-xl opacity-70 transition-opacity duration-300 rounded-lg;
+    transform: translate3d(0px, 20px, 0);
+    opacity: 0.15;
+  }
+  .shadow-gradient-2::after {
+    content: "";
+    @apply absolute -z-10 inset-0 bg-inherit rounded-lg;
+  }
+
+  /* bubble animation on click*/
+  .bubble-animation {
+    position: relative;
+    overflow: hidden;
+  }
+  .bubble-animation::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+   background: rgb(186,251,255);
+    border-radius: 50%;
+    transform: translate(-50%, -50%);
+    transition: width 1s ease, height 1s ease;
+  }
+  .bubble-animation.clicked {
+    outline: none;
+  }
+  .bubble-animation.clicked::before {
+    width: 300%;
+    height: 300%;
+  }
+
+
+  /* input box */
+  /* Chrome, Safari */
+  select::-webkit-scrollbar {
+    @apply w-2;
+  }
+  select::-webkit-scrollbar-track {
+    @apply bg-blue-200;
+  }
+  select::-webkit-scrollbar-thumb {
+    @apply bg-blue-500 rounded-full;
+  }
+  /* Firefox */
+  select {
+    scrollbar-width: thin;
+    scrollbar-color: theme('colors.blue.500') theme('colors.blue.200');
+  }
+
+  /* animated underline*/
+  .underline-slide {
+    position: relative;
+    display: inline-block; /* Ensure the element can have an underline */
+    padding-bottom: 4px; /* Space between text and underline */
+  }
+  .underline-slide::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 48px; /* Position underline at the bottom of the element */
+    height: 1px; /* Adjust the height of the underline */
+    background-image: linear-gradient(
+      45deg,
+      #e0fffb 0%,
+      #60efff 10%,
+      #00ff87 20%,
+      #00e67e 30%,
+      #00cc75 40%,
+      #00ff87 50%,
+      #60efff 60%,
+      #e0fffb 70%,
+      #60efff 80%,
+      #00ff87 90%,
+      #00e67e 100%
+    );
+    background-size: 200% 200%;
+    animation: slideShineUnderline 10s linear infinite;
+  }
+  @keyframes slideShineUnderline {
+    from {
+      background-position: 200% 0;
+    }
+    to {
+      background-position: -200% 0;
+    }
+  }
+}
+
+#content {
+  color: rgb(var(--foreground-rgb));
+  background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(223,246,255,0.2) 45%, rgba(238,238,238,0.2) 100%);;
+}
+
+/* Icon send */
+.blue-polygon {
+  fill: #5EBAE7;
+}
+
+.dark-blue-polygon {
+  fill: #36A9E1;
+}
+
+.white-rect {
+  fill: #FFFFFF;
+}
+
+.black-path {
+  fill: #1D1D1B;
+}
+
+/* Video background */
+
+.video-background {
+  position: fixed;
+  right: 0;
+  bottom: 0;
+  min-width: 100%;
+  min-height: 100%;
+  width: auto;
+  height: auto;
+  z-index: -1;
+  overflow: hidden;
+}
+video {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  object-fit: cover;
+  width: 100%;
+  height: 100%;
+}
