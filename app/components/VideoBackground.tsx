@@ -8,7 +8,7 @@ const VideoBackground = () => {
               loop
               autoPlay
             >
-              <source src="/particles_blue.mp4" type="video/mp4" />
+              <source src="/particles-blue.mp4" type="video/mp4" />
               Your browser does not support the video tag.
             </video>
     </div>
