@@ -1,4 +1,7 @@
 {
+  "resolutions": {
+    "react": "^18.2.0"
+  },
   "name": "nextjs-13-replit",
   "version": "0.1.0",
   "private": true,
@@ -14,7 +17,6 @@
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^5.15.3",
     "@mui/material": "^5.15.3",
-    "@mui/styles": "^5.15.3",
     "@savvywombat/tailwindcss-grid-areas": "^4.0.0",
     "apexcharts": "^3.45.1",
     "chroma-js": "^2.4.2",

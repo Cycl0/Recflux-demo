@@ -10,9 +10,9 @@ export default function InputBoxLayout({ nextImageHandler }) {
   const handleSelectChange = (event) => {
     const value = event.target.value;
     if (value === '1') {
-      setPlaceholder('Gere um template para um e-commerce');
+      setPlaceholder('Ex. Gere um template para um e-commerce');
     } else if (value === '2') {
-      setPlaceholder('Troque o verde por azul');
+      setPlaceholder('Ex. Troque o verde por azul');
     }
   };
 
