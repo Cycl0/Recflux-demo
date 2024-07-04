@@ -6,7 +6,6 @@ const IconSend = ({ className }) => (
           <svg 
             xmlns="http://www.w3.org/2000/svg" 
             viewBox="0 0 512.001 512.001" 
-            style={{enableBackground: 'new 0 0 512.001 512.001'}} 
             xmlSpace="preserve"
             width="28" // You can adjust the size as needed
             height="28"

@@ -3,7 +3,7 @@
 import InputBox from "@/components/InputBox";
 import CodeSection from "@/components/CodeSection";
 import VideoBackground from '@/components/VideoBackground';
-import { useState, Suspense } from "react";
+import { useState } from "react";
 
 export default function Home() {
   const [index, setIndex] = useState(-1);
@@ -14,9 +14,7 @@ export default function Home() {
   
   return (
     <main className="p-36">
-      <Suspense fallback={<p>Loading video...</p>}>
-        <VideoBackground />
-      </Suspense>
+      <VideoBackground />
       <div id="content" className={`flex min-h-screen flex-col items-center justify-between p-12 backdrop-blur-xl opacity-[99%] shadow-gradient-2 rounded-md`}>
         <InputBox nextImageHandler={nextImageHandler} />
         {(index >  -1) && <CodeSection index={index} />}
