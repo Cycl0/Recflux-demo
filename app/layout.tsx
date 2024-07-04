@@ -1,6 +1,6 @@
 import type { Metadata } from 'next'
 import { Inter } from 'next/font/google'
-import Head from 'next/head'
+import Script from 'next/script'
 import './globals.css'
 
 const inter = Inter({ subsets: ['latin'] })
@@ -17,11 +17,18 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <Head>
-        <link href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" rel="stylesheet" />
-      </Head>
-      <body className={inter.className}>{children}
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.js"></script>
+      <head>
+        <link 
+          href="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.css" 
+          rel="stylesheet" 
+        />
+      </head>
+      <body className={inter.className}>
+        {children}
+        <Script 
+          src="https://cdnjs.cloudflare.com/ajax/libs/flowbite/2.3.0/flowbite.min.js"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   )
