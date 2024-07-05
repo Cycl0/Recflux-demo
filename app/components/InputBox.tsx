@@ -38,7 +38,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
             className="appearance-none text-blue-700 border-green-100 ring-1 ring-blue-100 bg-blue-100 block w-full p-2.5 pr-8 border-r border-white/20 transition-colors duration-300 ease-in-out uppercase rounded-tl-md"
             onChange={handleSelectChange}
           >
-            <option value="1" defaultValue>Gerar</option>
+            <option value="1">Gerar</option>
             <option value="2">Editar</option>
           </select>
         </div>
