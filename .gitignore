@@ -24,3 +24,46 @@ package-lock.json
 yarn.lock
 
 commit.sh
+
+# Next.js build output
+.next
+
+# Next.js cache
+.next/cache
+
+# Webpack build files
+.next/static/webpack
+
+# Hot reload files
+.next/static/webpack/*.hot-update.*
+
+# Build manifest
+.next/build-manifest.json
+
+# Fallback build manifest
+.next/fallback-build-manifest.json
+
+# Server files
+.next/server
+
+# Static chunks
+.next/static/chunks
+
+# Development files
+.next/static/development
+
+# CSS files (if you want to version control these, remove this line)
+.next/static/css
+
+# Pages manifest
+.next/server/pages-manifest.json
+
+# Server reference manifest
+.next/server/server-reference-manifest.js
+.next/server/server-reference-manifest.json
+
+# Webpack runtime
+.next/server/webpack-runtime.js
+
+# Vendor chunks
+.next/server/vendor-chunks
