@@ -58,11 +58,11 @@ export default function InputBoxLayout({ nextImageHandler }) {
             <button
               type="button"
               onClick={handleSubmit}
-              className={`w-12 h-full bubble-animation p-2.5 font-medium h-full text-white bg-blue-300 rounded-tr-md border border-blue-300 hover:bg-green-200 hover:border-white hover:ring-2 hover:outline-none hover:ring-green-400 transition-all duration-1000 ease-in-out hover:scale-[105%] group transform-gpu hover:z-20 focus:z-20 ${
+              className={`w-12 h-full bubble-animation p-2.5 font-medium h-full text-white bg-blue-300 rounded-tr-md border border-blue-300 hover:bg-green-200 hover:border-white hover:outline-none transition-all duration-1000 ease-in-out hover:scale-[105%] group transform-gpu hover:z-20 focus:z-20 ${
                 isClicked ? 'clicked' : ''
               }`}
             >
-              <IconSend className="relative transition-transform duration-2000 ease-in-out group-hover:scale-110" />
+              <IconSend className="relative transition-transform duration-2000 ease-in-out -rotate-90 group-hover:rotate-90" />
             </button>
           </div>
         </div>
