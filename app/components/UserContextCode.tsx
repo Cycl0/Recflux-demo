@@ -17,11 +17,12 @@ export default function UserContextCode() {
       return (
         <Accordion>
           <AccordionSummary
+            className={`w-56 h-12 bg-blue-400 text-white rounded-md flex items-center justify-center uppercase`}
             expandIcon={<ExpandMoreIcon />}
             aria-controls="panel1-content"
             id="panel1-header"
           >
-            Accordion 1
+            Código do usuário
           </AccordionSummary>
           <AccordionDetails>
             <MonacoEditor/>

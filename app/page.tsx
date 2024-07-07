@@ -16,7 +16,7 @@ export default function Home() {
   return (
     <main className="p-36">
       <VideoBackground />
-      <div id="content" className={`flex min-h-screen flex-col items-center justify-between p-12 backdrop-blur-xl opacity-[99%] shadow-gradient-2 rounded-md`}>
+      <div id="content" className={`min-h-screen items-center justify-between p-12 backdrop-blur-xl opacity-[99%] shadow-gradient-2 rounded-md`}>
         <InputBox nextImageHandler={nextImageHandler} />
         <UserContextCode />
         {(index >  -1) && <CodeSection index={index} />}

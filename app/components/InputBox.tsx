@@ -13,6 +13,8 @@ export default function InputBoxLayout({ nextImageHandler }) {
       setPlaceholder('Ex. Template para um e-commerce');
     } else if (value === '2') {
       setPlaceholder('Ex. Troque o verde por azul');
+    } else if (value === '3') {
+      setPlaceholder('Ex. Apenas o primeiro componente');
     }
   };
 
@@ -41,6 +43,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
           >
             <option value="1">Gerar</option>
             <option value="2">Editar</option>
+            <option value="3">Visualizar</option>
           </select>
         </div>
         <div className="h-full grid-in-input relative">
@@ -49,7 +52,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
               type="search"
               id="search-dropdown"
               className="flex-grow h-full block p-2.5 text-blue-600 focus:outline-none border-none bg-blue-200 placeholder-white transition-colors duration-300 ease-in-out uppercase font-bold hover:z-20 focus:z-20"
-               placeholder={placeholder /* `Gere um template para um e-commerce`(GERAR) ou `Troque o verde por azul`(EDITAR) */}
+               placeholder={placeholder /* `Gere um template para um e-commerce`(GERAR), `Troque o verde por azul`(EDITAR) ou Ex. Apenas o primeiro componente (VISUALIZAR)*/}
               required
             />
             <button
