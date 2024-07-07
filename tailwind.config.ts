@@ -48,14 +48,14 @@ const config: Config = {
       },
       gridTemplateAreas: {
         'inputBoxLayout': [
-          'select input input',
+          'select input input input',
         ],
         'codeSectionLayout': [
           'codeSection codeSection codeSection',
         ],
       },
       gridTemplateColumns: {
-        'inputBoxLayout': 'repeat(3,1fr)',
+        'inputBoxLayout': 'repeat(4,1fr)',
         'codeSectionLayout': 'repeat(3,1fr)',
       },
       gridTemplateRows: {

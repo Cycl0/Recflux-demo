@@ -102,7 +102,6 @@ html {
   .underline-slide {
     position: relative;
     display: inline-block; /* Ensure the element can have an underline */
-    padding-bottom: 4px; /* Space between text and underline */
   }
   .underline-slide::after {
     content: '';
