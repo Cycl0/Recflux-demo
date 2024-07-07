@@ -1,8 +1,10 @@
 "use client";
+
+import { useEffect, useState } from "react";
 import Image from 'next/image';
 import { CopyBlock, nord } from "react-code-blocks";
 import { FlipTilt } from 'react-flip-tilt';
-import { useEffect, useState } from "react";
+import Modal from "@/components/Modal";
 
 export default function CodeSection({ index }) {
   index %= 6;
@@ -46,18 +48,11 @@ export default function CodeSection({ index }) {
   };
 
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isModalVisible, setIsModalVisible] = useState(false);
 
   const toggleModal = () => {
-    if (isModalOpen) {
-      setIsModalVisible(false);
-      setTimeout(() => setIsModalOpen(false), 500);
-    } else {
-      setIsModalOpen(true);
-      setTimeout(() => setIsModalVisible(true), 50);
-    }
-  };
-
+    setIsModalOpen(!isModalOpen);
+  }
+  
   return (
     <div className={`max-w-full flex flex-col items-center justify-center mt-20`}>
         <div className={`relative`}>
@@ -107,33 +102,11 @@ export default function CodeSection({ index }) {
           />
         )}
       </div>
-      {isModalOpen && (
-        <div 
-          className={`fixed inset-0 bg-black z-50 flex items-center justify-center transition-opacity duration-500 ease-in-out ${
-            isModalVisible ? 'opacity-100' : 'opacity-0'
-          }`}
-          onClick={toggleModal}
-          style={{
-            width: '100vw',
-            height: '100vh',
-            overflow: 'hidden'
-          }}
-        >
-          <div 
-            className={`relative w-full h-full transition-transform duration-300 ease-in-out ${
-              isModalVisible ? 'scale-100' : 'scale-[40%]'
-            }`}
-          >
-            <Image
-              src={demoImage[index]}
-              alt="Demo image"
-              layout="fill"
-              objectFit="cover"
-              quality={100}
-            />
-          </div>
-        </div>
-      )}
+      <Modal 
+        isOpen={isModalOpen}
+        onClose={toggleModal}
+        imageSrc={demoImage[index]}
+      />
       </div>
       );
       }

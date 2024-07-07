@@ -1,9 +1,9 @@
 "use client";
 
+import { useState } from "react";
 import InputBox from "@/components/InputBox";
 import CodeSection from "@/components/CodeSection";
 import VideoBackground from '@/components/VideoBackground';
-import { useState } from "react";
 
 export default function Home() {
   const [index, setIndex] = useState(-1);
