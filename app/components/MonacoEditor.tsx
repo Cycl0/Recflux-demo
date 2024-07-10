@@ -33,7 +33,7 @@ const MonacoEditor: React.FC = () => {
       width="400px"
       height="600px"
       defaultLanguage="javascript"
-      defaultValue="// Digite aqui o código relevante para servir como contexto (se houver)"
+      defaultValue="// Digite aqui o código relevante ao contexto (se houver)"
       theme="vitesse-dark"
       onMount={handleEditorDidMount}
     />
