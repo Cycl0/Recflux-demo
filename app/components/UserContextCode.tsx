@@ -18,17 +18,17 @@ export default function UserContextCode() {
       return (
         <Accordion
           style={{ background: 'transparent' }}
-          className={`transparent-bg shadow-none border-none rounded-none flex justify-center`}>
+          className={`z-10 absolute w-full transparent-bg shadow-none border-none rounded-none`}>
           <AccordionSummary
-            className={`w-24 h-12 bg-blue-400 text-white rounded-md flex justify-center uppercase`}
+            className={`w-1/2 left-1/2 max-h-8 bg-[rgba(193,219,253,0.15)] text-white rounded-md uppercase flex justify-between p-1.5`}
             expandIcon={<ExpandMoreIcon />}
             aria-controls="panel1-content"
             id="panel1-header"
           >
-            <DataObjectIcon />
+            <DataObjectIcon className={`justify-self-center`} />
           </AccordionSummary>
           <AccordionDetails
-            className={`flex justify-center`}>
+            className={`absolute p-0 left-1/3 -translate-x-1/3 w-screen`}>
             <MonacoEditor/>
           </AccordionDetails>
         </Accordion>

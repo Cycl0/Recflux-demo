@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Image from 'next/image';
 import { CopyBlock, nord } from "react-code-blocks";
 import { FlipTilt } from 'react-flip-tilt';
 import Modal from "@/components/Modal";
+import { Highlight } from "@mui/icons-material";
 
-export default function CodeSection({ index }) {
+export default function GeneratedSection({ index }) {
   index %= 6;
   const [demoCodeHTML, setDemoCodeHTML] = useState([]);
   const [demoSVG, setDemoSVG] = useState([]);
@@ -54,7 +54,7 @@ export default function CodeSection({ index }) {
   }
   
   return (
-    <div className={`max-w-full flex flex-col items-center justify-center mt-20`}>
+    <div className={`max-w-full flex flex-col items-center justify-center mt-32`}>
         <div className={`relative`}>
           <div className={`absolute -top-6 -left-6 w-1/3 h-1/3 border-t-2 border-l-2 border-blue-400`} />
           <div className={`absolute -bottom-6 -right-6 w-1/3 h-1/3 border-b-2 border-r-2 border-green-400`} />
@@ -76,7 +76,8 @@ export default function CodeSection({ index }) {
             showLineNumbers={true}
             wrapLongLines={true}
             theme={nord}
-            codeBlock
+            highlight={""/*highlight[index]*/}
+            codeBlock={true}
           />
         )}
         {demoCodeCSS[index] && (
@@ -87,18 +88,20 @@ export default function CodeSection({ index }) {
             showLineNumbers={true}
             wrapLongLines={true}
             theme={nord}
-            codeBlock
+            highlight={""/*highlight[index]*/}
+            codeBlock={true}
           />
         )}
         {demoSVG[index] && (
           <CopyBlock
             customStyle={customStyle}
-            language="javascript"
+            language="xml"
             text={demoSVG[index]}
             showLineNumbers={true}
             wrapLongLines={true}
             theme={nord}
-            codeBlock
+            highlight={""/*highlight[index]*/}
+            codeBlock={true}
           />
         )}
       </div>

@@ -139,7 +139,7 @@ html {
 
 #content {
   color: rgb(var(--foreground-rgb));
-  background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(223,246,255,0.2) 45%, rgba(238,238,238,0.2) 100%);;
+  /* background: radial-gradient(circle, rgba(255,255,255,0.2) 0%, rgba(223,246,255,0.2) 45%, rgba(238,238,238,0.2) 100%); */
 }
 
 /* Icon send */

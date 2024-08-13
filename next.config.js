@@ -13,7 +13,7 @@ const nextConfig = {
     // client
     config.plugins.push(
       new MonacoWebpackPlugin({
-        languages: ['javascript', 'typescript', 'vue'],
+        languages: ['javascript', 'html', 'css'],
         filename: 'static/[name].worker.js',
       })
     );

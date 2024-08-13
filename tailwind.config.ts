@@ -48,18 +48,21 @@ const config: Config = {
       },
       gridTemplateAreas: {
         'inputBoxLayout': [
-          'select input input input',
+          'select select input input input input input input',
+          '.      button .     .     .     .     .     .    ',
+          '.      .      files files files files files .    ',
+          'code   code   code  code  code  code  code  code '
         ],
         'codeSectionLayout': [
           'codeSection codeSection codeSection',
         ],
       },
       gridTemplateColumns: {
-        'inputBoxLayout': 'repeat(4,1fr)',
+        'inputBoxLayout': 'repeat(8,1fr)',
         'codeSectionLayout': 'repeat(3,1fr)',
       },
       gridTemplateRows: {
-        'inputBoxLayout': `1fr`,
+        'inputBoxLayout': `repeat(3,1fr) 600px`,
         'codeSectionLayout': `1fr`,
       },
       backgroundImage: {

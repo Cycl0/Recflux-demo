@@ -1,42 +1,72 @@
-import React, { useEffect, useRef } from 'react';
-import { createHighlighter } from 'shiki';
-import { shikiToMonaco } from '@shikijs/monaco';
-import * as monaco from 'monaco-editor-core';
-import { Editor } from '@monaco-editor/react';
+import React, { useState, useEffect, useRef } from "react";
 
-const MonacoEditor: React.FC = () => {
-  const editorRef = useRef<any>(null);
+import Editor from "@monaco-editor/react";
+import files from "@/utils/files-editor";
+
+function MonacoEditor() {
+  const editorRef = useRef(null);
+  const [fileName, setFileName] = useState("index.html");
+
+  const file = files[fileName];
 
   useEffect(() => {
-    const initializeEditor = async () => {
-      const highlighter = await createHighlighter({
-        themes: ['vitesse-dark', 'vitesse-light'],
-        langs: ['javascript', 'typescript', 'vue', 'jsx'],
-      });
-
-      monaco.languages.register({ id: 'vue' });
-      monaco.languages.register({ id: 'typescript' });
-      monaco.languages.register({ id: 'javascript' });
-
-      shikiToMonaco(highlighter, monaco);
-    };
-
-    initializeEditor();
-  }, []);
-
-  const handleEditorDidMount = (editor: any, monacoInstance: any) => {
-    editorRef.current = editor;
-  };
+    editorRef.current?.focus();
+  }, [file.name]);
 
   return (
-    <Editor
-      width="400px"
-      height="600px"
-      defaultLanguage="javascript"
-      defaultValue="// Digite aqui o código relevante ao contexto (se houver)"
-      theme="vitesse-dark"
-      onMount={handleEditorDidMount}
-    />
+    <div className="w-full flex flex-col justify-center items-center">
+      <div className="flex justify-center w-10 z-20 text-white">
+        <button
+          className={`rounded-tl-md p-4 ${fileName === "index.html" ? "bg-white text-green-500" : "bg-[rgba(193,219,253,0.15)]"}`}
+          onClick={(e) => {
+            e.preventDefault();
+            setFileName("index.html");
+          }}
+        >
+          index.html
+        </button>
+        <button
+          className={`p-4 ${fileName === "style.css" ? "bg-white text-green-500" : "bg-[rgba(193,219,253,0.15)]"}`}
+          onClick={(e) => {
+            e.preventDefault();
+            setFileName("style.css");
+          }}
+        >
+          style.css
+        </button>
+        <button
+          className={`p-4 ${fileName === "script.js" ? "bg-white text-green-500" : "bg-[rgba(193,219,253,0.15)]"}`}
+          onClick={(e) => {
+            e.preventDefault();
+            setFileName("script.js");
+          }}
+        >
+          script.js
+        </button>
+        <button
+          className={`rounded-tr-md p-4 ${fileName === "image.svg" ? "bg-white text-green-500" : "bg-[rgba(193,219,253,0.15)]"}`}
+          onClick={(e) => {
+            e.preventDefault();
+            setFileName("image.svg");
+          }}
+        >
+          image.svg
+        </button>
+      </div>
+      <Editor
+        width="49%"
+        height="600px"
+        path={file.name}
+        defaultLanguage={file.language}
+        defaultValue={file.value}
+        onMount={(editor) => (editorRef.current = editor)}
+        options={{
+          minimap: { enabled: true },
+          fontSize: 14,
+          wordWrap: 'on',
+        }}
+      />
+    </div>
   );
 };
 
