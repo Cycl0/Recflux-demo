@@ -15,7 +15,7 @@ export default function Home() {
   return (
     <main className="p-36">
       <VideoBackground />
-      <div id="content" className={`min-h-screen items-center justify-between p-12 backdrop-blur-2xl opacity-[99%] shadow-gradient-2 rounded-md`}>
+      <div id="content" className={`min-h-screen items-center justify-between py-20 px-12 backdrop-blur-2xl opacity-[99%] shadow-gradient-2 rounded-md`}>
         <InputBox nextImageHandler={nextImageHandler} />
         {(index >  -1) && <GeneratedSection index={index} />}
       </div>
