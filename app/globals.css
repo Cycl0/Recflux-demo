@@ -7,7 +7,7 @@
   --background-start-rgb: 214, 219, 220;
   --background-end-rgb: 255, 255, 255;
   --blue: #60efff;
-  --green: #00ff87;
+  --green: #60efa7;
   --dark-blue: #0048ff;
 }
 
@@ -81,6 +81,81 @@ html {
   }
 
 
+  /* Animated neon line left*/
+  .neon-l-shape-left {
+    position: relative;
+    display: inline-block;
+  }
+  .neon-l-shape-left::before,
+  .neon-l-shape-left::after {
+    content: '';
+    position: absolute;
+    background: #00ffff;
+    animation: neonGlow 2s ease-in-out infinite alternate;
+  }
+  .neon-l-shape-left::before {
+    left: -2rem;
+    bottom: 1rem;
+    width: 2px;
+    height: 50%;
+    background: linear-gradient(to bottom, transparent, #00ffff);
+  }
+  .neon-l-shape-left::after {
+    left: -2rem;
+    bottom: 1rem;
+    width: 2rem;
+    height: 2px;
+    background: linear-gradient(to right, #00ffff, transparent);
+  }
+  @keyframes neonGlow {
+    0% {
+      filter: brightness(100%) blur(1px);
+      box-shadow: 0 0 5px var(--green), 0 0 10px var(--green);
+    }
+    100% {
+      filter: brightness(200%) blur(3px);
+      box-shadow: 0 0 10px #00ffff, 0 0 20px var(--green), 0 0 30px var(--green);
+    }
+  }
+
+  /* Animated neon line right*/
+  .neon-l-shape-right {
+    position: relative;
+    display: inline-block;
+  }
+  .neon-l-shape-right::before,
+  .neon-l-shape-right::after {
+    content: '';
+    position: absolute;
+    background: #00ffff;
+    animation: neonGlow 2s ease-in-out infinite alternate;
+  }
+  .neon-l-shape-right::before {
+    right: -2rem;
+    bottom: 1rem;
+    width: 2px;
+    height: 50%;
+    background: linear-gradient(to bottom, transparent, #00ffff);
+  }
+  .neon-l-shape-right::after {
+    right: -2rem;
+    bottom: 1rem;
+    width: 2rem;
+    height: 2px;
+    background: linear-gradient(to right, #00ffff, transparent);
+  }
+  @keyframes neonGlow {
+    0% {
+      filter: brightness(100%) blur(1px);
+      box-shadow: 0 0 5px var(--green), 0 0 10px var(--green);
+    }
+    100% {
+      filter: brightness(200%) blur(3px);
+      box-shadow: 0 0 10px #00ffff, 0 0 20px var(--green), 0 0 30px var(--green);
+    }
+  }
+
+
   /* input box */
   /* Chrome, Safari */
   select::-webkit-scrollbar {
@@ -114,15 +189,16 @@ html {
       45deg,
       #e0fffb 0%,
       #60efff 10%,
-      #00ff87 20%,
-      #00e67e 30%,
-      #00cc75 40%,
-      #00ff87 50%,
-      #60efff 60%,
+      #00ffff 20%,
+      #00e6ff 30%,
+      #00ccff 40%,
+      #00aeff 50%,
+      #009dff 60%,
       #e0fffb 70%,
       #60efff 80%,
-      #00ff87 90%,
-      #00e67e 100%
+      var(--green) 90%,
+      #00e6ff 95%,
+      #e0fffb 100%,
     );
     background-size: 200% 200%;
     animation: slideShineUnderline 10s linear infinite;

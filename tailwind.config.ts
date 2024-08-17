@@ -16,6 +16,10 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      width: {
+        100: '25rem',
+        104: '26rem',
+      },
       colors: {
         'blue': {  
           0: '#f0feff',
@@ -46,23 +50,36 @@ const config: Config = {
           1000: '#006634',
         },
       },
+      zIndex: {
+        'auto': 'auto',
+        'negative': '-1',
+        '0': '0',
+      },
       gridTemplateAreas: {
         'inputBoxLayout': [
-          'select select input input input input input input',
-          '.      button .     .     .     .     .     .    ',
-          '.      .      files files files files files .    ',
-          'code   code   code  code  code  code  code  code '
+          '.     select select  input input',
+          '.      .      button .     .    ',
+          '.      .      .      files .    ',
+          '.      .      .      code  code '
         ],
-        'codeSectionLayout': [
+       'inputBoxSideLayout': [
+          '.     select  select  input input',
+          '.     .       button  .     .    ',
+          'files files   .       .     .    ',
+          'code  code    .       .     .    '
+       ],
+      'codeSectionLayout': [
           'codeSection codeSection codeSection',
         ],
       },
       gridTemplateColumns: {
-        'inputBoxLayout': 'repeat(8,1fr)',
+        'inputBoxLayout': '4fr 1fr 1fr 6fr 1fr',
+        'inputBoxSideLayout': '4fr 1fr 1fr 6fr 1fr',
         'codeSectionLayout': 'repeat(3,1fr)',
       },
       gridTemplateRows: {
         'inputBoxLayout': `repeat(3,1fr) 600px`,
+        'inputBoxSideLayout': `repeat(3,1fr) 600px`,
         'codeSectionLayout': `1fr`,
       },
       backgroundImage: {
