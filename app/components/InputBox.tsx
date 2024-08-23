@@ -10,6 +10,7 @@ import { wrapGrid } from 'animate-css-grid';
 import { throttle } from 'lodash';
 import { useCallback, useState, useEffect, useRef } from "react";
 import Select from 'react-select';
+import TextareaAutosize from 'react-textarea-autosize';
 
 export default function InputBoxLayout({ nextImageHandler }) {
 
@@ -116,10 +117,11 @@ export default function InputBoxLayout({ nextImageHandler }) {
           <div className={`w-full h-12`}>
 
             <div className="h-full relative w-full outline-none flex">
-              <textarea
-                className="w-full flex-grow h-full flex items-center justify-center p-2.5 text-blue-600 focus:outline-none focus:ring-0 border-none bg-blue-200 placeholder-white transition-colors duration-200 ease-in-out uppercase font-bold hover:z-20 focus:z-20"
+              <TextareaAutosize
+                maxRows={4}
+                className="w-full flex-grow min-h-12 flex items-center justify-center pt-4 text-blue-600 text-sm focus:outline-none focus:ring-0 border-none bg-blue-200 placeholder-white transition-colors duration-200 ease-in-out uppercase font-bold hover:z-20 focus:z-20"
                 placeholder={placeholder /* `Ex: Gere um template para um e-commerce`(GERAR), `Ex: Troque o verde por azul`(EDITAR) ou Ex: Apenas o primeiro componente (VISUALIZAR)*/}
-              ></textarea>
+              ></TextareaAutosize>
               <button
                 type="button"
                 onClick={handleGeneration}
