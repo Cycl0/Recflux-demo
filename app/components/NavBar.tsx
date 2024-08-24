@@ -18,7 +18,7 @@ export default function NavBar() {
     className="flex items-center space-x-3 rtl:space-x-reverse"
   >
     <Image
-      src="/images/logo.jpg"
+      src="/images/icon.png"
       width={32}
       height={32}
       className="h-8"
