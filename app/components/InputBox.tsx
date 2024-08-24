@@ -59,18 +59,18 @@ export default function InputBoxLayout({ nextImageHandler }) {
   const editorRef = useRef(null);
   const [editorOpen, setEditorOpen] = useState(false);
   // lodash debounce
-  const debouncedEditorOpen = useCallback(
+  const throttleEditorOpen = useCallback(
     throttle((newMode) => {
       setEditorOpen(newMode);
-    }, 400),
+    }, 1000),
     []
   );
   const [editorSideBarMode, setEditorSideBarMode] = useState(false);
   // lodash debounce
-  const debouncedLayoutChange = useCallback(
+  const throttleLayoutChange = useCallback(
     throttle((newMode) => {
       setEditorSideBarMode(newMode);
-    }, 400),
+    }, 1000),
     []
   );
   const [fileName, setFileName] = useState("index.html");
@@ -142,7 +142,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
         <button
           onClick={(e) => {
             e.preventDefault();
-            debouncedEditorOpen(!editorOpen);
+            throttleEditorOpen(!editorOpen);
           }}
           className={`
                       grid-in-button
@@ -237,7 +237,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
             <button
               onClick={(e) => {
                 e.preventDefault();
-                debouncedLayoutChange(!editorSideBarMode);
+                throttleLayoutChange(!editorSideBarMode);
               }}
               className={`invisible xl:!visible !absolute
                         ${editorSideBarMode ? `rounded-tr-xl -right-8` : `rounded-tl-xl -left-8`}
