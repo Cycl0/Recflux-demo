@@ -88,7 +88,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
   }, []);
 
   return (
-    <form className="relative md:w-3/4 w-full h-12 mx-auto max-w-4xl" onSubmit={handleGeneration}>
+    <form className="relative md:w-3/4 h-12 mx-auto max-w-4xl" onSubmit={handleGeneration}>
       <main className={`
                         absolute -translate-x-[calc(7650%/117)] left-1/2
                         ${editorSideBarMode ? gtc("inputBoxSide") : gtc("inputBox")}
@@ -96,7 +96,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
                         transition-all transform-gpu  duration-500 ease-in-out`}
         ref={gridRef}
       >
-        <section className="grid-in-select underline-slide h-12 transition-all transform-gpu  ease-in-out delay-500 duration-200">
+        <section className="grid-in-select underline-slide h-12 z-10 transition-all transform-gpu  ease-in-out delay-500 duration-200">
           <Select
             defaultValue={actionList[0]}
             id="actionSelect"
@@ -113,13 +113,13 @@ export default function InputBoxLayout({ nextImageHandler }) {
             {/* <option value="3">Visualizar</option> */}
           </Select>
         </section>
-        <section className="grid-in-input h-12 relative shadow-gradient transition-all transform-gpu  ease-in-out delay-200 duration-500">
+        <section className="grid-in-input h-12 relative z-10 shadow-gradient transition-all transform-gpu  ease-in-out delay-200 duration-500">
           <div className={`w-full h-12`}>
 
             <div className="h-full relative w-full outline-none flex">
               <TextareaAutosize
                 maxRows={4}
-                className="w-full flex-grow min-h-12 max-h-[104px] flex items-center justify-center pt-4 text-blue-600 text-sm focus:outline-none focus:ring-0 border-none bg-blue-200 placeholder-white transition-colors duration-200 ease-in-out uppercase font-bold hover:z-20 focus:z-20"
+                className="w-full flex-grow min-h-12 flex items-center justify-center pt-4 text-blue-600 text-sm focus:outline-none focus:ring-0 border-none bg-blue-200 placeholder-white transition-colors duration-200 ease-in-out uppercase font-bold hover:z-20 focus:z-20"
                 placeholder={placeholder /* `Ex: Gere um template para um e-commerce`(GERAR), `Ex: Troque o verde por azul`(EDITAR) ou Ex: Apenas o primeiro componente (VISUALIZAR)*/}
               ></TextareaAutosize>
               <button
@@ -225,6 +225,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
         <section
           className={`
                       grid-in-code
+                      min-w-96
                       ${editorOpen ? 'h-[600px] opacity-100' : 'z-negative h-0 opacity-0'}
 
                     `}>
