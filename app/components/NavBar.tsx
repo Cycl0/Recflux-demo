@@ -15,7 +15,7 @@ export default function NavBar() {
   <div className="w-full flex flex-wrap items-center justify-between mx-auto px-4">
   <Navbar.Brand
     href="https://recflux-demo.vercel.app/"
-    className="flex items-center space-x-3 rtl:space-x-reverse"
+    className="flex items-center space-x-3 rtl:space-x-reverse hover:shadow-gradient-2"
   >
     <Image
       src="/images/icon.png"
