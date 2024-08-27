@@ -133,6 +133,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
                             hover:shadow-gradient hover:backdrop-blur-md
                             ${isClicked ? ' bubble-animation clicked' : ''
                           }`}
+                aria-label="Enviar Prompt"
               >
                 <IconSend className="relative transition-transform duration-2000 ease-in-out -rotate-90 group-hover:rotate-90" />
               </button>
@@ -151,6 +152,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
                       bg-[rgba(193,219,253,0.15)] backdrop-blur-md z-negative
                       text-white uppercase p-1.5 hover:shadow-gradient
                       transition-all transform-gpu  ease-in-out duration-200`}
+          aria-label="Abrir Editor"
         >
           <div className={`w-full`}>
 
@@ -177,6 +179,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
                 e.preventDefault();
                 setFileName("index.html");
               }}
+              aria-label="Selecionar arquivo index.html"
             >
               index.html
             </button>
@@ -190,6 +193,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
                 e.preventDefault();
                 setFileName("style.css");
               }}
+              aria-label="Selecionar arquivo style.css"
             >
               style.css
             </button>
@@ -204,6 +208,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
                 e.preventDefault();
                 setFileName("script.js");
               }}
+              aria-label="Selecionar arquivo script.js"
             >
               script.js
             </button>
@@ -217,7 +222,9 @@ export default function InputBoxLayout({ nextImageHandler }) {
               onClick={(e) => {
                 e.preventDefault();
                 setFileName("image.svg");
-              }} >
+              }}
+              aria-label="Selecionar arquivo image.svg"
+            >
               image.svg
             </button>
           </div>
