@@ -1,10 +1,10 @@
 "use client";
 
-import { Button, Navbar } from "flowbite-react";
+import { Navbar } from "flowbite-react";
 
 import Image from 'next/image';
 
-export default function NavBar() {
+export default function NavBar({ children }) {
 
  return (
 <Navbar
@@ -30,17 +30,7 @@ export default function NavBar() {
   </Navbar.Brand>
 
   <div className="flex items-center md:order-2 space-x-3 md:space-x-0 rtl:space-x-reverse">
-    <Button className="
-                       text-blue-900 bg-blue-100
-                       focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium
-                       rounded-md text-sm px-4 text-center
-                       hover:bg-transparent border-2 hover:border-green-400 hover:outline-none hover:text-green-300
-                       transition-all transform-gpu  duration-1000 ease-in-out hover:scale-[105%] group hover:z-20 focus:z-20
-                       hover:shadow-gradient hover:backdrop-blur-md"
-    >
-
-      Teste agora
-    </Button>
+    {children}
     <Navbar.Toggle className="inline-flex items-center p-2 w-10 h-10 justify-center text-sm rounded-md md:hidden focus:outline-none focus:ring-2 text-blue-100 hover:bg-transparent  hover:shadow-gradient focus:ring-blue-100 transition-all duration-300 ease-in-out">
       <span className="sr-only">Open main menu</span>
       <svg

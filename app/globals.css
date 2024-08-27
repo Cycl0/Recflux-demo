@@ -23,6 +23,7 @@ html, body {
 
 body {
   overflow: hidden;
+  background: black;
 }
 
 html {
@@ -57,6 +58,10 @@ html {
   .shadow-gradient-2::after {
     content: "";
     @apply absolute -z-10 inset-0 bg-inherit rounded-lg;
+  }
+
+  .bg-blue-gradient {
+    background: radial-gradient(circle, rgba(148,248,240,1) 5%, rgba(0,225,240,1) 27%, rgba(0,107,125,1) 62%, rgba(0,32,32,1) 92%);
   }
 
   /* bubble animation on click*/
@@ -301,9 +306,11 @@ html {
     min-height: 100%;
     width: auto;
     height: auto;
-    z-index: -1;
+    z-index: -2;
     overflow: hidden;
     background: black;
+    border-bottom-left-radius: 1rem;
+    border-bottom-right-radius: 1rem;
   }
   video {
     position: absolute;
