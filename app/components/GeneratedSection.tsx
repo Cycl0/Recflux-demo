@@ -12,6 +12,7 @@ export default function GeneratedSection({ index }) {
   const [demoSVG, setDemoSVG] = useState([]);
   const [demoCodeCSS, setDemoCodeCSS] = useState([]);
   const [demoImage, setDemoImage] = useState([]);
+  const [demoUrl, setDemoUrl] = useState([]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -24,13 +25,19 @@ export default function GeneratedSection({ index }) {
         if (!imageResponse.ok) {
           throw new Error('Failed to fetch images');
         }
+        const urlResponse = await fetch('/api/url');
+        if (!urlResponse.ok) {
+          throw new Error('Failed to fetch url');
+        }
 
         const codeData = await codeResponse.json();
         const imageData = await imageResponse.json();
+        const urlData = await urlResponse.json();
         setDemoCodeHTML(codeData.demoCodeHTML || []);
         setDemoSVG(codeData.demoSVG || []);
         setDemoCodeCSS(codeData.demoCodeCSS || []);
         setDemoImage(imageData || []);
+        setDemoUrl(urlData || []);
       } catch (error) {
         console.error('Error fetching the JSON file:', error);
       }
@@ -108,8 +115,9 @@ export default function GeneratedSection({ index }) {
             <Modal
                 isOpen={isModalOpen}
                 onClose={toggleModal}
-                imageSrc={demoImage[index]}
-            />
+                url={demoUrl[index]}
+            >
+            </Modal>
         </div>
     );
 }

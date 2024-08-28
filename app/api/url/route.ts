@@ -1,9 +1,9 @@
-// app/api/code/route.ts
+// app/api/url/route.ts
 import { promises as fs } from "fs";
 import path from "path";
 
 export async function GET() {
-  const jsonFilePath = path.join(process.cwd(), "public", "code.json");
+  const jsonFilePath = path.join(process.cwd(), "public", "url.json");
   try {
     const fileContents = await fs.readFile(jsonFilePath, "utf8");
     const data = JSON.parse(fileContents);
