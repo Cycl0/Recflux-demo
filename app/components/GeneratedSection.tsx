@@ -6,53 +6,18 @@ import { FlipTilt } from 'react-flip-tilt';
 import Modal from "@/components/Modal";
 import { Highlight } from "@mui/icons-material";
 
-export default function GeneratedSection({ index }) {
-  index %= 6;
-  const [demoCodeHTML, setDemoCodeHTML] = useState([]);
-  const [demoSVG, setDemoSVG] = useState([]);
-  const [demoCodeCSS, setDemoCodeCSS] = useState([]);
-  const [demoImage, setDemoImage] = useState([]);
-  const [demoUrl, setDemoUrl] = useState([]);
+export default function GeneratedSection({ index, demoCodeHTML, demoCodeCSS, demoSVG, demoUrl, demoThumbnails}) {
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const codeResponse = await fetch('/api/code');
-        if (!codeResponse.ok) {
-          throw new Error('Failed to fetch code data');
-        }
-        const imageResponse = await fetch('/api/images');
-        if (!imageResponse.ok) {
-          throw new Error('Failed to fetch images');
-        }
-        const urlResponse = await fetch('/api/url');
-        if (!urlResponse.ok) {
-          throw new Error('Failed to fetch url');
-        }
+    index %= demoThumbnails.length;
 
-        const codeData = await codeResponse.json();
-        const imageData = await imageResponse.json();
-        const urlData = await urlResponse.json();
-        setDemoCodeHTML(codeData.demoCodeHTML || []);
-        setDemoSVG(codeData.demoSVG || []);
-        setDemoCodeCSS(codeData.demoCodeCSS || []);
-        setDemoImage(imageData || []);
-        setDemoUrl(urlData || []);
-      } catch (error) {
-        console.error('Error fetching the JSON file:', error);
-      }
+    const customStyle = {
+        width: "400px",
+        maxHeight: "600px",
+        overflow: "auto",
+        boxShadow: '0 15px 30px -15px rgba(96, 239, 255, 0.5)',
+        scrollbarWidth: 'thin',
+        scrollbarColor: '#60efff #e0fffb',
     };
-    fetchData();
-  }, []);
-
-  const customStyle = {
-    width: "400px",
-    maxHeight: "600px",
-    overflow: "auto",
-    boxShadow: '0 15px 30px -15px rgba(96, 239, 255, 0.5)',
-    scrollbarWidth: 'thin',
-    scrollbarColor: '#60efff #e0fffb',
-  };
 
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -68,8 +33,8 @@ export default function GeneratedSection({ index }) {
                 <FlipTilt
                     className={`w-full h-full cursor-pointer`}
                     onClick={toggleModal}
-                    front={demoImage[index]}
-                    back={demoImage[index]}
+                    front={demoThumbnails[index]}
+                    back={demoThumbnails[index]}
                     borderColor='#60efff'
                 />
             </div>
