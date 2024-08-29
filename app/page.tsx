@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import InputBox from "@/components/InputBox";
 import GeneratedSection from "@/components/GeneratedSection";
 import VideoBackground from '@/components/VideoBackground';
@@ -9,50 +9,6 @@ import { Button } from "flowbite-react";
 
 export default function Home() {
     const [index, setIndex] = useState(-1);
-    const [demoCodeHTML, setDemoCodeHTML] = useState([]);
-    const [demoCodeCSS, setDemoCodeCSS] = useState([]);
-    const [demoSVG, setDemoSVG] = useState([]);
-    const [demoThumbnails, setDemoThumbnails] = useState([]);
-    const [demoUrl, setDemoUrl] = useState([]);
-
-    useEffect(() => {
-        const fetchData = async () => {
-    try {
-      const codeResponse = await fetch('/api/code');
-        const urlResponse = await fetch('/api/url');
-
-        const codeData = await codeResponse.json();
-        const urlData = await urlResponse.json();
-        const thumbnailUrlsData = await Promise.all(
-      urlData.map(async (url) => {
-        try {
-          const response = await fetch(`/api/thumbnail?url=${encodeURIComponent(url)}`);
-          if (!response.ok) {
-            console.error(`Failed to fetch thumbnail for ${url}:`, response.status, response.statusText);
-            const text = await response.text();
-            console.error('Response body:', text);
-            return null; // or a placeholder image URL
-          }
-          const blob = await response.blob();
-          return URL.createObjectURL(blob);
-        } catch (error) {
-          console.error(`Error fetching thumbnail for ${url}:`, error);
-          return null; // or a placeholder image URL
-        }
-      })
-        );
-        setDemoCodeHTML(codeData.demoCodeHTML || []);
-        setDemoSVG(codeData.demoSVG || []);
-        setDemoCodeCSS(codeData.demoCodeCSS || []);
-        setDemoUrl(urlData || []);
-        setDemoThumbnails(thumbnailUrlsData.filter(Boolean));
-    } catch (error) {
-        console.error('Error fetching data:', error);
-    }
-  };
-  fetchData();
-}, []);
-
 
     function nextImageHandler() {
         setIndex((prevIndex) => prevIndex + 1);
@@ -75,7 +31,7 @@ export default function Home() {
                 <VideoBackground />
                 <div id="content" className={`min-h-screen items-center justify-between py-20 px-12  rounded-md`}>
                     <InputBox nextImageHandler={nextImageHandler} />
-                    {(index > -1) && <GeneratedSection index={index} demoCodeHTML={demoCodeHTML} demoCodeCSS={demoCodeCSS} demoSVG={demoSVG} demoUrl={demoUrl} demoThumbnails={demoThumbnails} />}
+                    {(index > -1) && <GeneratedSection index={index}/>}
                 </div>
             </main>
         </>

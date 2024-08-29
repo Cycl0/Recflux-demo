@@ -6,7 +6,51 @@ import { FlipTilt } from 'react-flip-tilt';
 import Modal from "@/components/Modal";
 import { Highlight } from "@mui/icons-material";
 
-export default function GeneratedSection({ index, demoCodeHTML, demoCodeCSS, demoSVG, demoUrl, demoThumbnails}) {
+export default function GeneratedSection({ index }) {
+
+    const [demoCodeHTML, setDemoCodeHTML] = useState([]);
+    const [demoCodeCSS, setDemoCodeCSS] = useState([]);
+    const [demoSVG, setDemoSVG] = useState([]);
+    const [demoThumbnails, setDemoThumbnails] = useState([]);
+    const [demoUrl, setDemoUrl] = useState([]);
+
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                const codeResponse = await fetch('/api/code');
+                const urlResponse = await fetch('/api/url');
+
+                const codeData = await codeResponse.json();
+                const urlData = await urlResponse.json();
+                const thumbnailUrlsData = await Promise.all(
+                    urlData.map(async (url) => {
+                        try {
+                            const response = await fetch(`/api/thumbnail?url=${encodeURIComponent(url)}`);
+                            if (!response.ok) {
+                                console.error(`Failed to fetch thumbnail for ${url}:`, response.status, response.statusText);
+                                const text = await response.text();
+                                console.error('Response body:', text);
+                                return null; // or a placeholder image URL
+                            }
+                            const blob = await response.blob();
+                            return URL.createObjectURL(blob);
+                        } catch (error) {
+                            console.error(`Error fetching thumbnail for ${url}:`, error);
+                            return null; // or a placeholder image URL
+                        }
+                    })
+                );
+                setDemoCodeHTML(codeData.demoCodeHTML || []);
+                setDemoSVG(codeData.demoSVG || []);
+                setDemoCodeCSS(codeData.demoCodeCSS || []);
+                setDemoUrl(urlData || []);
+                setDemoThumbnails(thumbnailUrlsData.filter(Boolean));
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            }
+        };
+        fetchData();
+    }, []);
 
     index %= demoThumbnails.length;
 
@@ -19,13 +63,13 @@ export default function GeneratedSection({ index, demoCodeHTML, demoCodeCSS, dem
         scrollbarColor: '#60efff #e0fffb',
     };
 
-  const [isModalOpen, setIsModalOpen] = useState(false);
+    const [isModalOpen, setIsModalOpen] = useState(false);
 
-  const toggleModal = () => {
-    setIsModalOpen(!isModalOpen);
-  }
-  
-  return (
+    const toggleModal = () => {
+        setIsModalOpen(!isModalOpen);
+    }
+
+    return (
         <div className={`max-w-full flex flex-col items-center justify-center mt-32`}>
             <div className={`xl:w-[28%] md:w-1/2 relative`}>
                 <div className={`absolute -top-6 -left-6 w-1/3 h-1/3 border-t-2 border-l-2 border-blue-400`} />
