@@ -119,7 +119,12 @@ export default function InputBoxLayout({ nextImageHandler }) {
                         <div className="h-full relative w-full outline-none flex">
                             <TextareaAutosize
                                 maxRows={4}
-                                className="w-full flex-grow min-h-12 flex items-center justify-center pt-4 text-blue-600 text-sm focus:outline-none focus:ring-0 border-none bg-blue-200 placeholder-white transition-colors duration-200 ease-in-out uppercase font-bold hover:z-20 focus:z-20"
+                                className="
+                                        w-full flex-grow min-h-12 flex items-center justify-center
+                                        pt-4 text-blue-600 text-sm focus:outline-none focus:ring-0 border-none
+                                        bg-blue-200 placeholder-gray-400
+                                        transition-colors duration-200 ease-in-out
+                                        uppercase font-bold hover:z-20 focus:z-20"
                                 placeholder={placeholder /* `Ex: Gere um template para um e-commerce`(GERAR), `Ex: Troque o verde por azul`(EDITAR) ou Ex: Apenas o primeiro componente (VISUALIZAR)*/}
                             ></TextareaAutosize>
                             <button
