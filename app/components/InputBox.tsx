@@ -104,7 +104,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
                         isSearchable={false}
                         className="
                        w-full h-full backdrop-blur-md appearance-none text-blue-700 border-b-2 border-blue-400
-                       border-none bg-blue-100 block transition-colors duration-200
+                       border-none bg-white block transition-colors duration-200
                        ease-in-out uppercase rounded-tl-md hover:z-20 focus:z-20"
                         onChange={handleSelectActionChange}
                     >
@@ -122,7 +122,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
                                 className="
                                         w-full flex-grow min-h-12 flex items-center justify-center
                                         pt-4 text-blue-600 text-sm focus:outline-none focus:ring-0 border-none
-                                        bg-blue-200 placeholder-gray-400
+                                        bg-blue-100 placeholder-gray-400
                                         transition-colors duration-200 ease-in-out
                                         uppercase font-bold hover:z-20 focus:z-20"
                                 placeholder={placeholder /* `Ex: Gere um template para um e-commerce`(GERAR), `Ex: Troque o verde por azul`(EDITAR) ou Ex: Apenas o primeiro componente (VISUALIZAR)*/}

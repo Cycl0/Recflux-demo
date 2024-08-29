@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { CopyBlock, nord } from "react-code-blocks";
+import { CopyBlock, hybrid } from "react-code-blocks";
 import { FlipTilt } from 'react-flip-tilt';
 import Modal from "@/components/Modal";
 import { Highlight } from "@mui/icons-material";
@@ -91,7 +91,7 @@ export default function GeneratedSection({ index }) {
                         text={demoCodeHTML[index]}
                         showLineNumbers={true}
                         wrapLongLines={true}
-                        theme={nord}
+                        theme={hybrid}
                         highlight={""/*highlight[index]*/}
                         codeBlock={true}
                     />
@@ -103,7 +103,7 @@ export default function GeneratedSection({ index }) {
                         text={demoCodeCSS[index]}
                         showLineNumbers={true}
                         wrapLongLines={true}
-                        theme={nord}
+                        theme={hybrid}
                         highlight={""/*highlight[index]*/}
                         codeBlock={true}
                     />
@@ -115,7 +115,7 @@ export default function GeneratedSection({ index }) {
                         text={demoSVG[index]}
                         showLineNumbers={true}
                         wrapLongLines={true}
-                        theme={nord}
+                        theme={hybrid}
                         highlight={""/*highlight[index]*/}
                         codeBlock={true}
                     />
