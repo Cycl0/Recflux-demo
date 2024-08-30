@@ -17,6 +17,7 @@ export default function Home() {
         <>
             <NavBar>
                 <Button className="
+                       xs:!block hidden
                        text-blue-900 bg-blue-100
                        focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium
                        rounded-md text-sm px-4 text-center
@@ -29,9 +30,9 @@ export default function Home() {
             </NavBar>
             <main className="xl:!p-36 lg:!p-12 md:!p-8 sm:!p-4">
                 <VideoBackground />
-                <div id="content" className={`min-h-screen items-center justify-between py-20 px-12  rounded-md`}>
+                <div id="content" className={`min-h-screen items-center justify-between py-40 md:py-20 md:px-12 xs:px-4 px-2 rounded-md`}>
                     <InputBox nextImageHandler={nextImageHandler} />
-                    {(index > -1) && <GeneratedSection index={index}/>}
+                    {(index > -1) && <GeneratedSection index={index} />}
                 </div>
             </main>
         </>

@@ -9,12 +9,22 @@ const config: Config = {
   ],
   safelist: [
     { pattern: /^grid$/ },
-    { pattern: /^grid-areas-/ },
-    { pattern: /^grid-cols-/ },
-    { pattern: /^grid-rows-/ },
-    { pattern: /^grid-in-/ }
+    { pattern: /^grid-areas-/, variants: ['2xs'] },
+    { pattern: /^grid-cols-/, variants: ['2xs'] },
+    { pattern: /^grid-rows-/, variants: ['2xs'] },
+    { pattern: /^grid-in-/, variants: ['2xs'] }
   ],
   theme: {
+     screens: {
+      'xs': '380px',
+      '2xs': '540px',
+      'sm': '640px',
+      'md': '768px',
+      'lg': '1024px',
+      'xl': '1280px',
+      '2xl': '1536px',
+      '3xl': '1920px',
+    },
     extend: {
       width: {
         100: '25rem',
@@ -68,6 +78,13 @@ const config: Config = {
           'files files   .       .     .    ',
           'code  code    .       .     .    '
        ],
+        'inputBoxMobileLayout': [
+          'select select select select',
+          'input  input  input  input ',
+          '.      .      .      button',
+          'files  files  files  files ',
+          'code   code   code   code  '
+        ],
       'codeSectionLayout': [
           'codeSection codeSection codeSection',
         ],
@@ -75,11 +92,13 @@ const config: Config = {
       gridTemplateColumns: {
         'inputBoxLayout': '4fr 1fr 1fr 6fr 1fr',
         'inputBoxSideLayout': '4fr 1fr 1fr 6fr 1fr',
+        'inputBoxMobileLayout': '2fr 2fr 7fr 2fr',
         'codeSectionLayout': 'repeat(3,1fr)',
       },
       gridTemplateRows: {
         'inputBoxLayout': `repeat(3,1fr) 600px`,
         'inputBoxSideLayout': `repeat(3,1fr) 600px`,
+        'inputBoxMobileLayout': `repeat(4,1fr) 600px`,
         'codeSectionLayout': `1fr`,
       },
       backgroundImage: {

@@ -1,9 +1,10 @@
 "use client";
 import IconSend from "@/components/IconSend";
-import gtc from "@/utils/grid-area-template-css.js";
+import {gtc, gtcm} from "@/utils/grid-area-template-css.js";
 import DataObjectIcon from '@mui/icons-material/DataObject';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import VerticalSplitIcon from '@mui/icons-material/VerticalSplit';
+import AddCircleIcon from '@mui/icons-material/AddCircle';
 import Editor from "@monaco-editor/react";
 import files from "@/utils/files-editor";
 import { wrapGrid } from 'animate-css-grid';
@@ -90,13 +91,15 @@ export default function InputBoxLayout({ nextImageHandler }) {
   return (
         <form className="relative md:w-3/4 h-12 mx-auto max-w-4xl" onSubmit={throttleHandleGeneration}>
             <main className={`
-                        absolute -translate-x-[calc(7650%/117)] left-1/2
-                        ${editorSideBarMode ? gtc("inputBoxSide") : gtc("inputBox")}
-                        z-10 w-[calc(1300%/9)] h-12
+                        2xs:!w-[calc(1300%/9)] 2xs:!-translate-x-[calc(7650%/117)] 2xs:!left-1/2
+                        w-full absolute
+                        ${gtc("inputBoxMobile")}
+                        ${editorSideBarMode ? gtcm("inputBoxSide", "2xs") : gtcm("inputBox", "2xs")}
+                        z-10 h-12
                         transition-all transform-gpu  duration-500 ease-in-out`}
                 ref={gridRef}
             >
-                <section className="grid-in-select underline-slide h-12 z-10 transition-all transform-gpu  ease-in-out delay-500 duration-200">
+                <section className="grid-in-select underline-slide h-12 z-20 transition-all transform-gpu  ease-in-out delay-500 duration-200">
                     <Select
                         defaultValue={actionList[0]}
                         id="actionSelect"
@@ -168,13 +171,28 @@ export default function InputBoxLayout({ nextImageHandler }) {
                 </button>
 
                 <section className={`
-                             grid-in-files
-                             ${editorOpen ? editorSideBarMode ? `neon-l-shape-right` : `neon-l-shape-left` : ``}`}>
+                             grid-in-files flex
+                             ${editorOpen ? editorSideBarMode ? `2xs:neon-l-shape-right justify-end` : `2xs:neon-l-shape-left` : ``}`}>
                     <div className={`
-                           w-full ${editorOpen ? `h-8 opacity-100` : `h-0 opacity-0`}
-                           flex justify-end divide-x-2 divide-transparent text-white
-                           transition-all transform-gpu  ease-in-out duration-200`}>
-
+                           w-full
+                           ${editorOpen ? `h-8 opacity-100` : `h-0 opacity-0`}
+                           ${editorSideBarMode ? `max-w-[344px]` : ``}
+                           flex flex-wrap justify-end divide-x-2 divide-transparent text-white
+                           transition-all transform-gpu ease-in-out duration-200`}>
+                        <button
+                            className={`
+                          order-first
+                          h-full min-w-8 flex justify-center items-center
+                          backdrop-blur-2xl shadow-gradient brightness-150
+                        `}
+                            onClick={(e) => {
+                                e.preventDefault();
+                                // TODO
+                            }}
+                            aria-label="Gerenciar arquivos"
+                        >
+                            <AddCircleIcon />
+                        </button>
                         <button
                             className={`
                           h-full px-4 flex-1 flex justify-center items-center
@@ -222,7 +240,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
                             className={`
                           h-full flex-1 flex justify-center items-center
                           px-4 backdrop-blur-sm  hover:shadow-gradient
-                          ${fileName === "image.svg" ? "bg-blue-100 text-blue-500" : "bg-[rgba(193,219,253,0.15)]"}
+                          ${fileName === "image.svg" ? "bg-blue-100 text-blue-500" : "bg-[rgba(193,219,253,0.1)]"}
                           ${editorSideBarMode ? `max-w-24` : `rounded-tr-md`}
                         `}
                             onClick={(e) => {
@@ -238,7 +256,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
                 <section
                     className={`
                       grid-in-code
-                      min-w-96
+                      md:min-w-96 md:flex-none flex-1
                       ${editorOpen ? 'h-[600px] opacity-100' : 'z-negative h-0 opacity-0'}
 
                     `}>
