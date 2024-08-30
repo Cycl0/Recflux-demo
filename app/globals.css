@@ -7,6 +7,7 @@
   --background-start-rgb: 214, 219, 220;
   --background-end-rgb: 255, 255, 255;
   --blue: #60efff;
+  --pink: #AF51FF;
   --green: #60efa7;
   --dark-blue: #0048ff;
 }
@@ -31,13 +32,13 @@ html {
 }
 
 @layer components {
-/* shadow */
+  /* shadow */
   .shadow-gradient {
     @apply relative;
   }
   .shadow-gradient::before {
     content: "";
-    @apply absolute -z-10 inset-0 bg-gradient-to-br from-[var(--blue)] to-[var(--green)] scale-90 blur-xl opacity-70 transition-opacity duration-300 rounded-lg;
+    @apply absolute -z-10 inset-0 bg-gradient-to-br from-[var(--blue)] to-[var(--pink)] scale-90 blur-xl opacity-70 transition-opacity duration-300 rounded-lg;
     transform: translate3d(0px, 20px, 0);
   }
   .shadow-gradient::after {
@@ -45,21 +46,7 @@ html {
     @apply absolute -z-10 inset-0 bg-inherit rounded-lg;
   }
 
-  /* shadow 2*/
-  .shadow-gradient-2 {
-    @apply relative;
-  }
-  .shadow-gradient-2::before {
-    content: "";
-    @apply absolute -z-10 inset-0 bg-gradient-to-br from-[var(--blue)] to-[var(--green)] scale-90 blur-xl opacity-70 transition-opacity duration-300 rounded-lg;
-    transform: translate3d(0px, 20px, 0);
-    opacity: 0.15;
-  }
-  .shadow-gradient-2::after {
-    content: "";
-    @apply absolute -z-10 inset-0 bg-inherit rounded-lg;
-  }
-
+  /* bg blue gradient */
   .bg-blue-gradient {
     background: radial-gradient(circle, rgba(148,248,240,1) 5%, rgba(0,225,240,1) 27%, rgba(0,107,125,1) 62%, rgba(0,32,32,1) 92%);
   }

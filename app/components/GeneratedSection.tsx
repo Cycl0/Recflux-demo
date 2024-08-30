@@ -71,7 +71,7 @@ export default function GeneratedSection({ index }) {
 
     return (
         <div className={`max-w-full flex flex-col items-center justify-center mt-32`}>
-            <div className={`xl:w-[28%] md:w-1/2 relative`}>
+            <div className={`2xl:w-[28%] xl:w-[36%] md:w-1/2 relative`}>
                 <div className={`absolute -top-6 -left-6 w-1/3 h-1/3 border-t-2 border-l-2 border-blue-400`} />
                 <div className={`absolute -bottom-6 -right-6 w-1/3 h-1/3 border-b-2 border-r-2 border-green-400`} />
                 <FlipTilt
