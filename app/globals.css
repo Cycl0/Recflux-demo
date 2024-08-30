@@ -311,6 +311,25 @@ html {
     background: black;
     border-bottom-left-radius: 1rem;
     border-bottom-right-radius: 1rem;
+   animation: hueRotation 130s alternate infinite;
+   filter: hue-rotate(-60eg);
+  }
+  @keyframes hueRotation {
+    0 {
+      filter: hue-rotate(-60deg);
+    }
+    25% {
+      filter: hue-rotate(0);
+    }
+    50% {
+      filter: hue-rotate(60deg);
+    }
+    75% {
+      filter: hue-rotate(0);
+    }
+    100% {
+      filter: hue-rotate(-60deg);
+    }
   }
   video {
     position: absolute;
