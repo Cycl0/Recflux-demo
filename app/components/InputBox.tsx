@@ -37,7 +37,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
   const actionList = [
     { value: '1', label: 'GERAR' },
     { value: '2', label: 'EDITAR' },
-    { value: '3', label: 'VISUALIZAR' },
+    { value: '3', label: 'FOCAR' },
   ];
   const handleSelectActionChange = (selectedAction) => {
     // setAction(selectedAction);
@@ -110,7 +110,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
                     >
                         {/* <option value="1">Gerar</option> */}
                         {/* <option value="2">Editar</option> */}
-                        {/* <option value="3">Visualizar</option> */}
+                        {/* <option value="3">Focar</option> */}
                     </Select>
                 </section>
                 <section className="grid-in-input h-12 relative z-10 shadow-gradient transition-all transform-gpu  ease-in-out delay-200 duration-500">
@@ -125,7 +125,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
                                         bg-blue-100 placeholder-gray-400
                                         transition-colors duration-200 ease-in-out
                                         uppercase font-bold hover:z-20 focus:z-20"
-                                placeholder={placeholder /* `Ex: Gere um template para um e-commerce`(GERAR), `Ex: Troque o verde por azul`(EDITAR) ou Ex: Apenas o primeiro componente (VISUALIZAR)*/}
+                                placeholder={placeholder /* `Ex: Gere um template para um e-commerce`(GERAR), `Ex: Troque o verde por azul`(EDITAR) ou Ex: Apenas o primeiro componente (FOCAR)*/}
                             ></TextareaAutosize>
                             <button
                                 type="button"
