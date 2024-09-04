@@ -12,10 +12,10 @@ export default function Home() {
 
     function nextImageHandler() {
         setIndex((prevIndex) => prevIndex + 1);
-  }
-  return (
+    }
+    return (
         <>
-            <NavBar>
+            <NavBar extra={
                 <Button className="
                        xs:!block hidden
                        text-blue-900 bg-blue-100
@@ -27,7 +27,7 @@ export default function Home() {
                 >
                     Teste agora
                 </Button>
-            </NavBar>
+            } />
             <main className="xl:!p-36 lg:!p-12 md:!p-8 sm:!p-4">
                 <VideoBackground />
                 <div id="content" className={`min-h-screen items-center justify-between py-40 md:py-20 md:px-12 xs:px-4 px-2 rounded-md`}>

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import NavBar from '@/components/NavBar';
-import { Avatar, Dropdown } from "flowbite-react";
+import NavStyledDropdown from '@/components/NavStyledDropdown';
 import { useResizable } from 'react-resizable-layout';
 
 export default function Home() {
@@ -17,24 +17,7 @@ export default function Home() {
   })
   return (
     <>
-      <NavBar>
-        <Dropdown
-          arrowIcon={false}
-          inline
-          label={
-            <Avatar alt="User settings" img="/images/icon.png" rounded />
-          }
-        >
-          <Dropdown.Header>
-            <span className="block text-sm">Lucas</span>
-            <span className="block truncate text-sm font-medium">lucas@email.com</span>
-          </Dropdown.Header>
-          <Dropdown.Item>Dashboard</Dropdown.Item>
-          <Dropdown.Item>Configurações</Dropdown.Item>
-          <Dropdown.Divider />
-          <Dropdown.Item>Sair</Dropdown.Item>
-        </Dropdown>
-      </NavBar>
+      <NavBar extra={<NavStyledDropdown />}/>
       <main className="bg-blue-gradient flex justify-between items-center space-x-2">
         <div className={`
           flex-1 min-h-screen items-center justify-between py-20 px-12
