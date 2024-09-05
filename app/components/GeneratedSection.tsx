@@ -1,16 +1,29 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { CopyBlock, hybrid } from "react-code-blocks";
+import { useEffect, useState, useRef } from "react";
 import { FlipTilt } from 'react-flip-tilt';
 import Modal from "@/components/Modal";
-import { Highlight } from "@mui/icons-material";
+import FileSelector from "@/components/FileSelector";
 
-export default function GeneratedSection({ index }) {
+export default function GeneratedSection({
+    index, indexHandler,
+    filesGenerated, setFilesGeneratedHandler,
+    filesCurrent, setFilesCurrentHandler,
+    filesRecentPromptList
+}) {
+    // diff
+    const diffRef = useRef(null);
 
-    const [demoCodeHTML, setDemoCodeHTML] = useState([]);
-    const [demoCodeCSS, setDemoCodeCSS] = useState([]);
-    const [demoSVG, setDemoSVG] = useState([]);
+    const [selectedFileName, setSelectedFileName] = useState("index.html");
+    const selectedFile = filesGenerated[selectedFileName];
+    useEffect(() => {
+        diffRef.current?.focus();
+    }, [selectedFile?.name]);
+    const handleFileSelect = (fileName) => (e) => {
+        e.preventDefault();
+        setSelectedFileName(fileName);
+    };
+
     const [demoThumbnails, setDemoThumbnails] = useState([]);
     const [demoUrl, setDemoUrl] = useState([]);
 
@@ -40,9 +53,18 @@ export default function GeneratedSection({ index }) {
                         }
                     })
                 );
-                setDemoCodeHTML(codeData.demoCodeHTML || []);
-                setDemoSVG(codeData.demoSVG || []);
-                setDemoCodeCSS(codeData.demoCodeCSS || []);
+                (codeData.demoCodeHTML || []).forEach((code, index) => {
+                    setFilesGeneratedHandler("index.html", code, index);
+                });
+                (codeData.demoCodeCSS || []).forEach((code, index) => {
+                    setFilesGeneratedHandler("style.css", code, index);
+                });
+                (codeData.demoCodeJS || []).forEach((code, index) => {
+                    setFilesGeneratedHandler("script.js", code, index);
+                });
+                (codeData.demoSVG || []).forEach((code, index) => {
+                    setFilesGeneratedHandler("image.svg", code, index);
+                });
                 setDemoUrl(urlData || []);
                 setDemoThumbnails(thumbnailUrlsData.filter(Boolean));
             } catch (error) {
@@ -83,43 +105,15 @@ export default function GeneratedSection({ index }) {
                 />
             </div>
             <div className={`w-full flex items-center justify-center space-x-10 mt-20`}>
+                <FileSelector
+                    files={filesGenerated[0]}
+                    handleFileSelect={handleFileSelect}
+                    selectedFileName={selectedFileName}
+                    className={`w-full flex`}>
+                    <select>
+                    </select>
+                </FileSelector>
 
-                {demoCodeHTML[index] && (
-                    <CopyBlock
-                        customStyle={customStyle}
-                        language="html"
-                        text={demoCodeHTML[index]}
-                        showLineNumbers={true}
-                        wrapLongLines={true}
-                        theme={hybrid}
-                        highlight={""/*highlight[index]*/}
-                        codeBlock={true}
-                    />
-                )}
-                {demoCodeCSS[index] && (
-                    <CopyBlock
-                        customStyle={customStyle}
-                        language="css"
-                        text={demoCodeCSS[index]}
-                        showLineNumbers={true}
-                        wrapLongLines={true}
-                        theme={hybrid}
-                        highlight={""/*highlight[index]*/}
-                        codeBlock={true}
-                    />
-                )}
-                {demoSVG[index] && (
-                    <CopyBlock
-                        customStyle={customStyle}
-                        language="xml"
-                        text={demoSVG[index]}
-                        showLineNumbers={true}
-                        wrapLongLines={true}
-                        theme={hybrid}
-                        highlight={""/*highlight[index]*/}
-                        codeBlock={true}
-                    />
-                )}
             </div>
             <Modal
                 isOpen={isModalOpen}
@@ -127,6 +121,6 @@ export default function GeneratedSection({ index }) {
                 url={demoUrl[index]}
             >
             </Modal>
-        </div>
+        </div >
     );
 }

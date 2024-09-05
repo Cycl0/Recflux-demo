@@ -5,25 +5,37 @@ import DataObjectIcon from '@mui/icons-material/DataObject';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import VerticalSplitIcon from '@mui/icons-material/VerticalSplit';
 import AddCircleIcon from '@mui/icons-material/AddCircle';
+import FileSelector from "@/components/FileSelector";
 import Editor from "@monaco-editor/react";
-import files from "@/utils/files-editor";
 import { wrapGrid } from 'animate-css-grid';
 import { debounce, throttle } from 'lodash';
 import { useCallback, useState, useEffect, useRef } from "react";
 import Select from 'react-select';
 import TextareaAutosize from 'react-textarea-autosize';
 
-export default function InputBoxLayout({ nextImageHandler }) {
+export default function InputBox({
+  indexHandler,
+  files,
+  filesCurrent,
+  setFilesCurrentHandler,
+  filesRecentPrompt,
+  setFilesRecentPromptHandler
+}) {
 
-    // generation
-    const [isClicked, setIsClicked] = useState(false);
-    const throttleHandleGeneration = useCallback(
-    debounce((newMode) => {
-      setIsClicked(newMode);
-      nextImageHandler();
+  // generation
+  const [isClicked, setIsClicked] = useState(false);
+  const handleSubmitPrompt = useCallback(
+    debounce((e) => {
+      e.preventDefault();
+      const nextIndex = filesRecentPrompt.length;
+      Object.keys(filesCurrent[0]).forEach(fileName => {
+        setFilesRecentPromptHandler(fileName, filesCurrent[0][fileName].value, nextIndex);
+      });
+      setIsClicked(true);
+      indexHandler((prevIndex) => prevIndex + 1);
     }, 1000),
-    [nextImageHandler]
-    );
+    [filesCurrent, filesRecentPrompt, setFilesRecentPromptHandler, indexHandler]
+  );
   useEffect(() => {
     let timer;
     if (isClicked) {
@@ -31,7 +43,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
     }
     return () => clearTimeout(timer); // Cleanup
   }, [isClicked]);
-  
+
   // action selector
   // const [action, setAction] = useState({ value: '1', label: 'GERAR' });
   const [placeholder, setPlaceholder] = useState('Ex: Template para um site e-commerce');
@@ -58,6 +70,17 @@ export default function InputBoxLayout({ nextImageHandler }) {
     }
   };
 
+  // files
+  const [selectedFileName, setSelectedFileName] = useState("index.html");
+  const selectedFile = files[selectedFileName];
+  useEffect(() => {
+    editorRef.current?.focus();
+  }, [selectedFile?.name]);
+  const handleFileSelect = (fileName) => (e) => {
+    e.preventDefault();
+    setSelectedFileName(fileName);
+  };
+
   // editor
   const editorRef = useRef(null);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -74,11 +97,12 @@ export default function InputBoxLayout({ nextImageHandler }) {
     }, 1000),
     []
   );
-  const [fileName, setFileName] = useState("index.html");
-  const file = files[fileName];
-  useEffect(() => {
-    editorRef.current?.focus();
-  }, [file.name]);
+  const handleEditorChange = useCallback(
+  throttle((value, event) => {
+    setFilesCurrentHandler(selectedFileName, value, 0);
+  }, 1000),
+  [selectedFileName, setFilesCurrentHandler]
+);
 
   // grid animation
   const gridRef = useRef<HTMLElement>(null);
@@ -89,7 +113,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
   }, []);
 
   return (
-        <form className="relative md:w-3/4 h-12 mx-auto max-w-4xl" onSubmit={throttleHandleGeneration}>
+        <div className="relative md:w-3/4 h-12 mx-auto max-w-4xl">
             <main className={`
                         2xs:!w-[calc(1300%/9)] 2xs:!-translate-x-[calc(7650%/117)] 2xs:!left-1/2
                         w-full absolute
@@ -132,7 +156,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
                             ></TextareaAutosize>
                             <button
                                 type="button"
-                                onClick={throttleHandleGeneration}
+                                onClick={handleSubmitPrompt}
                                 className={`
                             w-12 h-full p-2.5 font-medium h-full
                             text-white bg-blue-300 rounded-tr-md border border-blue-300
@@ -169,21 +193,21 @@ export default function InputBoxLayout({ nextImageHandler }) {
                         <ExpandMoreIcon className={`${editorOpen ? `rotate-180` : ``} justify-self-end transition ease-in-out duration-200`} />
                     </div>
                 </button>
-
-                <section className={`
-                             grid-in-files flex
-                             ${editorOpen ? editorSideBarMode ? `2xs:neon-l-shape-right justify-end` : `2xs:neon-l-shape-left` : ``}`}>
-                    <div className={`
-                           w-full
-                           ${editorOpen ? `h-8 opacity-100` : `h-0 opacity-0`}
-                           ${editorSideBarMode ? `max-w-[344px]` : ``}
-                           flex flex-wrap justify-end divide-x-2 divide-transparent text-white
-                           transition-all transform-gpu ease-in-out duration-200`}>
+                <FileSelector
+                             files={files}
+                             editorSideBarMode={editorSideBarMode}
+                             editorOpen={editorOpen}
+                             handleFileSelect={handleFileSelect}
+                             selectedFileName={selectedFileName}
+                             className={`
+                               grid-in-files flex
+                               ${editorOpen ? editorSideBarMode ? `2xs:neon-l-shape-right justify-end` : `2xs:neon-l-shape-left` : ``}`}>
                         <button
                             className={`
                           order-first
                           h-full min-w-8 flex justify-center items-center
                           backdrop-blur-2xl shadow-gradient brightness-150
+                          ${editorSideBarMode} ? 'rounded-tl-md' : ''
                         `}
                             onClick={(e) => {
                                 e.preventDefault();
@@ -193,66 +217,7 @@ export default function InputBoxLayout({ nextImageHandler }) {
                         >
                             <AddCircleIcon />
                         </button>
-                        <button
-                            className={`
-                          h-full px-4 flex-1 flex justify-center items-center
-                          backdrop-blur-xl hover:shadow-gradient
-                          ${fileName === "index.html" ? "bg-blue-100 text-blue-500" : "bg-[rgba(193,219,253,0.15)]"}
-                          ${editorSideBarMode ? `max-w-24 rounded-tl-md` : ``}`}
-                            onClick={(e) => {
-                                e.preventDefault();
-                                setFileName("index.html");
-                            }}
-                            aria-label="Selecionar arquivo index.html"
-                        >
-                            index.html
-                        </button>
-                        <button
-                            className={`
-                          h-full px-4 flex-1 flex justify-center items-center
-                          backdrop-blur-sm  hover:shadow-gradient
-                          ${fileName === "style.css" ? "bg-blue-100 text-blue-500" : "bg-[rgba(193,219,253,0.15)]"}
-                          ${editorSideBarMode ? `max-w-24` : ``}`}
-                            onClick={(e) => {
-                                e.preventDefault();
-                                setFileName("style.css");
-                            }}
-                            aria-label="Selecionar arquivo style.css"
-                        >
-                            style.css
-                        </button>
-                        <button
-                            className={`
-                          h-full px-4 flex-1 flex justify-center items-center
-                          backdrop-blur-xl  hover:shadow-gradient
-                          ${fileName === "script.js" ? "bg-blue-100 text-blue-500" : "bg-[rgba(193,219,253,0.15)]"}
-                          ${editorSideBarMode ? `max-w-24` : ``}
-                        `}
-                            onClick={(e) => {
-                                e.preventDefault();
-                                setFileName("script.js");
-                            }}
-                            aria-label="Selecionar arquivo script.js"
-                        >
-                            script.js
-                        </button>
-                        <button
-                            className={`
-                          h-full flex-1 flex justify-center items-center
-                          px-4 backdrop-blur-sm  hover:shadow-gradient
-                          ${fileName === "image.svg" ? "bg-blue-100 text-blue-500" : "bg-[rgba(193,219,253,0.1)]"}
-                          ${editorSideBarMode ? `max-w-24` : `rounded-tr-md`}
-                        `}
-                            onClick={(e) => {
-                                e.preventDefault();
-                                setFileName("image.svg");
-                            }}
-                            aria-label="Selecionar arquivo image.svg"
-                        >
-                            image.svg
-                        </button>
-                    </div>
-                </section>
+                </FileSelector>
                 <section
                     className={`
                       grid-in-code
@@ -284,9 +249,11 @@ export default function InputBoxLayout({ nextImageHandler }) {
                                 className="flex-1 rounded-md"
                                 width="100%"
                                 height="600px"
-                                path={file.name}
-                                defaultLanguage={file.language}
-                                defaultValue={file.value}
+                                onChange={handleEditorChange}
+                                value={filesCurrent[0][selectedFileName].value}
+                                path={selectedFile.name}
+                                defaultLanguage={selectedFile.language}
+                                defaultValue={selectedFile.value}
                                 onMount={(editor) => (editorRef.current = editor)}
                                 options={{
                                     minimap: { enabled: true },
@@ -298,6 +265,6 @@ export default function InputBoxLayout({ nextImageHandler }) {
                     </div>
                 </section>
             </main>
-        </form>
+        </div>
     );
 }
