@@ -10,7 +10,7 @@ export default function NavBar({ extra }) {
     <Navbar
       fluid
       rounded
-      className="fixed w-full z-20 top-0 start-0 backdrop-blur-md bg-black/[.06] md:bg-white/[.04]"
+      className="fixed w-full z-20 top-0 start-0 backdrop-blur-md bg-black/[.06] md:bg-white/[.04] noselect"
     >
       <div className="w-full flex flex-wrap items-center justify-between mx-auto px-4">
         <Navbar.Brand
