@@ -7,6 +7,12 @@ import { useMemo } from 'react';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import FileCopyIcon from '@mui/icons-material/FileCopy';
 
+interface FileObject {
+  name: string;
+  desc?: string;
+  value: string;
+}
+
 export default function GeneratedSection({
     initialFiles, index, indexHandler,
     filesGenerated, setFilesGeneratedHandler,
@@ -49,14 +55,14 @@ const [selectedNewFile, setSelectedNewFile] = useState(null);
 
     // select
    const options = useMemo(() => {
-    const createOptionsGroup = (filesArray, groupLabel) => {
-        const options = filesArray.flatMap((files, index) =>
-            Object.entries(files)
-                .map(([key, file]) => ({
-                    value: `${groupLabel}_${index}_${key}`,
-                    label: file.name + (file.desc ? ` - <<${file.desc}>>` : ``),
-                }))
-        );
+    const createOptionsGroup = (filesArray: Record<string, FileObject>[], groupLabel: string) => {
+  const options = filesArray.flatMap((files, index) =>
+    Object.entries(files)
+      .map(([key, file]: [string, FileObject]) => ({
+        value: `${groupLabel}_${index}_${key}`,
+        label: file.name + (file.desc ? ` - <<${file.desc}>>` : ``),
+      }))
+  );
 
         // Sort options by the label, ensuring that files with the same name are grouped together
         return {
