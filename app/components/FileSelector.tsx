@@ -27,7 +27,9 @@ export default function FileSelector ({ files, editorSideBarMode=false, editorOp
           >
             {fileName}
           </button>
-        ))}
+        ))
+
+        }
       </div>
     </section>
   );

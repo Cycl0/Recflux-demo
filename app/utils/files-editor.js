@@ -22,32 +22,59 @@ Código SVG relevante ao prompt
 -->
 `;
 
-const files = {
+export const initialFiles = {
   "index.html": {
     name: "index.html",
     language: "html",
-    value: someHTMLCodeExample
+    value: someHTMLCodeExample,
+    desc: ""
   },
   "style.css": {
     name: "style.css",
     language: "css",
-    value: someCSSCodeExample
+    value: someCSSCodeExample,
+    desc: ""
   },
   "script.js": {
     name: "script.js",
     language: "javascript",
-    value: someJSCodeExample
+    value: someJSCodeExample,
+    desc: ""
   },
   "image.svg": {
     name: "image.svg",
     language: "xml",
-    value: someSvgExample
-  },
-  "commentary": {
-    name: "commentary",
-    language: "",
-    value: "",
+    value: someSvgExample,
+    desc: ""
   }
 };
 
-export default files;
+export const emptyFiles = {
+  "index.html": {
+    name: "index.html",
+    language: "html",
+    value: "",
+    desc: ""
+  },
+  "style.css": {
+    name: "style.css",
+    language: "css",
+    value: "",
+    desc: ""
+  },
+  "script.js": {
+    name: "script.js",
+    language: "javascript",
+    value: "",
+    desc: ""
+  },
+  "image.svg": {
+    name: "image.svg",
+    language: "xml",
+    value: "",
+    desc: ""
+  }
+};
+
+
+export default {emptyFiles, initialFiles};

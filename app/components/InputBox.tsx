@@ -19,7 +19,9 @@ export default function InputBox({
   filesCurrent,
   setFilesCurrentHandler,
   filesRecentPrompt,
-  setFilesRecentPromptHandler
+  setFilesRecentPromptHandler,
+   setFilesGeneratedHandler,
+  codeData
 }) {
 
   // generation
@@ -31,6 +33,12 @@ export default function InputBox({
       Object.keys(filesCurrent[0]).forEach(fileName => {
         setFilesRecentPromptHandler(fileName, filesCurrent[0][fileName].value, nextIndex);
       });
+
+            setFilesGeneratedHandler("index.html", codeData.demoCodeHTML[nextIndex], nextIndex);
+            setFilesGeneratedHandler("style.css", codeData.demoCodeCSS[nextIndex], nextIndex);
+            setFilesGeneratedHandler("script.js", codeData.demoCodeJS[nextIndex], nextIndex);
+            setFilesGeneratedHandler("image.svg", codeData.demoSVG[nextIndex], nextIndex);
+
       setIsClicked(true);
       indexHandler((prevIndex) => prevIndex + 1);
     }, 1000),
@@ -267,4 +275,5 @@ export default function InputBox({
             </main>
         </div>
     );
+
 }
