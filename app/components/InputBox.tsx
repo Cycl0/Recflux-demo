@@ -17,6 +17,10 @@ export default function InputBox({
   indexHandler,
   files,
   filesCurrent,
+  selectedFile,
+  handleFileSelect,
+  editorOpen,
+  throttleEditorOpen,
   setFilesCurrentHandler,
   filesRecentPrompt,
   setFilesRecentPromptHandler,
@@ -77,27 +81,13 @@ export default function InputBox({
         break;
     }
   };
-
   // files
-  const [selectedFileName, setSelectedFileName] = useState("index.html");
-  const selectedFile = files[selectedFileName];
   useEffect(() => {
     editorRef.current?.focus();
   }, [selectedFile?.name]);
-  const handleFileSelect = (fileName) => (e) => {
-    e.preventDefault();
-    setSelectedFileName(fileName);
-  };
 
   // editor
   const editorRef = useRef(null);
-  const [editorOpen, setEditorOpen] = useState(false);
-  const throttleEditorOpen = useCallback(
-    throttle((newMode) => {
-      setEditorOpen(newMode);
-    }, 1000),
-    []
-  );
   const [editorSideBarMode, setEditorSideBarMode] = useState(false);
   const throttleLayoutChange = useCallback(
     throttle((newMode) => {
@@ -107,9 +97,9 @@ export default function InputBox({
   );
   const handleEditorChange = useCallback(
   throttle((value, event) => {
-    setFilesCurrentHandler(selectedFileName, value, 0);
-  }, 1000),
-  [selectedFileName, setFilesCurrentHandler]
+    setFilesCurrentHandler(selectedFile?.name, value, 0);
+  }, 200),
+  [selectedFile?.name, setFilesCurrentHandler]
 );
 
   // grid animation
@@ -206,7 +196,7 @@ export default function InputBox({
                              editorSideBarMode={editorSideBarMode}
                              editorOpen={editorOpen}
                              handleFileSelect={handleFileSelect}
-                             selectedFileName={selectedFileName}
+                             selectedFileName={selectedFile?.name}
                              className={`
                                grid-in-files flex
                                ${editorOpen ? editorSideBarMode ? `2xs:neon-l-shape-right justify-end` : `2xs:neon-l-shape-left` : ``}`}>
@@ -258,7 +248,7 @@ export default function InputBox({
                                 width="100%"
                                 height="600px"
                                 onChange={handleEditorChange}
-                                value={filesCurrent[0][selectedFileName].value}
+                                value={filesCurrent[0][selectedFile?.name]?.value}
                                 path={selectedFile.name}
                                 defaultLanguage={selectedFile.language}
                                 defaultValue={selectedFile.value}

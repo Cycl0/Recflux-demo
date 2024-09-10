@@ -4,21 +4,41 @@ import Modal from "@/components/Modal";
 import Select from 'react-select';
 import ReactDiffViewer from 'react-diff-viewer';
 import { useMemo } from 'react';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import FileCopyIcon from '@mui/icons-material/FileCopy';
 
 export default function GeneratedSection({
     initialFiles, index, indexHandler,
     filesGenerated, setFilesGeneratedHandler,
     filesCurrent, setFilesCurrentHandler,
+      handleFileSelect,
+  throttleEditorOpen,
     filesRecentPrompt,
-    demoThumbnails,  demoUrl
+    demoThumbnails, demoUrl
 }) {
 
     const [oldCode, setOldCode] = useState("");
     const [newCode, setNewCode] = useState("");
 
+        const [selectedOldFileName, setSelectedOldFileName] = useState("index.html");
+        const [selectedNewFileName, setSelectedNewFileName] = useState("index.html");
 
     const [selectedOldFile, setSelectedOldFile] = useState(null);
 const [selectedNewFile, setSelectedNewFile] = useState(null);
+
+
+    // diff
+    const refreshDiff = () => {
+        handleOldSelectChange(getLastOption(2, 0, selectedOldFileName)); // 2 is the index for 'Atual' group, offset 0 so it's last
+    }
+
+    const copyToCurrentFile = () => {
+        setFilesCurrentHandler(selectedNewFileName, newCode);
+        handleOldSelectChange(getLastOption(2, 0, selectedNewFileName)); // 2 is the index for 'Atual' group, offset 0 so it's last
+        handleFileSelect(selectedNewFileName); // change the file in the editor
+        throttleEditorOpen(true); // opennn the editor
+    }
+
 
     // modal
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -70,26 +90,34 @@ const [selectedNewFile, setSelectedNewFile] = useState(null);
 }, [filesRecentPrompt, filesGenerated, filesCurrent, index]);
 
 
-    useEffect(() => {
-    // Function to get the last option from a group
-    const getLastOption = (groupIndex, offset) => {
-        if (options[groupIndex] && options[groupIndex].options.length > 0) {
-            return options[groupIndex].options[options[groupIndex].options.length - 1 - offset];
+// Function to get the last option from a group
+    const getLastOption = (groupIndex, offset, fileName) => {
+        const groupOptions = options[groupIndex]?.options;
+    if (groupOptions && groupOptions.length > 0) {
+        let matchCount = 0;
+        for (let i = groupOptions.length - 1; i >= 0; i--) {
+            if (groupOptions[i].label.startsWith(fileName)) {
+                ++matchCount;
+                if (matchCount == offset + 1) {
+                    return groupOptions[i];
+                }
+            }
         }
-        return null;
-    };
+    }
+    return null;
+};
+
+    useEffect(() => {
 
     // Set the old file (current)
-    const oldFileOption = getLastOption(1, 1); // 1 is the index for 'Gerado' group, offset 1 so it's second from last
+    const oldFileOption = getLastOption(1, 1, selectedOldFileName); // 1 is the index for 'Gerado' group, offset 1 so it's second from last
     if (oldFileOption) {
-        setSelectedOldFile(oldFileOption);
         handleOldSelectChange(oldFileOption);
     }
 
     // Set the new file (generated)
-    const newFileOption = getLastOption(1, 0); // 1 is the index for 'Gerado' group, offset 0 so it's last
+    const newFileOption = getLastOption(1, 0, selectedNewFileName); // 1 is the index for 'Gerado' group, offset 0 so it's last
     if (newFileOption) {
-        setSelectedNewFile(newFileOption);
         handleNewSelectChange(newFileOption);
     }
 }, [filesGenerated, index, options]);
@@ -108,6 +136,7 @@ const handleOldSelectChange = (selectedOption) => {
     }
     setOldCode(fileContent);
     setSelectedOldFile(selectedOption);
+    setSelectedOldFileName(fileName);
 };
 
 const handleNewSelectChange = (selectedOption) => {
@@ -123,6 +152,7 @@ const handleNewSelectChange = (selectedOption) => {
     }
     setNewCode(fileContent);
     setSelectedNewFile(selectedOption);
+    setSelectedNewFileName(fileName);
 };
 
 
@@ -241,7 +271,7 @@ const handleNewSelectChange = (selectedOption) => {
                     borderColor='#60efff'
                 />
             </div>
-            <div className={`w-full flex items-center justify-center mt-20`}>
+            <div className={`w-full flex items-center justify-center mt-20 relative`}>
                 <Select
                     options={options}
                     onChange={handleOldSelectChange}
@@ -258,6 +288,32 @@ const handleNewSelectChange = (selectedOption) => {
                     className="w-full"
                     placeholder="Selecione um arquivo para comparar"
                 />
+                <button
+                    onClick={(e) => {
+                        e.preventDefault();
+                        refreshDiff();
+                    }}
+                    className={`!absolute
+                        left-0 top-10
+                        w-10 h-10 bg-[rgba(193,219,253,0.15)] backdrop-blur-md text-white
+                        p-1.5 hover:shadow-gradient
+                        transition-all transform-gpu  ease-in-out duration-200
+                      `}>
+                    <RefreshIcon />
+                </button>
+                <button
+                    onClick={(e) => {
+                        e.preventDefault();
+                        copyToCurrentFile();
+                    }}
+                    className={`!absolute
+                        right-0 top-10
+                        w-10 h-10 bg-[rgba(193,219,253,0.15)] backdrop-blur-md text-white
+                        p-1.5 hover:shadow-gradient
+                        transition-all transform-gpu  ease-in-out duration-200
+                      `}>
+                    <FileCopyIcon />
+                </button>
             </div>
             <ReactDiffViewer oldValue={oldCode} newValue={newCode} splitView={false} />
             <Modal

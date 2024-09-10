@@ -1,21 +1,39 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import InputBox from "@/components/InputBox";
 import GeneratedSection from "@/components/GeneratedSection";
 import VideoBackground from '@/components/VideoBackground';
 import NavBar from '@/components/NavBar';
 import { Button } from "flowbite-react";
 import {emptyFiles, initialFiles} from "@/utils/files-editor";
+import { throttle } from 'lodash';
 
 export default function Home() {
 
     const [index, setIndex] = useState(-1);
 
+
+   // Editor
+   const [editorOpen, setEditorOpen] = useState(false);
+  const throttleEditorOpen = useCallback(
+    throttle((newMode) => {
+      setEditorOpen(newMode);
+    }, 1000),
+    []
+  );
+
+
     // Files
     const [filesRecentPrompt, setFilesRecentPrompt] = useState([]);
     const [filesCurrent, setFilesCurrent] = useState([initialFiles]);
     const [filesGenerated, setFilesGenerated] = useState([]);
+
+    const [selectedFile, setSelectedFile] = useState(filesCurrent[0]["index.html"]);
+    const handleFileSelect = (fileName) => (e) => {
+        e.preventDefault();
+        setSelectedFile(filesCurrent[0][fileName]);
+    };
 
     // Compose Handlers
   function setFilesHandler(setter, fileName, content, desc, index = 0) {
@@ -135,7 +153,10 @@ export default function Home() {
             <main className="xl:!p-36 lg:!p-12 md:!p-8 sm:!p-4">
                 <VideoBackground />
                 <div id="content" className={`min-h-screen items-center justify-between py-40 md:py-20 md:px-12 xs:px-4 px-2 rounded-md`}>
-                    <InputBox indexHandler={indexHandler} files={initialFiles}  setFilesGeneratedHandler={setFilesGeneratedHandler} codeData={codeData}
+                    <InputBox indexHandler={indexHandler} files={initialFiles}  setFilesGeneratedHandler={setFilesGeneratedHandler}  selectedFile={selectedFile}
+                              handleFileSelect={handleFileSelect}
+                              editorOpen={editorOpen}
+                              throttleEditorOpen={throttleEditorOpen}  codeData={codeData}
                             filesCurrent={filesCurrent} setFilesCurrentHandler={setFilesCurrentHandler}
                             filesRecentPrompt={filesRecentPrompt} setFilesRecentPromptHandler={setFilesRecentPromptHandler} />
                     {(index > -1) && (
@@ -144,7 +165,8 @@ export default function Home() {
                             index={index} indexHandler={indexHandler}
                             filesGenerated={filesGenerated} setFilesGeneratedHandler={setFilesGeneratedHandler}
                             filesCurrent={filesCurrent} setFilesCurrentHandler={setFilesCurrentHandler}
-                            filesRecentPrompt={filesRecentPrompt}
+                            filesRecentPrompt={filesRecentPrompt} handleFileSelect={handleFileSelect}
+                              throttleEditorOpen={throttleEditorOpen}
                             demoThumbnails={demoThumbnails} demoUrl={demoUrl}
                         />
                     )}
