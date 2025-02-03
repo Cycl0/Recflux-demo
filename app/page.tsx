@@ -90,7 +90,6 @@ export default function Home() {
     const [codeData, setCodeData] = useState([]);
 
     // fetch
-    //
 
     const [demoThumbnails, setDemoThumbnails] = useState([]);
     const [demoUrl, setDemoUrl] = useState([]);
