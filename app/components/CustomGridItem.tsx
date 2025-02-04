@@ -1,6 +1,7 @@
 import React, { forwardRef, ReactNode, useCallback, useState } from 'react';
 
 interface CustomGridItemProps {
+  id?: string;
   style?: React.CSSProperties;
   className?: string;
   onMouseDown?: (e: React.MouseEvent) => void;
@@ -14,7 +15,7 @@ interface CustomGridItemProps {
 }
 
 const CustomGridItem = forwardRef<HTMLDivElement, CustomGridItemProps>(
-  ({ style, className, onMouseDown, onMouseUp, onTouchStart, onTouchEnd, children, isActive, zIndex, ...props }, ref) => {
+  ({ id, style, className, onMouseDown, onMouseUp, onTouchStart, onTouchEnd, children, isActive, zIndex, ...props }, ref) => {
     const [isDragging, setIsDragging] = useState(false);
 
     const handleDragStart = useCallback((e: React.MouseEvent | React.TouchEvent) => {
@@ -39,6 +40,7 @@ const CustomGridItem = forwardRef<HTMLDivElement, CustomGridItemProps>(
 
     return (
       <div
+        id={id}
         ref={ref}
         style={{
           ...style,

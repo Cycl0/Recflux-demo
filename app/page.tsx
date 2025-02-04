@@ -8,6 +8,7 @@ import NavBar from '@/components/NavBar';
 import { Button } from "flowbite-react";
 import {emptyFiles, initialFiles} from "@/utils/files-editor";
 import { throttle } from 'lodash';
+import Link from 'next/link';
 
 export default function Home() {
 
@@ -137,17 +138,19 @@ export default function Home() {
     return (
         <>
             <NavBar extra={
-                <Button className="
-                       xs:!block hidden
-                       text-blue-900 bg-blue-100
-                       focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium
-                       rounded-md text-sm px-4 text-center
-                       hover:bg-black/[0.07] border-2 hover:border-green-400 hover:outline-none hover:text-green-300
-                       transition-all transform-gpu  duration-1000 ease-in-out hover:scale-[105%] group hover:z-20 focus:z-20
-                       hover:shadow-gradient hover:backdrop-blur-md"
-                >
-                    Teste agora
-                </Button>
+                <Link href={`/pages/editor`}>
+                    <Button className="
+                                    xs:!block hidden
+                                    text-blue-900 bg-blue-100
+                                    focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium
+                                    rounded-md text-sm px-4 text-center
+                                    hover:bg-black/[0.07] border-2 hover:border-green-400 hover:outline-none hover:text-green-300
+                                    transition-all transform-gpu  duration-1000 ease-in-out hover:scale-[105%] group hover:z-20 focus:z-20
+                                    hover:shadow-gradient hover:backdrop-blur-md"
+                    >
+                        Teste agora
+                    </Button>
+                </Link>
             } />
             <main className="xl:!p-36 lg:!p-12 md:!p-8 sm:!p-4">
                 <VideoBackground />
@@ -156,8 +159,8 @@ export default function Home() {
                               handleFileSelect={handleFileSelect}
                               editorOpen={editorOpen}
                               throttleEditorOpen={throttleEditorOpen}  codeData={codeData}
-                            filesCurrent={filesCurrent} setFilesCurrentHandler={setFilesCurrentHandler}
-                            filesRecentPrompt={filesRecentPrompt} setFilesRecentPromptHandler={setFilesRecentPromptHandler} />
+                              filesCurrent={filesCurrent} setFilesCurrentHandler={setFilesCurrentHandler}
+                              filesRecentPrompt={filesRecentPrompt} setFilesRecentPromptHandler={setFilesRecentPromptHandler} />
                     {(index > -1) && (
                         <GeneratedSection
                             initialFiles={initialFiles}
@@ -165,7 +168,7 @@ export default function Home() {
                             filesGenerated={filesGenerated} setFilesGeneratedHandler={setFilesGeneratedHandler}
                             filesCurrent={filesCurrent} setFilesCurrentHandler={setFilesCurrentHandler}
                             filesRecentPrompt={filesRecentPrompt} handleFileSelect={handleFileSelect}
-                              throttleEditorOpen={throttleEditorOpen}
+                            throttleEditorOpen={throttleEditorOpen}
                             demoThumbnails={demoThumbnails} demoUrl={demoUrl}
                         />
                     )}
