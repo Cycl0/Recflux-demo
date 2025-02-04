@@ -19,7 +19,7 @@ export default function Home(props) {
     const [filesCurrent, setFilesCurrent] = useState([initialFiles]);
     const [filesGenerated, setFilesGenerated] = useState([]);
 
-    const [selectedFile, setSelectedFile] = useState(filesCurrent[0]["index.html"]);
+    const [selectedFile, setSelectedFile] = useState(filesCurrent[0]["script.js"]);
     const handleFileSelect = (fileName) => (e) => {
         e.preventDefault();
         setSelectedFile(filesCurrent[0][fileName]);
@@ -147,14 +147,18 @@ export default function Home(props) {
   const [currentBreakpoint, setCurrentBreakpoint] = useState("lg");
   const [mounted, setMounted] = useState(false);
   const [initialLayout, setInitialLayout] = useState(null);
-  const [layouts, setLayouts] = useState<LayoutType>({ lg: initialLayout });
+
+
+  /* const [layouts, setLayouts] = useState<LayoutType>({ lg: initialLayout }); */
+  const [layouts, setLayouts] = useState<LayoutType>({
+    lg: window.innerWidth < 640 ? props.mobileLayout : props.initialLayout
+  });
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [zIndexCustomGridItem, setZIndexCustomGridItem] = useState(10);
 
     useEffect(() => {
     setMounted(true);
-    setInitialLayout(window.innerWidth < 640 ? props.mobileLayout : props.initialLayout);
   }, []);
 
   const onBreakpointChange = useCallback((breakpoint) => {
@@ -207,68 +211,68 @@ export default function Home(props) {
     *   );
     *  */
     return (
-        <main className="w-full min-h-[150vh] max-h[150vh] bg-blue-gradient py-24">
-            <NavBar extra={<NavStyledDropdown />} />
-          <LiveProvider code={filesCurrent[0]?.value} noInline>
-            <ResponsiveReactGridLayout
-                {...props}
-                draggableHandle=".drag-handle"
-                className="min-h-[150vh] max-h[150vh]"
-                layouts={layouts}
-                autoResize={false}
-                onBreakpointChange={onBreakpointChange}
-                onLayoutChange={onLayoutChange}
-                onResize={onResize}
-                onDragStart={onDragStart}
-                measureBeforeMount={false}
-                useCSSTransforms={mounted}
-                allowOverlap={true}
-                isResizable={true}
-                isDraggable={true}
+      <main className="w-full min-h-[150vh] bg-blue-gradient py-24">
+        <NavBar extra={<NavStyledDropdown />} />
+        <LiveProvider code={filesCurrent[0]?.value} noInline>
+          <ResponsiveReactGridLayout
+            {...props}
+            draggableHandle=".drag-handle"
+            className="min-h-[150vh] max-h[150vh]"
+            layouts={layouts}
+            autoResize={false}
+            onBreakpointChange={onBreakpointChange}
+            onLayoutChange={onLayoutChange}
+            onResize={onResize}
+            onDragStart={onDragStart}
+            measureBeforeMount={false}
+            useCSSTransforms={mounted}
+            allowOverlap={true}
+            isResizable={true}
+            isDraggable={true}
+          >
+            <CustomGridItem
+              key="0"
+              className="bg-black/[.3] transform-gpu shadow-gradient text-white transition-all duration-[5ms] ease-out"
+              isActive={activeKey === "0"}
+              zIndex={zIndexCustomGridItem}
             >
-                <CustomGridItem
-                    key="0"
-                    className="bg-black/[.3] transform-gpu shadow-gradient text-white transition-all duration-[5ms] ease-out"
-                    isActive={activeKey === "0"}
-                    zIndex={zIndexCustomGridItem}
-                >
-                    <Editor
-                        className="flex-1"
-                        width="100%"
-                        height="100%"
-                        path={filesCurrent[0]?.name}
-                        defaultLanguage={filesCurrent[0]?.language}
-                        defaultValue={filesCurrent[0]?.value}
-                        onMount={(editor) => (editorRef.current = editor)}
-                        onChange={handleEditorChange}
-                        options={{
-                            minimap: { enabled: true },
-                            fontSize: 14,
-                            wordWrap: 'on',
-                        }}
-                    />
-                </CustomGridItem>
-                <CustomGridItem
-                    key="1"
-                    className="bg-black/[.3] transform-gpu shadow-gradient text-white transition-all duration-[5ms] ease-in-out"
-                    isActive={activeKey === "1"}
-                    zIndex={zIndexCustomGridItem}
-                >
-                    <LiveEditor className="font-mono" />
-                </CustomGridItem>
-                <CustomGridItem
-                    key="2"
-                    className="bg-black/[.3] transform-gpu shadow-gradient text-white transition-all duration-[5ms] ease-in-out"
-                    isActive={activeKey === "2"}
-                    zIndex={zIndexCustomGridItem}
-                >
+              <Editor
+                className="flex-1"
+                width="100%"
+                height="100%"
+                path={filesCurrent[0]?.name}
+                defaultLanguage={filesCurrent[0]?.language}
+                defaultValue={filesCurrent[0]?.value}
+                onMount={(editor) => (editorRef.current = editor)}
+                onChange={handleEditorChange}
+                options={{
+                  minimap: { enabled: true },
+                  fontSize: 14,
+                  wordWrap: 'on',
+                }}
+              />
+            </CustomGridItem>
+            <CustomGridItem
+              key="1"
+              className="bg-black/[.3] transform-gpu shadow-gradient text-white transition-all duration-[5ms] ease-in-out"
+              isActive={activeKey === "1"}
+              zIndex={zIndexCustomGridItem}
+            >
+              <LiveEditor className="font-mono h-full" />
+            </CustomGridItem>
+            <CustomGridItem
+              key="2"
+              className="bg-black/[.3] transform-gpu shadow-gradient text-white transition-all duration-[5ms] ease-in-out"
+              isActive={activeKey === "2"}
+              zIndex={zIndexCustomGridItem}
+            >
 
-    <LivePreview />
-                  <LiveError />
-                </CustomGridItem>
-            </ResponsiveReactGridLayout>
-</LiveProvider>
-        </main>
+              <LivePreview />
+              <LiveError />
+            </CustomGridItem>
+          </ResponsiveReactGridLayout>
+        </LiveProvider>
+      </main>
     );
 }
 

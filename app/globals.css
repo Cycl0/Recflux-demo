@@ -334,3 +334,7 @@ html {
     background: none;
   }
 }
+
+pre {
+  height: 100%;
+}
