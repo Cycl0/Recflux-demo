@@ -16,8 +16,8 @@ export async function POST(req: Request) {
     }
 
       const result = streamText({
-          model: openai('gpt-4o'),
-          system: 'You are a helpful assistant.',
+          model: openai('gpt-4.1'),
+          system: 'You are a helpful assistant.\nYou will output the code in react no matter what and will replace the export default with render(<component/>) and not use any imports. You will give the code formatted in a code block and comment about it only above the block',
           messages,
       });
 
