@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback, useMemo, useRef, useContext } from "react";
+import Cookies from 'js-cookie';
 import { GoogleOAuthProvider, useGoogleOneTapLogin } from '@react-oauth/google';
 import PropTypes from "prop-types";
 import WinBoxWindow from '@/components/WinBoxWindow';
@@ -11,6 +12,7 @@ import 'react-resizable/css/styles.css';
 import { LiveProvider, LiveEditor, LivePreview, LiveError } from "react-live";
 import {emptyFiles, initialFiles} from "@/utils/files-editor";
 import { throttle } from 'lodash';
+import { supabase } from '@/utils/supabaseClient';
 
 import { Button } from '@mui/material';
 import LayersIcon from '@mui/icons-material/Layers'; // Represents "overlap on"
@@ -26,6 +28,7 @@ import 'prismjs/themes/prism-tomorrow.css';
 import TextareaAutosize from 'react-textarea-autosize';
 import IconSend from "@/components/IconSend";
 import Select from 'react-select';
+import Image from 'next/image';
 
 // Chat action options for the Select component
 const chatActionOptions = [
@@ -37,6 +40,9 @@ const chatActionOptions = [
 
 import { useRouter } from 'next/navigation';
 
+// const { data, error } = await supabase.from('users').select('*');
+
+
 // Editor context for sending code to the editor
 const EditorContext = React.createContext({
   setFilesCurrentHandler: (fileName: string, code: string, index?: number) => {},
@@ -45,14 +51,26 @@ const EditorContext = React.createContext({
 });
 
 function Chat() {
+  // Restore chat prompt from cookie
+  const [input, setInput] = useState(() => Cookies.get('chatPrompt') || '');
+  useEffect(() => {
+    Cookies.set('chatPrompt', input, { expires: 7 });
+  }, [input]);
   const { setFilesCurrentHandler, throttleEditorOpen, selectedFile } = useContext(EditorContext);
   const [chatAction, setChatAction] = useState({ value: '1', label: 'GERAR' });
   const chat = useChat({
     api: '/api/chat',
   });
-  const { messages, input, handleInputChange, handleSubmit: baseHandleSubmit, isLoading } = chat;
+  const { messages, handleInputChange: baseHandleInputChange, handleSubmit: baseHandleSubmit, isLoading } = chat;
+
+  // Custom handleInputChange to sync with cookie
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    setInput(e.target.value);
+    baseHandleInputChange(e);
+  }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    Cookies.remove('chatPrompt');
     e.preventDefault();
     if (chatAction.value === '2') { // EDITAR
       // Compose a prompt referencing the code from the editor
@@ -375,31 +393,140 @@ function SendToEditorButton({ codeContent, part }: { codeContent: string; part: 
   );
 }
 
-function GoogleOneTapHandler() {
+function TriggerableGoogleOneTapHandler({ open, onClose }: { open: boolean, onClose: () => void }) {
+ 
   useGoogleOneTapLogin({
-    onSuccess: credentialResponse => {
+    onSuccess: async (credentialResponse) => {
       console.log('One Tap Success:', credentialResponse);
+      const { credential } = credentialResponse;
+      // Exchange Google credential for Supabase session
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: credential,
+      });
+      if (error) {
+        console.error('Supabase signInWithIdToken error:', error);
+      } else {
+        console.log('Supabase session:', data);
+      }
+      onClose();
     },
     onError: () => {
       console.log('One Tap Login Failed');
+      onClose();
     },
     promptMomentNotification: notification => {
       console.log('Prompt notification:', notification);
-      if (notification.isNotDisplayed && notification.isNotDisplayed()) {
-        console.log('One Tap prompt was not displayed:', notification.getNotDisplayedReason && notification.getNotDisplayedReason());
-      }
-      if (notification.isSkippedMoment && notification.isSkippedMoment()) {
-        console.log('One Tap prompt was skipped:', notification.getSkippedReason && notification.getSkippedReason());
-      }
-      if (notification.isDismissedMoment && notification.isDismissedMoment()) {
-        console.log('One Tap prompt was dismissed:', notification.getDismissedReason && notification.getDismissedReason());
+      if (
+        (notification.isNotDisplayed && notification.isNotDisplayed()) ||
+        (notification.isSkippedMoment && notification.isSkippedMoment()) ||
+        (notification.isDismissedMoment && notification.isDismissedMoment())
+      ) {
+        onClose();
       }
     }
   });
   return null;
 }
 
+function useSupabaseGoogleRegistration() {
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const router = useRouter();
+
+  // Helper to register/update user in your table
+  const registerUserIfNeeded = async (sessionUser) => {
+    if (!sessionUser) {
+      console.log('[registerUserIfNeeded] No sessionUser');
+      return;
+    }
+    console.log('[registerUserIfNeeded] sessionUser:', sessionUser);
+    setUser(sessionUser);
+    const { id, email, user_metadata } = sessionUser;
+    const { data: existingUser, error: selectError } = await supabase
+      .from('users')
+      .select('id')
+      .eq('email', email)
+      .single();
+    if (selectError) {
+      console.error('[registerUserIfNeeded] select error:', selectError);
+    }
+    if (!existingUser) {
+      const { error: insertError } = await supabase.from('users').insert([
+        {
+          email,
+          username: user_metadata?.full_name || user_metadata?.name || email.split('@')[0],
+          google_id: user_metadata?.sub || id,
+          full_name: user_metadata?.full_name || user_metadata?.name || email.split('@')[0],
+          avatar_url: user_metadata?.avatar_url || null,
+        }
+      ]);
+      if (insertError) {
+        console.error('User insert error:', insertError);
+      } else {
+        console.log('User inserted in users table');
+      }
+    } else {
+      const { error: updateError } = await supabase.from('users').update({
+        full_name: user_metadata?.full_name || user_metadata?.name || email.split('@')[0],
+        avatar_url: user_metadata?.avatar_url || null,
+      }).eq('email', email);
+      if (updateError) {
+        console.error('User update error:', updateError);
+      } else {
+        console.log('User updated in users table');
+      }
+    }
+  };
+
+  useEffect(() => {
+    // Always check session on mount
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      console.log('[useEffect] getSession result:', session);
+      if (session?.user) {
+        registerUserIfNeeded(session.user);
+      } else {
+        console.log('[useEffect] No user in session');
+      }
+      setLoading(false);
+    });
+
+    // Listen for auth state changes
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[onAuthStateChange]', event, session);
+      if (event === 'SIGNED_IN' && session?.user) {
+        registerUserIfNeeded(session.user);
+      }
+      if (event === 'SIGNED_OUT') {
+        setUser(null);
+      }
+      setLoading(false);
+    });
+    return () => {
+      authListener?.subscription.unsubscribe();
+    };
+  }, []);
+
+  return { user, loading };
+}
+
+
 export default function Home({ onLayoutChange = () => {}, ...props }) {
+  // Restore editor code from cookie
+  const [filesCurrent, setFilesCurrent] = useState(() => {
+    const saved = Cookies.get('editorCode');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {
+        return [initialFiles];
+      }
+    }
+    return [initialFiles];
+  });
+  useEffect(() => {
+    Cookies.set('editorCode', JSON.stringify(filesCurrent), { expires: 7 });
+  }, [filesCurrent]);
   // Track the last file sent to the editor
   const [lastUpdatedFile, setLastUpdatedFile] = useState('script.js');
   // ...existing Home logic
@@ -409,7 +536,6 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
 
   // Files
   const [filesRecentPrompt, setFilesRecentPrompt] = useState([]);
-  const [filesCurrent, setFilesCurrent] = useState([initialFiles]);
   const [filesGenerated, setFilesGenerated] = useState([]);
 
   // Update selectedFile when filesCurrent or lastUpdatedFile changes
@@ -425,7 +551,47 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
     setSelectedFile(filesCurrent[0][fileName]);
     setLastUpdatedFile(fileName);
   };
-
+function GoogleSignInButton() {
+  const handleGoogleLogin = async () => {
+    await supabase.auth.signInWithOAuth({
+  provider: 'google',
+  options: {
+    redirectTo: `${window.location.origin}/pages/editor`
+  }
+});
+  };
+  return (
+    <button
+      onClick={handleGoogleLogin}
+      title="Sign in with Google"
+      className="
+        px-4 h-9 flex items-center justify-center
+        rounded-full
+        bg-cyan-400/30
+        text-cyan-200
+        font-semibold
+        shadow-md
+        border border-cyan-200/30
+        backdrop-blur-md
+        transition-all
+        hover:bg-cyan-400/50
+        hover:text-white
+        hover:shadow-cyan-400/40
+        hover:scale-105
+        focus:outline-none
+        focus:ring-2 focus:ring-cyan-300
+      "
+      style={{
+        WebkitBackdropFilter: 'blur(8px)',
+        backdropFilter: 'blur(8px)',
+        fontSize: 15,
+        letterSpacing: 0.5,
+      }}
+    >
+      Sign in
+    </button>
+  );
+}
 
     // Compose Handlers
   function setFilesHandler(setter, fileName, content, desc, index = 0) {
@@ -701,12 +867,54 @@ const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 if (!clientId) {
   throw new Error('Missing NEXT_PUBLIC_GOOGLE_CLIENT_ID in your environment. Please check your .env.local file.');
 }
+
+const { user: supabaseUser, loading: userLoading } = useSupabaseGoogleRegistration();
+
+console.log('DEBUG supabaseUser:', supabaseUser);
+const [showOneTap, setShowOneTap] = useState(true);
+const handleLogout = async () => {
+  await supabase.auth.signOut();
+  setShowOneTap(true);
+};
+
+let navExtra;
+if (userLoading) {
+  navExtra = (
+    <div className="flex items-center justify-center h-9 px-4">
+      <span className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-400"></span>
+    </div>
+  );
+} else if (supabaseUser) {
+  const name =
+    supabaseUser.user_metadata?.full_name ||
+    supabaseUser.user_metadata?.name ||
+    supabaseUser.email?.split("@")[0] || "";
+  const email = supabaseUser.email;
+  const avatarUrl =
+    supabaseUser.user_metadata?.avatar_url || "/images/icon.png";
+  console.log('DEBUG supabaseUser:', supabaseUser);
+  console.log('DEBUG avatarUrl:', avatarUrl);
+  navExtra = (
+    <NavStyledDropdown
+  name={name}
+  email={email}
+  avatarUrl={avatarUrl}
+  onLogout={handleLogout}
+/>
+  );
+} else {
+  navExtra = <GoogleSignInButton />;
+}
+
 return (
   <GoogleOAuthProvider clientId={clientId}>
-    <GoogleOneTapHandler />
+    {showOneTap && (
+      <TriggerableGoogleOneTapHandler open={showOneTap} onClose={() => setShowOneTap(false)} />
+    )}
+
     <div className="bg-blue-gradient min-h-screen w-full relative">
       <EditorContext.Provider value={{ setFilesCurrentHandler, throttleEditorOpen, selectedFile }}>
-        <NavBar extra={<NavStyledDropdown />} />
+        <NavBar extra={navExtra} />
         <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={400} height={500}>
           <Chat />
         </WinBoxWindow>
