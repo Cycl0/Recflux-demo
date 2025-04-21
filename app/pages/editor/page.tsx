@@ -665,10 +665,10 @@ return (
     <EditorContext.Provider value={{ setFilesCurrentHandler, throttleEditorOpen, selectedFile }}>
       <main className="w-full min-h-[150vh] bg-blue-gradient py-24">
         <NavBar extra={<NavStyledDropdown />} />
-        <WinBoxWindow title="Chat" x={50} y={50} width={400} height={500}>
+        <WinBoxWindow title="Chat" x={50} y={100} width={400} height={500}>
           <Chat />
         </WinBoxWindow>
-        <WinBoxWindow title="Editor" x={500} y={50} width={600} height={500}>
+        <WinBoxWindow title="Editor" x={500} y={100} width={600} height={500}>
           <div className="w-full h-full flex flex-col min-h-0 min-w-0">
             <Editor
               key={selectedFile?.name}
@@ -691,7 +691,7 @@ return (
             />
           </div>
         </WinBoxWindow>
-        <WinBoxWindow title="Preview" x={1150} y={50} width={500} height={500}>
+        <WinBoxWindow title="Preview" x={1150} y={100} width={500} height={500}>
           <LiveProvider code={selectedFile?.value} scope={reactScope} noInline>
             <LivePreview />
             <LiveError className="text-wrap" />
