@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, useEffect, useCallback, useMemo, useRef, useContext } from "react";
+import { GoogleOAuthProvider, useGoogleOneTapLogin } from '@react-oauth/google';
 import PropTypes from "prop-types";
 import WinBoxWindow from '@/components/WinBoxWindow';
 import NavBar from '@/components/NavBar';
@@ -213,10 +214,10 @@ Pedido do usuário: ${input}`;
                               // Guess file extension from language
                               let lang = match ? match[1].toLowerCase() : '';
                               let fileName = 'script.js';
-                              if (lang.includes('html')) fileName = 'index.html';
-                              else if (lang.includes('css')) fileName = 'style.css';
-                              else if (lang.includes('js')) fileName = 'script.js';
-                              else if (lang.includes('svg') || lang.includes('xml')) fileName = 'image.svg';
+                              if (lang && lang.includes('html')) fileName = 'index.html';
+                              else if (lang && lang.includes('css')) fileName = 'style.css';
+                              else if (lang && lang.includes('js')) fileName = 'script.js';
+                              else if (lang && (lang.includes('svg') || lang.includes('xml'))) fileName = 'image.svg';
                               setFilesCurrentHandler(fileName, codeContent, 0);
                               throttleEditorOpen(true);
                             }}
@@ -372,6 +373,30 @@ function SendToEditorButton({ codeContent, part }: { codeContent: string; part: 
       Enviar para o Editor
     </button>
   );
+}
+
+function GoogleOneTapHandler() {
+  useGoogleOneTapLogin({
+    onSuccess: credentialResponse => {
+      console.log('One Tap Success:', credentialResponse);
+    },
+    onError: () => {
+      console.log('One Tap Login Failed');
+    },
+    promptMomentNotification: notification => {
+      console.log('Prompt notification:', notification);
+      if (notification.isNotDisplayed && notification.isNotDisplayed()) {
+        console.log('One Tap prompt was not displayed:', notification.getNotDisplayedReason && notification.getNotDisplayedReason());
+      }
+      if (notification.isSkippedMoment && notification.isSkippedMoment()) {
+        console.log('One Tap prompt was skipped:', notification.getSkippedReason && notification.getSkippedReason());
+      }
+      if (notification.isDismissedMoment && notification.isDismissedMoment()) {
+        console.log('One Tap prompt was dismissed:', notification.getDismissedReason && notification.getDismissedReason());
+      }
+    }
+  });
+  return null;
 }
 
 export default function Home({ onLayoutChange = () => {}, ...props }) {
@@ -653,133 +678,139 @@ const handleEditorChange = useMemo(
       const hash = window.location.hash;
       if (hash) {
         const element = document.querySelector(hash);
-        element?.scrollIntoView({ behavior: 'smooth' });
       }
     };
 
-    window.addEventListener('hashchange', handleHashScroll);
-    return () => window.removeEventListener('hashchange', handleHashScroll);
+  window.addEventListener('hashchange', handleHashScroll);
+  return () => window.removeEventListener('hashchange', handleHashScroll);
 }, []);
 
+const centerWinBox = (id: string) => {
+  const winbox = window.winboxWindows?.[id];
+  if (winbox) {
+    const width = winbox.width;
+    const height = winbox.height;
+    const x = Math.max(0, (window.innerWidth - width) / 2);
+    const y = Math.max(0, (window.innerHeight - height) / 2);
+    winbox.move(x, y);
+    winbox.focus();
+  }
+};
+
+const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
+if (!clientId) {
+  throw new Error('Missing NEXT_PUBLIC_GOOGLE_CLIENT_ID in your environment. Please check your .env.local file.');
+}
 return (
-    <EditorContext.Provider value={{ setFilesCurrentHandler, throttleEditorOpen, selectedFile }}>
-        <main className="w-full min-h-[150vh] bg-blue-gradient py-24">
-            <NavBar extra={<NavStyledDropdown />} />
-            <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={400} height={500}>
-                <Chat />
-            </WinBoxWindow>
-            <WinBoxWindow id="editor" title="Editor" x={500} y={100} width={600} height={500}>
-                <div className="w-full h-full flex flex-col min-h-0 min-w-0">
-                    <Editor
-                        key={selectedFile?.name}
-                        className="flex-1 w-full h-full min-h-0 min-w-0"
-                        width="100%"
-                        height="100%"
-                        path={selectedFile?.name}
-                        defaultLanguage={selectedFile?.language}
-                        value={selectedFile?.value}
-                        onMount={(editor) => {
-                            editorRef.current = editor;
-                            setTimeout(() => editor.layout(), 100);
-                        }}
-                        onChange={handleEditorChange}
-                        options={{
-                            minimap: { enabled: true },
-                            fontSize: 14,
-                            wordWrap: 'on',
-                        }}
-                    />
+  <GoogleOAuthProvider clientId={clientId}>
+    <GoogleOneTapHandler />
+    <div className="bg-blue-gradient min-h-screen w-full relative">
+      <EditorContext.Provider value={{ setFilesCurrentHandler, throttleEditorOpen, selectedFile }}>
+        <NavBar extra={<NavStyledDropdown />} />
+        <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={400} height={500}>
+          <Chat />
+        </WinBoxWindow>
+        <WinBoxWindow id="editor" title="Editor" x={500} y={100} width={600} height={500}>
+          <div className="w-full h-full flex flex-col min-h-0 min-w-0">
+            <Editor
+                key={selectedFile?.name}
+                className="flex-1 w-full h-full min-h-0 min-w-0"
+                width="100%"
+                height="100%"
+                path={selectedFile?.name}
+                defaultLanguage={selectedFile?.language}
+                value={selectedFile?.value}
+                onMount={(editor) => {
+                  editorRef.current = editor;
+                  setTimeout(() => editor.layout(), 100);
+                }}
+                onChange={handleEditorChange}
+                options={{
+                  minimap: { enabled: true },
+                  fontSize: 14,
+                  wordWrap: 'on',
+                }}
+              />
+            </div>
+          </WinBoxWindow>
+          <WinBoxWindow id="preview" title="Preview" x={1150} y={100} width={500} height={500}>
+            <LiveProvider code={selectedFile?.value} scope={reactScope} noInline>
+              <LivePreview />
+              <LiveError className="text-wrap" />
+            </LiveProvider>
+          </WinBoxWindow>
+          <nav className="w-full h-20 block fixed w-full z-30 bottom-0 noselect shadow-lg bg-gray-900/30 rounded">
+            <div className="w-full h-full flex flex-row justify-between items-end mx-auto px-4 space-y-2">
+              {/* Chat Controls */}
+              <div className="w-full flex flex-col items-center space-y-1">
+                <span className="text-xs text-blue-100 mb-1">Chat</span>
+                <div className="flex w-full justify-center space-x-2">
+                  <button
+                    className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                    title="Centralizar e focar Chat"
+                    onClick={() => { centerWinBox('chat'); push('#chat'); }}
+                  >
+                    <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
+                    <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
+                  </button>
+                  <button
+                    className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                    title="Focar Chat"
+                    onClick={() => { window.winboxWindows?.['chat']?.focus(); push('#chat'); }}
+                  >
+                    <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
+                    <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
+                  </button>
                 </div>
-            </WinBoxWindow>
-            <WinBoxWindow id="preview" title="Preview" x={1150} y={100} width={500} height={500}>
-                <LiveProvider code={selectedFile?.value} scope={reactScope} noInline>
-                    <LivePreview />
-                    <LiveError className="text-wrap" />
-                </LiveProvider>
-            </WinBoxWindow>
-            <nav className="w-full h-20 block  fixed w-full z-30 bottom-0 noselect shadow-lg bg-gray-900/30 rounded">
-                <div className="w-full h-full flex flex-row justify-between items-end mx-auto px-4 space-y-2">
-                  {/* Chat Controls */}
-                  <div className="w-full flex flex-col items-center space-y-1">
-                    <span className="text-xs text-blue-100 mb-1">Chat</span>
-                    <div className="flex w-full justify-center space-x-2">
-                      <button
-                        className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
-                        title="Centralizar e focar Chat"
-                        onClick={() => { centerWinBox('chat'); push('#chat'); }}
-                      >
-                        <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
-                        <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
-                      </button>
-                      <button
-                        className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
-                        title="Focar Chat"
-                        onClick={() => { window.winboxWindows?.['chat']?.focus(); push('#chat'); }}
-                      >
-                        <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
-                        <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
-                      </button>
-                    </div>
-                  </div>
-                  {/* Editor Controls */}
-                  <div className="w-full flex flex-col items-center space-y-1">
-                    <span className="text-xs text-blue-100 mb-1">Editor</span>
-                    <div className="flex w-full justify-center space-x-2">
-                      <button
-                        className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
-                        title="Centralizar e focar Editor"
-                        onClick={() => { centerWinBox('editor'); push('#editor'); }}
-                      >
-                        <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
-                        <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
-                      </button>
-                      <button
-                        className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
-                        title="Focar Editor"
-                        onClick={() => { window.winboxWindows?.['editor']?.focus(); push('#editor'); }}
-                      >
-                        <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
-                        <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
-                      </button>
-                    </div>
-                  </div>
-                  {/* Preview Controls */}
-                  <div className="w-full flex flex-col items-center space-y-1">
-                    <span className="text-xs text-blue-100 mb-1">Preview</span>
-                    <div className="flex w-full justify-center space-x-2">
-                      <button
-                        className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
-                        title="Centralizar e focar Preview"
-                        onClick={() => { centerWinBox('preview'); push('#preview'); }}
-                      >
-                        <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
-                        <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
-                      </button>
-                      <button
-                        className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
-                        title="Focar Preview"
-                        onClick={() => { window.winboxWindows?.['preview']?.focus(); push('#preview'); }}
-                      >
-                        <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
-                        <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
-                      </button>
-                    </div>
-                  </div>
+              </div>
+              {/* Editor Controls */}
+              <div className="w-full flex flex-col items-center space-y-1">
+                <span className="text-xs text-blue-100 mb-1">Editor</span>
+                <div className="flex w-full justify-center space-x-2">
+                  <button
+                    className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                    title="Centralizar e focar Editor"
+                    onClick={() => { centerWinBox('editor'); push('#editor'); }}
+                  >
+                    <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
+                    <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
+                  </button>
+                  <button
+                    className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                    title="Focar Editor"
+                    onClick={() => { window.winboxWindows?.['editor']?.focus(); push('#editor'); }}
+                  >
+                    <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
+                    <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
+                  </button>
                 </div>
-            </nav>
-        </main>
-    </EditorContext.Provider>
+              </div>
+              {/* Preview Controls */}
+              <div className="w-full flex flex-col items-center space-y-1">
+                <span className="text-xs text-blue-100 mb-1">Preview</span>
+                <div className="flex w-full justify-center space-x-2">
+                  <button
+                    className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                    title="Centralizar e focar Preview"
+                    onClick={() => { centerWinBox('preview'); push('#preview'); }}
+                  >
+                    <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
+                    <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
+                  </button>
+                  <button
+                    className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                    title="Focar Preview"
+                    onClick={() => { window.winboxWindows?.['preview']?.focus(); push('#preview'); }}
+                  >
+                    <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
+                    <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </nav>
+        </EditorContext.Provider>
+      </div>
+    </GoogleOAuthProvider>
 );
 }
-
-const centerWinBox = (id: string) => {
-    const winbox = window.winboxWindows?.[id];
-    if (winbox) {
-        const width = winbox.width;
-        const height = winbox.height;
-        const x = Math.max(0, (window.innerWidth - width) / 2);
-        const y = Math.max(0, (window.innerHeight - height) / 2);
-        winbox.move(x, y);
-        winbox.focus();
-    }
-};
