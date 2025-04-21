@@ -2,22 +2,15 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useContext } from "react";
 import Cookies from 'js-cookie';
 import { GoogleOAuthProvider, useGoogleOneTapLogin } from '@react-oauth/google';
-import PropTypes from "prop-types";
 import WinBoxWindow from '@/components/WinBoxWindow';
 import NavBar from '@/components/NavBar';
 import NavStyledDropdown from '@/components/NavStyledDropdown';
 import Editor from "@monaco-editor/react";
-import CustomGridItem from "@/components/CustomGridItem";
 import 'react-resizable/css/styles.css';
-import { LiveProvider, LiveEditor, LivePreview, LiveError } from "react-live";
+import { LiveProvider, LivePreview, LiveError } from "react-live";
 import {emptyFiles, initialFiles} from "@/utils/files-editor";
 import { throttle } from 'lodash';
 import { supabase } from '@/utils/supabaseClient';
-
-import { Button } from '@mui/material';
-import LayersIcon from '@mui/icons-material/Layers'; // Represents "overlap on"
-import LayersClearIcon from '@mui/icons-material/LayersClear'; // Represents "overlap off"
-
 import { useChat } from 'ai/react'
 import CopyButton from '@/components/CopyButton'
 import { Bot, User } from 'lucide-react'
@@ -28,7 +21,6 @@ import 'prismjs/themes/prism-tomorrow.css';
 import TextareaAutosize from 'react-textarea-autosize';
 import IconSend from "@/components/IconSend";
 import Select from 'react-select';
-import Image from 'next/image';
 
 // Chat action options for the Select component
 const chatActionOptions = [
@@ -64,9 +56,11 @@ function Chat() {
   const { messages, handleInputChange: baseHandleInputChange, handleSubmit: baseHandleSubmit, isLoading } = chat;
 
   // Custom handleInputChange to sync with cookie
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>
+  ) => {
     setInput(e.target.value);
-    baseHandleInputChange(e);
+    baseHandleInputChange(e as any);
   }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
@@ -793,46 +787,6 @@ const handleEditorChange = useMemo(
     useMemo: React.useMemo,
     useContext: React.useContext,
     Component: React.Component,
-  };
-
-  const editFullCode = async () => {
-    let prompt = `
-    Remove imports, exports and return all the following code sections formatted together in order, leave only the classes, hooks and put at the end the last eval inside render().\n";
-    Example:
-    const Wrapper = ({ children }) => (
-      <div style={{
-        background: 'papayawhip',
-        width: '100%',
-        padding: '2rem'
-      }}>
-        {children}
-      </div>
-    )
-    const Title = () => (
-      <h3 style={{ color: 'palevioletred' }}>
-        Hello World!
-      </h3>
-    )
-    render(
-      <Wrapper>
-        <Title />
-      </Wrapper>
-    )
-
-    Now here's my code sections:
-    ${allCodeGenerated.join('\n[...]\n')}`;
-
-    let fullCode = await fetch('/api/singleanswer', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        prompt
-      })
-    })
-
-    return fullCode;
   };
 
   const { push } = useRouter();
