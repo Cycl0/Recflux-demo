@@ -146,11 +146,11 @@ export default function InputBox({
                                 maxRows={4}
                                 className="
                                         w-full flex-grow min-h-12 flex items-center justify-center
-                                        pt-4 text-blue-600 text-sm focus:outline-none focus:ring-0 border-none
-                                        bg-blue-100 placeholder-gray-400
+                                        pt-4 text-white text-sm focus:outline-none focus:ring-0 border-none
+                                        bg-blue-900 placeholder-gray-300
                                         transition-colors duration-200 ease-in-out
                                         uppercase font-bold hover:z-20 focus:z-20"
-                                placeholder={placeholder /* `Ex: Gere um template para um e-commerce`(GERAR), `Ex: Troque o verde por azul`(EDITAR) ou Ex: Apenas o primeiro componente (FOCAR)*/}
+                                placeholder={placeholder}
                             ></TextareaAutosize>
                             <button
                                 type="button"
