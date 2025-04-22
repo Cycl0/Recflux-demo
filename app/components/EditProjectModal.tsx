@@ -11,6 +11,7 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ project, onSave, on
   const [name, setName] = useState(project.name || "");
   const [description, setDescription] = useState(project.description || "");
   const [loading, setLoading] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
@@ -55,16 +56,40 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ project, onSave, on
           </button>
           <button
             className="px-3 py-1 rounded bg-red-500 text-white hover:bg-red-700 ml-auto"
-            onClick={async () => {
-              setLoading(true);
-              await onDelete(project.id);
-              setLoading(false);
-            }}
+            onClick={() => setShowConfirm(true)}
             disabled={loading}
           >
             Remover Projeto
           </button>
         </div>
+        {showConfirm && (
+          <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/40">
+            <div className="bg-white rounded-lg shadow-lg p-6 min-w-[300px] relative flex flex-col items-center">
+              <h3 className="text-lg font-semibold text-red-600 mb-2">Tem certeza que deseja remover este projeto?</h3>
+              <p className="text-gray-700 mb-4 text-center">Esta ação não pode ser desfeita.</p>
+              <div className="flex gap-4">
+                <button
+                  className="px-4 py-1 rounded bg-gray-200 hover:bg-gray-300 text-gray-800"
+                  onClick={() => setShowConfirm(false)}
+                  disabled={loading}
+                >
+                  Cancelar
+                </button>
+                <button
+                  className="px-4 py-1 rounded bg-red-600 text-white hover:bg-red-700"
+                  onClick={async () => {
+                    setLoading(true);
+                    await onDelete(project.id);
+                    setLoading(false);
+                  }}
+                  disabled={loading}
+                >
+                  Remover
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
