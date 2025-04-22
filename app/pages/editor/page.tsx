@@ -43,7 +43,7 @@ const EditorContext = React.createContext({
 });
 
 interface ChatProps {
-  onPromptSubmit?: (prompt: string) => void;
+  onPromptSubmit?: (prompt: string, fileName?: string, code?: string) => void;
 }
 
 function Chat({ onPromptSubmit }: ChatProps) {
@@ -171,6 +171,9 @@ Pedido do usuário: ${input}`;
       else if (lang && (lang.includes('svg') || lang.includes('xml'))) fileName = 'image.svg';
       setFilesCurrentHandler(fileName, filteredContent, 0);
       throttleEditorOpen(true);
+      if (onPromptSubmit) {
+        onPromptSubmit(input, fileName, filteredContent);
+      }
     });
     setAutoSentCodes(prev => ({ ...prev, [lastMessage.id]: true }));
     setTimeout(() => setSendingToEditor(false), 1200); // show indicator for 1.2s
@@ -480,6 +483,33 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
   const [showDiffModal, setShowDiffModal] = useState(false);
   // Track the last submitted prompt
   const [lastPrompt, setLastPrompt] = useState<string>('');
+
+  // Handle prompt submit from Chat and save file version with prompt
+  const handlePromptSubmit = async (prompt: string, fileName?: string, code?: string) => {
+    setLastPrompt(prompt);
+    if (!fileName || !code) return;
+    // Get fileId from filesCurrent
+    const fileId = filesCurrent[fileName]?.id;
+    if (!fileId || !publicUserId) return;
+    // Fetch latest version number
+    let nextVersion = 1;
+    try {
+      const { data: latestVersionRows, error: latestVersionError } = await supabase
+        .from('file_versions')
+        .select('version')
+        .eq('file_id', fileId)
+        .order('version', { ascending: false })
+        .limit(1);
+      if (!latestVersionError && latestVersionRows && latestVersionRows.length > 0) {
+        nextVersion = (latestVersionRows[0].version || 0) + 1;
+      }
+      const { saveFileVersion } = await import('@/utils/supabaseProjects');
+      await saveFileVersion(fileId, prompt, code, nextVersion, publicUserId);
+    } catch (err) {
+      // Ignore save errors for now
+    }
+  };
+
   // Step 1: Add state variable for projects
   const [projects, setProjects] = useState<any[]>([]); // Replace 'any' with your Project type if available
   // Auth state - must be declared FIRST so it's available everywhere
@@ -674,23 +704,14 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
       } catch (e) {
         // fallback to version 1
       }
-      const { error: versionError } = await supabase
-        .from('file_versions')
-        .insert([
-          {
-            file_id: fileId,
-            last_prompt: lastPrompt,
-            code: typedFileObj.value || '',
-            version: nextVersion,
-            created_at: now,
-            created_by: publicUserId,
-          }
-        ])
-        .select();
-      if (versionError) {
-        console.error(`[DB SAVE] Failed to insert file_version for '${fileName}':`, versionError);
-      } else {
+      // Only pass lastPrompt if this save was triggered by code generation
+      // For manual save/autosave/copy, pass null
+      const { saveFileVersion } = await import('@/utils/supabaseProjects');
+      try {
+        await saveFileVersion(fileId, null, typedFileObj.value || '', nextVersion, publicUserId);
         console.log(`[DB SAVE] Saved file '${fileName}' and version to DB.`);
+      } catch (versionError) {
+        console.error(`[DB SAVE] Failed to insert file_version for '${fileName}':`, versionError);
       }
     }
   }, [selectedProjectId, publicUserId, allFilesCurrent]);
@@ -1052,8 +1073,9 @@ return (
       )}
 
       <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={400} height={500}>
-        <Chat onPromptSubmit={setLastPrompt} />
+        <Chat onPromptSubmit={handlePromptSubmit} />
       </WinBoxWindow>
+
       <WinBoxWindow id="editor" title="Editor" x={500} y={100} width={600} height={500}>
         <div className="w-full h-full flex flex-col min-h-0 min-w-0">
           <div className="flex items-center gap-4 p-2 bg-white/70 border-b border-cyan-100">
