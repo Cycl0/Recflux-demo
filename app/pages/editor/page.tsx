@@ -34,9 +34,6 @@ const chatActionOptions = [
 
 import { useRouter } from 'next/navigation';
 
-// const { data, error } = await supabase.from('users').select('*');
-
-
 // Editor context for sending code to the editor
 const EditorContext = React.createContext({
   setFilesCurrentHandler: (fileName: string, code: string, index?: number) => {}, // Will be replaced below
@@ -667,13 +664,12 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
       } catch (e) {
         // fallback to version 1
       }
-      // Insert into file_versions
       const { error: versionError } = await supabase
         .from('file_versions')
         .insert([
           {
             file_id: fileId,
-            last_prompt: '', // Optionally fill with last prompt if you track it
+            last_prompt: '',
             code: typedFileObj.value || '',
             version: nextVersion,
             created_at: now,
@@ -726,10 +722,6 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
 
   // Track the last file sent to the editor
   const [lastUpdatedFile, setLastUpdatedFile] = useState('script.js');
-  // ...existing Home logic
-  // Make sure to render <Chat /> inside the EditorContext.Provider
-  // (No change needed here unless Chat is rendered elsewhere)
-
 
   // Files
   const [filesRecentPrompt, setFilesRecentPrompt] = useState([]);
@@ -850,46 +842,6 @@ const handleEditorChange = useMemo(
 
     const [demoThumbnails, setDemoThumbnails] = useState([]);
     const [demoUrl, setDemoUrl] = useState([]);
-    // useEffect(() => {
-    //     const fetchData = async () => {
-    //         try {
-    //             const codeResponse = await fetch('/api/code');
-    //             const urlResponse = await fetch('/api/url');
-
-    //             const codeData = await codeResponse.json();
-    //             const urlData = await urlResponse.json();
-    //             const thumbnailUrlsData = await Promise.all(
-    //                 urlData.map(async (url) => {
-    //                     try {
-    //                         const response = await fetch(`/api/thumbnail?url=${encodeURIComponent(url)}`);
-    //                         if (!response.ok) {
-    //                             console.error(`Failed to fetch thumbnail for ${url}:`, response.status, response.statusText);
-    //                             const text = await response.text();
-    //                             console.error('Response body:', text);
-    //                             return null; // or a placeholder image URL
-    //                         }
-    //                         const blob = await response.blob();
-    //                         return URL.createObjectURL(blob);
-    //                     } catch (error) {
-    //                         console.error(`Error fetching thumbnail for ${url}:`, error);
-    //                         return null; // or a placeholder image URL
-    //                     }
-    //                 })
-    //             );
-    //             setCodeData(codeData || []);
-    //             setFilesGeneratedHandler("index.html", codeData.demoCodeHTML[0], 0);
-    //             setFilesGeneratedHandler("style.css", codeData.demoCodeCSS[0], 0);
-    //             setFilesGeneratedHandler("script.js", codeData.demoCodeJS[0], 0);
-    //             setFilesGeneratedHandler("image.svg", codeData.demoSVG[0], 0);
-    //             setDemoUrl(urlData || []);
-    //             setDemoThumbnails(thumbnailUrlsData.filter(Boolean));
-    //         } catch (error) {
-    //             console.error('Error fetching data:', error);
-    //         }
-    //     };
-    //     fetchData();
-    // }, []);
-
 
   const editorRef = useRef(null);
 
@@ -900,14 +852,9 @@ const handleEditorChange = useMemo(
 
     const [code, setCode] = useState(false);
 
-  // WinBox.js does not require ResponsiveReactGridLayout
   const [currentBreakpoint, setCurrentBreakpoint] = useState("lg");
   const [mounted, setMounted] = useState(false);
   const [initialLayout, setInitialLayout] = useState(null);
-
-
-  /* const [layouts, setLayouts] = useState<LayoutType>({ lg: initialLayout }); */
-  // No grid layouts needed for WinBox.js
 
   const [activeKey, setActiveKey] = useState<string | null>(null);
   const [zIndexCustomGridItem, setZIndexCustomGridItem] = useState(10);
@@ -961,14 +908,6 @@ const handleEditorChange = useMemo(
       },
       []
   );
-    /*
-    *   const onDragStop = useCallback(
-    *     (layout, oldItem, newItem, placeholder, e, element) => {
-    *       setActiveKey(null); // Reset active key when dragging stops
-    *     },
-    *     []
-    *   );
-    *  */
 
   const reactScope = {
     React,
@@ -1056,8 +995,6 @@ if (userLoading) {
 } else {
   navExtra = <GoogleSignInButton />;
 }
-
-// Google OAuth client ID (replace with your real client ID)
 
 // State for modal
 const [showConfigModal, setShowConfigModal] = useState(false);
