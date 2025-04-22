@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Dropdown, Avatar } from "flowbite-react";
 
-export default function NavStyledDropdown({ name, email, avatarUrl, onLogout }) {
+export default function NavStyledDropdown({ name, email, avatarUrl, onLogout, onOpenProjectModal }) {
   const [imgSrc, setImgSrc] = useState(avatarUrl && avatarUrl.startsWith('http') ? avatarUrl : "/images/icon.png");
   useEffect(() => {
     setImgSrc(avatarUrl && avatarUrl.startsWith('http') ? avatarUrl : "/images/icon.png");
@@ -31,6 +31,12 @@ export default function NavStyledDropdown({ name, email, avatarUrl, onLogout }) 
         <span className="block text-sm">{name}</span>
         <span className="block truncate text-sm font-medium">{email}</span>
       </Dropdown.Header>
+      <Dropdown.Item
+        className="text-white bg-transparent focus:bg-transparent hover:bg-transparent hover:shadow-gradient hover:text-white transition-all duration-300"
+        onClick={onOpenProjectModal}
+      >
+        Projetos
+      </Dropdown.Item>
       <Dropdown.Item className="
                                 text-white bg-transparent
                                 focus:bg-transparent

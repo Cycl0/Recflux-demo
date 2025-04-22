@@ -474,6 +474,8 @@ function useSupabaseGoogleRegistration() {
 }
 
 export default function Home({ onLayoutChange = () => {}, ...props }) {
+  // Step 1: Add state variable for projects
+  const [projects, setProjects] = useState<any[]>([]); // Replace 'any' with your Project type if available
   // Auth state - must be declared FIRST so it's available everywhere
   const { user, loading: userLoading } = useSupabaseGoogleRegistration();
 
@@ -485,25 +487,31 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
     setSelectedProjectId(newProjectId);
   };
 
+  // Automatically select the first project after projects are fetched
+  useEffect(() => {
+    if (!selectedProjectId && projects.length > 0) {
+      setSelectedProjectId(projects[0].id);
+    }
+  }, [projects, selectedProjectId]);
+
   // Add state for publicUserId
   const [publicUserId, setPublicUserId] = useState<string | null>(null);
 
-  // Automatically select the most recent project
+  // Step 2: Fetch and set projects when publicUserId changes
   useEffect(() => {
-    async function fetchAndSetDefaultProject() {
+    async function fetchProjects() {
+      console.log('publicUserId before fetching projects:', publicUserId);
       if (!publicUserId) return;
-      if (selectedProjectId) return;
-      try {
-        const projects = await import('@/utils/supabaseProjects').then(mod => mod.getUserProjects(publicUserId));
-        if (Array.isArray(projects) && projects.length > 0) {
-          setSelectedProjectId(projects[0].id);
-        }
-      } catch (err) {
-        // Optionally handle error
-      }
+      const projectsList = await import('@/utils/supabaseProjects').then(mod => mod.getUserProjects(publicUserId));
+      console.log('Fetched projectsList:', projectsList);
+      setProjects(projectsList || []);
+    // Debug: log projects after DB fetch
+    console.log('Projects state updated:', projectsList);
     }
-    fetchAndSetDefaultProject();
-  }, [publicUserId, selectedProjectId]);
+    if (publicUserId) {
+      fetchProjects();
+    }
+  }, [publicUserId]);
 
   // Fetch and set publicUserId after login
   useEffect(() => {
@@ -525,7 +533,7 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
 
   // Project-specific editor state: maps projectId to files object
   const [allFilesCurrent, setAllFilesCurrent] = useState<{ [projectId: string]: any }>({});
-  const filesCurrent = (selectedProjectId && allFilesCurrent[selectedProjectId]) || initialFiles;
+  const filesCurrent = (selectedProjectId && allFilesCurrent[selectedProjectId]) ? allFilesCurrent[selectedProjectId] : {};
 
   // Track project loading state to avoid race condition
   const [loadingProject, setLoadingProject] = useState(false);
@@ -537,27 +545,57 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
       return;
     }
     setLoadingProject(true);
-    const storageKey = `editorCode_${selectedProjectId}`;
-    let saved = localStorage.getItem(storageKey);
-    // console.log('[LOAD] storageKey', storageKey, 'selectedProjectId', selectedProjectId, 'localStorage', saved);
-    if (saved) {
+    // Always try to load from DB for existing projects
+    (async () => {
       try {
-        const loaded = JSON.parse(saved);
-        console.log('[LOAD] Project', selectedProjectId, 'loaded', loaded);
+        const { data: dbFiles, error } = await supabase
+          .from('files')
+          .select('*')
+          .eq('project_id', selectedProjectId);
+        if (error) throw error;
+        let filesObj = {};
+        if (dbFiles && dbFiles.length > 0) {
+          for (const file of dbFiles) {
+            // Fetch the latest code from file_versions
+            let codeValue = '';
+            try {
+              const { data: versionRows, error: versionError } = await supabase
+                .from('file_versions')
+                .select('code')
+                .eq('file_id', file.id)
+                .order('version', { ascending: false })
+                .order('created_at', { ascending: false })
+                .limit(1);
+              if (!versionError && versionRows && versionRows.length > 0) {
+                codeValue = versionRows[0].code || '';
+              }
+            } catch (err) {
+              // leave codeValue as ''
+            }
+            filesObj[file.name] = {
+              name: file.name,
+              language: file.language || '',
+              value: codeValue,
+              desc: file.desc || ''
+            };
+          }
+        } else {
+          // Only use initialFiles if truly new project (no files in DB)
+          filesObj = { ...initialFiles };
+        }
         setAllFilesCurrent(prev => ({
           ...prev,
-          [selectedProjectId]: loaded
+          [selectedProjectId]: filesObj
         }));
         setLoadingProject(false);
-        return;
       } catch (e) {
-        console.error('[LOAD] JSON parse error', e);
+        setLoadingProject(false);
+        setAllFilesCurrent(prev => ({
+          ...prev,
+          [selectedProjectId]: { ...initialFiles }
+        }));
       }
-    }
-    setAllFilesCurrent(prevState => ({ ...prevState, [selectedProjectId]: initialFiles }));
-    setSelectedFile(initialFiles["script.js"]);
-    setLastUpdatedFile("script.js");
-    setLoadingProject(false);
+    })();
   }, [selectedProjectId]);
 
   // Persist editor code to the correct cookie whenever it changes
@@ -571,30 +609,116 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
       return;
     }
     const storageKey = `editorCode_${selectedProjectId}`;
-    localStorage.setItem(storageKey, JSON.stringify(allFilesCurrent[selectedProjectId] || initialFiles));
+    localStorage.setItem(storageKey, JSON.stringify(allFilesCurrent[selectedProjectId]));
     // console.log('[SAVE] storageKey', storageKey, 'selectedProjectId', selectedProjectId, 'files', allFilesCurrent[selectedProjectId], 'localStorage', localStorage.getItem(storageKey));
   }, [allFilesCurrent, selectedProjectId, loadingProject]);
 
   // Manual Save logic
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  // Editor file type for type safety
+  type EditorFile = { value?: string; [key: string]: any };
+
+  // Save project files to Supabase DB (using user's schema)
+  const saveProjectFilesToDB = useCallback(async () => {
+    if (!selectedProjectId || !publicUserId) return;
+    const filesToSave: Record<string, EditorFile> = allFilesCurrent[selectedProjectId] || {};
+    const now = new Date().toISOString();
+    for (const [fileName, fileObj] of Object.entries(filesToSave)) {
+      const typedFileObj = fileObj as EditorFile;
+      // 1. Upsert into files table by (project_id, name)
+      const { data: fileRows, error: fileError } = await supabase
+        .from('files')
+        .upsert([
+          {
+            project_id: selectedProjectId,
+            name: fileName,
+            updated_at: now,
+            // You may want to add more fields if needed
+          }
+        ], { onConflict: 'project_id,name', ignoreDuplicates: false })
+        .select();
+      if (fileError) {
+        console.error(`[DB SAVE] Failed to upsert file '${fileName}':`, fileError);
+        continue;
+      }
+      const fileId = fileRows && fileRows.length > 0 ? fileRows[0].id : undefined;
+      if (!fileId) {
+        console.error(`[DB SAVE] Could not get file_id for '${fileName}' after upsert.`);
+        continue;
+      }
+      // 2. Insert new file_versions row for history
+      // Fetch the latest version for this file
+      let nextVersion = 1;
+      try {
+        const { data: latestVersionRows, error: latestVersionError } = await supabase
+          .from('file_versions')
+          .select('version')
+          .eq('file_id', fileId)
+          .order('version', { ascending: false })
+          .limit(1);
+        if (!latestVersionError && latestVersionRows && latestVersionRows.length > 0) {
+          nextVersion = (latestVersionRows[0].version || 0) + 1;
+        }
+      } catch (e) {
+        // fallback to version 1
+      }
+      // Insert into file_versions
+      const { error: versionError } = await supabase
+        .from('file_versions')
+        .insert([
+          {
+            file_id: fileId,
+            last_prompt: '', // Optionally fill with last prompt if you track it
+            code: typedFileObj.value || '',
+            version: nextVersion,
+            created_at: now,
+            created_by: publicUserId,
+          }
+        ])
+        .select();
+      if (versionError) {
+        console.error(`[DB SAVE] Failed to insert file_version for '${fileName}':`, versionError);
+      } else {
+        console.log(`[DB SAVE] Saved file '${fileName}' and version to DB.`);
+      }
+    }
+  }, [selectedProjectId, publicUserId, allFilesCurrent]);
+
   const saveEditorCode = useCallback(() => {
     if (!selectedProjectId) return;
     setSaveStatus('saving');
     const storageKey = `editorCode_${selectedProjectId}`;
     localStorage.setItem(storageKey, JSON.stringify(allFilesCurrent[selectedProjectId] || initialFiles));
-    // console.log('[DEBUG] manual localStorage after set:', localStorage.getItem(storageKey));
+    saveProjectFilesToDB(); // Also save to DB on manual save
     setSaveStatus('saved');
     setTimeout(() => setSaveStatus('idle'), 1200);
-  }, [selectedProjectId, allFilesCurrent]);
+  }, [selectedProjectId, allFilesCurrent, saveProjectFilesToDB]);
 
-  // Auto-save every 2 minutes
+  // Auto-save every 2 minutes (localStorage only)
   useEffect(() => {
     if (!selectedProjectId) return;
     const interval = setInterval(() => {
-      saveEditorCode();
+      const storageKey = `editorCode_${selectedProjectId}`;
+      localStorage.setItem(storageKey, JSON.stringify(allFilesCurrent[selectedProjectId] || initialFiles));
     }, 2 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [selectedProjectId, filesCurrent, saveEditorCode]);
+  }, [selectedProjectId, allFilesCurrent]);
+
+  // Auto-save to DB every 5 minutes if files have changed
+  const lastDBSavedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!selectedProjectId || !publicUserId) return;
+    const interval = setInterval(() => {
+      const filesToSave = allFilesCurrent[selectedProjectId] || initialFiles;
+      const serialized = JSON.stringify(filesToSave);
+      if (serialized !== lastDBSavedRef.current) {
+        saveProjectFilesToDB();
+        lastDBSavedRef.current = serialized;
+      }
+    }, 5 * 60 * 1000); // 5 minutes
+    return () => clearInterval(interval);
+  }, [selectedProjectId, publicUserId, allFilesCurrent, saveProjectFilesToDB]);
+
   // Track the last file sent to the editor
   const [lastUpdatedFile, setLastUpdatedFile] = useState('script.js');
   // ...existing Home logic
@@ -888,7 +1012,10 @@ const handleLogout = async () => {
   // Optionally clear user state or reload
   window.location.reload();
 };
-
+// console.log('user:', user);
+// console.log('publicUserId:', publicUserId);
+// console.log('projects:', projects);
+// console.log('selectedProjectId:', selectedProjectId);
 if (userLoading) {
   navExtra = (
     <div className="flex items-center justify-center h-9 px-4">
@@ -905,16 +1032,19 @@ if (userLoading) {
     user.user_metadata?.avatar_url || "/images/icon.png";
   navExtra = (
     <>
-      <CurrentProjectLabel
-        userId={publicUserId}
-        selectedProjectId={selectedProjectId}
-        onOpenConfig={() => setShowConfigModal(true)}
-      />
+      {(publicUserId && selectedProjectId) && (
+        <CurrentProjectLabel
+          userId={publicUserId}
+          selectedProjectId={selectedProjectId}
+          onOpenConfig={() => setShowConfigModal(true)}
+        />
+      )}
       <NavStyledDropdown
         name={name}
         email={email}
         avatarUrl={avatarUrl}
         onLogout={handleLogout}
+        onOpenProjectModal={() => setShowConfigModal(true)}
       />
     </>
   );
@@ -928,6 +1058,15 @@ if (userLoading) {
 const [showConfigModal, setShowConfigModal] = useState(false);
 const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID_HERE";
 const [showOneTap, setShowOneTap] = useState(false);
+
+// Show Google One Tap automatically for unauthenticated users
+useEffect(() => {
+  if (!user && !userLoading) {
+    setShowOneTap(true);
+  } else {
+    setShowOneTap(false);
+  }
+}, [user, userLoading]);
 
 return (
 <GoogleOAuthProvider clientId={clientId}>
