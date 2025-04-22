@@ -41,7 +41,11 @@ const EditorContext = React.createContext({
   selectedFile: undefined as undefined | { value?: string; name?: string },
 });
 
-function Chat() {
+interface ChatProps {
+  onPromptSubmit?: (prompt: string) => void;
+}
+
+function Chat({ onPromptSubmit }: ChatProps) {
   // Restore chat prompt from cookie
   const [input, setInput] = useState(() => Cookies.get('chatPrompt') || '');
   useEffect(() => {
@@ -63,6 +67,7 @@ function Chat() {
   }
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  if (onPromptSubmit) onPromptSubmit(input);
     Cookies.remove('chatPrompt');
     e.preventDefault();
     if (chatAction.value === '2') { // EDITAR
@@ -471,6 +476,8 @@ function useSupabaseGoogleRegistration() {
 }
 
 export default function Home({ onLayoutChange = () => {}, ...props }) {
+  // Track the last submitted prompt
+  const [lastPrompt, setLastPrompt] = useState<string>('');
   // Step 1: Add state variable for projects
   const [projects, setProjects] = useState<any[]>([]); // Replace 'any' with your Project type if available
   // Auth state - must be declared FIRST so it's available everywhere
@@ -669,7 +676,7 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
         .insert([
           {
             file_id: fileId,
-            last_prompt: '',
+            last_prompt: lastPrompt,
             code: typedFileObj.value || '',
             version: nextVersion,
             created_at: now,
@@ -1040,7 +1047,7 @@ return (
       )}
 
       <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={400} height={500}>
-        <Chat />
+      <Chat onPromptSubmit={setLastPrompt} />
       </WinBoxWindow>
       <WinBoxWindow id="editor" title="Editor" x={500} y={100} width={600} height={500}>
         <div className="w-full h-full flex flex-col min-h-0 min-w-0">

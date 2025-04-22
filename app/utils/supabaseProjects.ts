@@ -79,10 +79,10 @@ export async function deleteProject(projectId: string) {
 }
 
 // Save a new file version for a file
-export async function saveFileVersion(fileId: string, prompt: string, version: number, createdBy?: string) {
+export async function saveFileVersion(fileId: string, last_prompt: string, code: string, version: number, createdBy?: string) {
   const { data, error } = await supabase
     .from('file_versions')
-    .insert([{ file_id: fileId, prompt, version, created_by: createdBy }])
+    .insert([{ file_id: fileId, last_prompt, code, version, created_by: createdBy }])
     .select()
     .single();
   if (error) throw error;
