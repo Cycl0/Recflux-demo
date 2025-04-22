@@ -26,7 +26,7 @@ export async function getUserProjects(userId: string) {
 export async function saveProjectFile(projectId: string, name: string, code: string) {
   // Check if file exists
   const { data: existing, error: fetchError } = await supabase
-    .from('files')
+    .from('files_metadata')
     .select('id')
     .eq('project_id', projectId)
     .eq('name', name)
@@ -36,8 +36,8 @@ export async function saveProjectFile(projectId: string, name: string, code: str
   if (existing) {
     // Update
     const { data: updated, error: updateError } = await supabase
-      .from('files')
-      .update({ code, updated_at: new Date().toISOString() })
+      .from('files_metadata')
+      .update({ updated_at: new Date().toISOString() })
       .eq('id', existing.id)
       .select()
       .single();
@@ -46,14 +46,36 @@ export async function saveProjectFile(projectId: string, name: string, code: str
   } else {
     // Insert
     const { data: inserted, error: insertError } = await supabase
-      .from('files')
-      .insert([{ project_id: projectId, name, code }])
+      .from('files_metadata')
+      .insert([{ project_id: projectId, name }])
       .select()
       .single();
     if (insertError) throw insertError;
     fileId = inserted.id;
   }
   return fileId;
+}
+
+// Update a project's name and description
+export async function updateProject(projectId: string, name: string, description: string) {
+  const { data, error } = await supabase
+    .from('projects')
+    .update({ name, description, updated_at: new Date().toISOString() })
+    .eq('id', projectId)
+    .select()
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+// Delete a project by id
+export async function deleteProject(projectId: string) {
+  const { error } = await supabase
+    .from('projects')
+    .delete()
+    .eq('id', projectId);
+  if (error) throw error;
+  return true;
 }
 
 // Save a new file version for a file

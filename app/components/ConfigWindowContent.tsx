@@ -10,9 +10,28 @@ interface ConfigWindowContentProps {
   onProjectCreated: (project: any) => void;
 }
 
+import EditProjectModal from "@/components/EditProjectModal";
+import { updateProject, deleteProject, getUserProjects } from "@/utils/supabaseProjects";
+
 const ConfigWindowContent = ({ userId, selectedProjectId, setSelectedProjectId, onProjectCreated }) => {
   const [showProjectModal, setShowProjectModal] = useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editingProject, setEditingProject] = useState<any>(null);
+  const [projects, setProjects] = useState<any[]>([]);
   const projectSelectorRef = useRef<any>(null);
+
+  // Fetch projects for edit modal
+  React.useEffect(() => {
+    if (!userId) return;
+    getUserProjects(userId).then(setProjects);
+  }, [userId, showProjectModal, showEditModal]);
+
+  React.useEffect(() => {
+    if (selectedProjectId && projects.length) {
+      const proj = projects.find(p => p.id === selectedProjectId);
+      setEditingProject(proj || null);
+    }
+  }, [selectedProjectId, projects]);
 
   return (
     <div className="p-6 min-w-[340px] flex flex-col gap-6">
@@ -20,12 +39,23 @@ const ConfigWindowContent = ({ userId, selectedProjectId, setSelectedProjectId, 
       <section className="bg-white/60 rounded-lg shadow p-4 flex flex-col gap-2">
         <h2 className="text-lg font-semibold mb-1 text-cyan-700">Selecionar Projeto</h2>
         <p className="text-sm text-gray-600 mb-2">Escolha um projeto para editar ou visualizar.</p>
-        <ProjectSelector
-          ref={projectSelectorRef}
-          userId={userId}
-          selectedProjectId={selectedProjectId}
-          onSelect={setSelectedProjectId}
-        />
+        <div className="flex items-center gap-2">
+          <ProjectSelector
+            ref={projectSelectorRef}
+            userId={userId}
+            selectedProjectId={selectedProjectId}
+            onSelect={setSelectedProjectId}
+          />
+          {selectedProjectId && (
+            <button
+              className="ml-2 px-2 py-1 w-32 h-8 mt-4 rounded bg-cyan-600 text-white hover:bg-cyan-700 text-lg flex items-center justify-center"
+              onClick={() => setShowEditModal(true)}
+              title="Editar ou Remover Projeto"
+            >
+              Editar
+            </button>
+          )}
+        </div>
       </section>
       <section className="bg-white/60 rounded-lg shadow p-4 flex flex-col gap-2">
         <div className="mb-4">
@@ -56,6 +86,25 @@ const ConfigWindowContent = ({ userId, selectedProjectId, setSelectedProjectId, 
           )}
         </div>
       </section>
+      {showEditModal && editingProject && (
+        <EditProjectModal
+          project={editingProject}
+          onSave={async (updated) => {
+            await updateProject(updated.id, updated.name, updated.description);
+            if (projectSelectorRef.current?.refreshProjects) projectSelectorRef.current.refreshProjects();
+            setShowEditModal(false);
+            // Optionally update local state
+            setProjects(prev => prev.map(p => p.id === updated.id ? { ...p, ...updated } : p));
+          }}
+          onDelete={async (projectId) => {
+            await deleteProject(projectId);
+            setShowEditModal(false);
+            setSelectedProjectId(null);
+            if (projectSelectorRef.current?.refreshProjects) projectSelectorRef.current.refreshProjects();
+          }}
+          onClose={() => setShowEditModal(false)}
+        />
+      )}
     </div>
   );
 };
