@@ -3,7 +3,9 @@ import React, { useState, useEffect, useCallback, useMemo, useRef, useContext } 
 import Cookies from 'js-cookie';
 import { GoogleOAuthProvider, useGoogleOneTapLogin } from '@react-oauth/google';
 import WinBoxWindow from '@/components/WinBoxWindow';
+import ConfigWindowContent from '@/components/ConfigWindowContent';
 import NavBar from '@/components/NavBar';
+import CurrentProjectLabel from '@/components/CurrentProjectLabel';
 import NavStyledDropdown from '@/components/NavStyledDropdown';
 import Editor from "@monaco-editor/react";
 import 'react-resizable/css/styles.css';
@@ -360,33 +362,6 @@ Pedido do usuário: ${input}`;
   );
 }
 
-// Provide EditorContext to children
-function SendToEditorButton({ codeContent, part }: { codeContent: string; part: string }) {
-  const { setFilesCurrentHandler, throttleEditorOpen } = useContext(EditorContext);
-  return (
-    <button
-      className="ml-1 px-2 py-1 bg-blue-200 text-blue-900 rounded shadow-gradient hover:bg-blue-300 transition-all duration-300 ease-in-out"
-      title="Enviar para o Editor"
-      onClick={() => {
-        // Remove a language tag line (e.g. jsx, tsx, js, // jsx, etc) if present
-        let filteredContent = codeContent.replace(/^(jsx|tsx|js|html|css|svg|xml|json|python|typescript|javascript|do not copy this line|\/\/.*)\s*\n/i, '');
-        // Try to guess the language and file extension
-        let langMatch = filteredContent.match(/^([a-zA-Z0-9]+)/);
-        let lang = langMatch ? langMatch[1].toLowerCase() : '';
-        let fileName = 'script.js';
-        if (lang && lang.includes('html')) fileName = 'index.html';
-        else if (lang && lang.includes('css')) fileName = 'style.css';
-        else if (lang && lang.includes('js')) fileName = 'script.js';
-        else if (lang && (lang.includes('svg') || lang.includes('xml'))) fileName = 'image.svg';
-        setFilesCurrentHandler(fileName, filteredContent, 0);
-        throttleEditorOpen(true);
-      }}
-    >
-      Enviar para o Editor
-    </button>
-  );
-}
-
 function TriggerableGoogleOneTapHandler({ open, onClose }: { open: boolean, onClose: () => void }) {
  
   useGoogleOneTapLogin({
@@ -504,8 +479,56 @@ function useSupabaseGoogleRegistration() {
   return { user, loading };
 }
 
-
 export default function Home({ onLayoutChange = () => {}, ...props }) {
+  // Auth state - must be declared FIRST so it's available everywhere
+  const { user, loading: userLoading } = useSupabaseGoogleRegistration();
+
+  // Project selection state for ConfigWindowContent
+  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
+
+  // Handler for when a new project is created
+  const handleProjectCreate = (newProjectId: string) => {
+    setSelectedProjectId(newProjectId);
+  };
+
+  // Add state for publicUserId
+  const [publicUserId, setPublicUserId] = useState<string | null>(null);
+
+  // Automatically select the most recent project
+  useEffect(() => {
+    async function fetchAndSetDefaultProject() {
+      if (!publicUserId) return;
+      if (selectedProjectId) return;
+      try {
+        const projects = await import('@/utils/supabaseProjects').then(mod => mod.getUserProjects(publicUserId));
+        if (Array.isArray(projects) && projects.length > 0) {
+          setSelectedProjectId(projects[0].id);
+        }
+      } catch (err) {
+        // Optionally handle error
+      }
+    }
+    fetchAndSetDefaultProject();
+  }, [publicUserId, selectedProjectId]);
+
+  // Fetch and set publicUserId after login
+  useEffect(() => {
+    async function fetchCustomUserId() {
+      if (!user) return;
+      const userEmail = user.email;
+      if (!userEmail) return;
+      const { data: customUser } = await supabase
+        .from('users')
+        .select('id')
+        .eq('email', userEmail)
+        .single();
+      if (customUser) {
+        setPublicUserId(customUser.id);
+      }
+    }
+    fetchCustomUserId();
+  }, [user]);
+
   // Restore editor code from cookie
   const [filesCurrent, setFilesCurrent] = useState(() => {
     const saved = Cookies.get('editorCode');
@@ -518,6 +541,11 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
     }
     return [initialFiles];
   });
+
+  // Persist editor code to cookie whenever it changes
+  useEffect(() => {
+    Cookies.set('editorCode', JSON.stringify(filesCurrent), { expires: 7 });
+  }, [filesCurrent]);
   useEffect(() => {
     Cookies.set('editorCode', JSON.stringify(filesCurrent), { expires: 7 });
   }, [filesCurrent]);
@@ -817,162 +845,190 @@ const centerWinBox = (id: string) => {
   }
 };
 
-const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
-if (!clientId) {
-  throw new Error('Missing NEXT_PUBLIC_GOOGLE_CLIENT_ID in your environment. Please check your .env.local file.');
-}
-
-const { user: supabaseUser, loading: userLoading } = useSupabaseGoogleRegistration();
-
-console.log('DEBUG supabaseUser:', supabaseUser);
-const [showOneTap, setShowOneTap] = useState(true);
+let navExtra;
 const handleLogout = async () => {
+  // Sign out from Supabase
   await supabase.auth.signOut();
-  setShowOneTap(true);
+  // Optionally clear user state or reload
+  window.location.reload();
 };
 
-let navExtra;
 if (userLoading) {
   navExtra = (
     <div className="flex items-center justify-center h-9 px-4">
       <span className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-400"></span>
     </div>
   );
-} else if (supabaseUser) {
+} else if (user) {
   const name =
-    supabaseUser.user_metadata?.full_name ||
-    supabaseUser.user_metadata?.name ||
-    supabaseUser.email?.split("@")[0] || "";
-  const email = supabaseUser.email;
+    user.user_metadata?.full_name ||
+    user.user_metadata?.name ||
+    user.email?.split("@")?.[0] || "";
+  const email = user.email;
   const avatarUrl =
-    supabaseUser.user_metadata?.avatar_url || "/images/icon.png";
-  console.log('DEBUG supabaseUser:', supabaseUser);
+    user.user_metadata?.avatar_url || "/images/icon.png";
+  console.log('DEBUG user:', user);
   console.log('DEBUG avatarUrl:', avatarUrl);
   navExtra = (
-    <NavStyledDropdown
-  name={name}
-  email={email}
-  avatarUrl={avatarUrl}
-  onLogout={handleLogout}
-/>
+    <>
+      <CurrentProjectLabel
+        userId={publicUserId}
+        selectedProjectId={selectedProjectId}
+        onOpenConfig={() => setShowConfigModal(true)}
+      />
+      <NavStyledDropdown
+        name={name}
+        email={email}
+        avatarUrl={avatarUrl}
+        onLogout={handleLogout}
+      />
+    </>
   );
 } else {
   navExtra = <GoogleSignInButton />;
 }
 
-return (
-  <GoogleOAuthProvider clientId={clientId}>
-    {showOneTap && (
-      <TriggerableGoogleOneTapHandler open={showOneTap} onClose={() => setShowOneTap(false)} />
-    )}
+// Google OAuth client ID (replace with your real client ID)
 
-    <div className="bg-blue-gradient min-h-screen w-full relative">
-      <EditorContext.Provider value={{ setFilesCurrentHandler, throttleEditorOpen, selectedFile }}>
-        <NavBar extra={navExtra} />
-        <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={400} height={500}>
-          <Chat />
+// State for modal
+const [showConfigModal, setShowConfigModal] = useState(false);
+const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID_HERE";
+const [showOneTap, setShowOneTap] = useState(false);
+
+return (
+<GoogleOAuthProvider clientId={clientId}>
+  {showOneTap && (
+    <TriggerableGoogleOneTapHandler open={showOneTap} onClose={() => setShowOneTap(false)} />
+  )}
+
+  <div className="bg-blue-gradient min-h-screen w-full relative">
+    <EditorContext.Provider value={{ setFilesCurrentHandler, throttleEditorOpen, selectedFile }}>
+      <NavBar extra={navExtra} />
+      {/* Modal for Project Configuration */}
+      {showConfigModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+          <div className="bg-white rounded-lg shadow-lg p-0 max-w-md w-full relative">
+            <button
+              className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none"
+              onClick={() => setShowConfigModal(false)}
+              aria-label="Fechar"
+            >
+              &times;
+            </button>
+            <ConfigWindowContent
+              userId={publicUserId}
+              selectedProjectId={selectedProjectId}
+              setSelectedProjectId={setSelectedProjectId}
+              onProjectCreated={handleProjectCreate}
+            />
+          </div>
+        </div>
+      )}
+
+      <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={400} height={500}>
+        <Chat />
+      </WinBoxWindow>
+      <WinBoxWindow id="editor" title="Editor" x={500} y={100} width={600} height={500}>
+        <div className="w-full h-full flex flex-col min-h-0 min-w-0">
+          <Editor
+              key={selectedFile?.name}
+              className="flex-1 w-full h-full min-h-0 min-w-0"
+              width="100%"
+              height="100%"
+              path={selectedFile?.name}
+              defaultLanguage={selectedFile?.language}
+              value={selectedFile?.value}
+              onMount={(editor) => {
+                editorRef.current = editor;
+                setTimeout(() => editor.layout(), 100);
+              }}
+              onChange={handleEditorChange}
+              options={{
+                minimap: { enabled: true },
+                fontSize: 14,
+                wordWrap: 'on',
+              }}
+            />
+          </div>
         </WinBoxWindow>
-        <WinBoxWindow id="editor" title="Editor" x={500} y={100} width={600} height={500}>
-          <div className="w-full h-full flex flex-col min-h-0 min-w-0">
-            <Editor
-                key={selectedFile?.name}
-                className="flex-1 w-full h-full min-h-0 min-w-0"
-                width="100%"
-                height="100%"
-                path={selectedFile?.name}
-                defaultLanguage={selectedFile?.language}
-                value={selectedFile?.value}
-                onMount={(editor) => {
-                  editorRef.current = editor;
-                  setTimeout(() => editor.layout(), 100);
-                }}
-                onChange={handleEditorChange}
-                options={{
-                  minimap: { enabled: true },
-                  fontSize: 14,
-                  wordWrap: 'on',
-                }}
-              />
-            </div>
-          </WinBoxWindow>
-          <WinBoxWindow id="preview" title="Preview" x={1150} y={100} width={500} height={500}>
-            <LiveProvider code={selectedFile?.value} scope={reactScope} noInline>
-              <LivePreview />
-              <LiveError className="text-wrap" />
-            </LiveProvider>
-          </WinBoxWindow>
-          <nav className="w-full h-20 block fixed w-full z-30 bottom-0 noselect shadow-lg bg-gray-900/30 rounded">
-            <div className="w-full h-full flex flex-row justify-between items-end mx-auto px-4 space-y-2">
-              {/* Chat Controls */}
-              <div className="w-full flex flex-col items-center space-y-1">
-                <span className="text-xs text-blue-100 mb-1">Chat</span>
-                <div className="flex w-full justify-center space-x-2">
-                  <button
-                    className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
-                    title="Centralizar e focar Chat"
-                    onClick={() => { centerWinBox('chat'); push('#chat'); }}
-                  >
-                    <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
-                    <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
-                  </button>
-                  <button
-                    className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
-                    title="Focar Chat"
-                    onClick={() => { window.winboxWindows?.['chat']?.focus(); push('#chat'); }}
-                  >
-                    <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
-                    <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
-                  </button>
-                </div>
-              </div>
-              {/* Editor Controls */}
-              <div className="w-full flex flex-col items-center space-y-1">
-                <span className="text-xs text-blue-100 mb-1">Editor</span>
-                <div className="flex w-full justify-center space-x-2">
-                  <button
-                    className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
-                    title="Centralizar e focar Editor"
-                    onClick={() => { centerWinBox('editor'); push('#editor'); }}
-                  >
-                    <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
-                    <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
-                  </button>
-                  <button
-                    className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
-                    title="Focar Editor"
-                    onClick={() => { window.winboxWindows?.['editor']?.focus(); push('#editor'); }}
-                  >
-                    <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
-                    <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
-                  </button>
-                </div>
-              </div>
-              {/* Preview Controls */}
-              <div className="w-full flex flex-col items-center space-y-1">
-                <span className="text-xs text-blue-100 mb-1">Preview</span>
-                <div className="flex w-full justify-center space-x-2">
-                  <button
-                    className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
-                    title="Centralizar e focar Preview"
-                    onClick={() => { centerWinBox('preview'); push('#preview'); }}
-                  >
-                    <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
-                    <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
-                  </button>
-                  <button
-                    className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
-                    title="Focar Preview"
-                    onClick={() => { window.winboxWindows?.['preview']?.focus(); push('#preview'); }}
-                  >
-                    <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
-                    <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
-                  </button>
-                </div>
+        <WinBoxWindow id="preview" title="Preview" x={1150} y={100} width={500} height={500}>
+          <LiveProvider code={selectedFile?.value} scope={reactScope} noInline>
+            <LivePreview />
+            <LiveError className="text-wrap" />
+          </LiveProvider>
+        </WinBoxWindow>
+        <nav className="w-full h-20 block fixed w-full z-30 bottom-0 noselect shadow-lg bg-gray-900/30 rounded">
+          <div className="w-full h-full flex flex-row justify-between items-end mx-auto px-4 space-y-2">
+            {/* Chat Controls */}
+            <div className="w-full flex flex-col items-center space-y-1">
+              <span className="text-xs text-blue-100 mb-1">Chat</span>
+              <div className="flex w-full justify-center space-x-2">
+                <button
+                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                  title="Centralizar e focar Chat"
+                  onClick={() => { centerWinBox('chat'); push('#chat'); }}
+                >
+                  <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
+                  <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
+                </button>
+                <button
+                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                  title="Focar Chat"
+                  onClick={() => { window.winboxWindows?.['chat']?.focus(); push('#chat'); }}
+                >
+                  <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
+                  <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
+                </button>
               </div>
             </div>
-          </nav>
-        </EditorContext.Provider>
-      </div>
-    </GoogleOAuthProvider>
+            {/* Editor Controls */}
+            <div className="w-full flex flex-col items-center space-y-1">
+              <span className="text-xs text-blue-100 mb-1">Editor</span>
+              <div className="flex w-full justify-center space-x-2">
+                <button
+                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                  title="Centralizar e focar Editor"
+                  onClick={() => { centerWinBox('editor'); push('#editor'); }}
+                >
+                  <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
+                  <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
+                </button>
+                <button
+                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                  title="Focar Editor"
+                  onClick={() => { window.winboxWindows?.['editor']?.focus(); push('#editor'); }}
+                >
+                  <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
+                  <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
+                </button>
+              </div>
+            </div>
+            {/* Preview Controls */}
+            <div className="w-full flex flex-col items-center space-y-1">
+              <span className="text-xs text-blue-100 mb-1">Preview</span>
+              <div className="flex w-full justify-center space-x-2">
+                <button
+                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                  title="Centralizar e focar Preview"
+                  onClick={() => { centerWinBox('preview'); push('#preview'); }}
+                >
+                  <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
+                  <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
+                </button>
+                <button
+                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                  title="Focar Preview"
+                  onClick={() => { window.winboxWindows?.['preview']?.focus(); push('#preview'); }}
+                >
+                  <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
+                  <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </nav>
+      </EditorContext.Provider>
+    </div>
+  </GoogleOAuthProvider>
 );
 }
