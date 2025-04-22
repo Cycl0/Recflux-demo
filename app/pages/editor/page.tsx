@@ -4,6 +4,9 @@ import Cookies from 'js-cookie';
 import { GoogleOAuthProvider, useGoogleOneTapLogin } from '@react-oauth/google';
 import WinBoxWindow from '@/components/WinBoxWindow';
 import ConfigWindowContent from '@/components/ConfigWindowContent';
+import dynamic from 'next/dynamic';
+
+const FileDiffWinBox = dynamic(() => import('./FileDiffWinBox'), { ssr: false });
 import NavBar from '@/components/NavBar';
 import CurrentProjectLabel from '@/components/CurrentProjectLabel';
 import NavStyledDropdown from '@/components/NavStyledDropdown';
@@ -33,6 +36,7 @@ const chatActionOptions = [
 ];
 
 import { useRouter } from 'next/navigation';
+import FileDiffViewer from "@/components/FileDiffViewer";
 
 // Editor context for sending code to the editor
 const EditorContext = React.createContext({
@@ -476,6 +480,7 @@ function useSupabaseGoogleRegistration() {
 }
 
 export default function Home({ onLayoutChange = () => {}, ...props }) {
+  const [showDiffModal, setShowDiffModal] = useState(false);
   // Track the last submitted prompt
   const [lastPrompt, setLastPrompt] = useState<string>('');
   // Step 1: Add state variable for projects
@@ -583,6 +588,7 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
             }
             filesObj[file.name] = {
               name: file.name,
+              id: file.id,
               language: file.language || '',
               value: codeValue,
               desc: file.desc || ''
@@ -1049,7 +1055,7 @@ return (
       )}
 
       <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={400} height={500}>
-      <Chat onPromptSubmit={setLastPrompt} />
+        <Chat onPromptSubmit={setLastPrompt} />
       </WinBoxWindow>
       <WinBoxWindow id="editor" title="Editor" x={500} y={100} width={600} height={500}>
         <div className="w-full h-full flex flex-col min-h-0 min-w-0">
@@ -1073,6 +1079,18 @@ return (
                 </svg>
               )}
             </button>
+            {/* Diff Modal Trigger Button */}
+              <button
+                onClick={() => setShowDiffModal(true)}
+                className="px-2 py-1 rounded bg-cyan-600 text-white font-semibold shadow-md transition-all duration-300 ease-in-out flex items-center justify-center hover:bg-sky-600"
+                style={{ minWidth: 24, minHeight: 24 }}
+                aria-label="Comparar versões do arquivo"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+  <path d="M8 4a.5.5 0 0 1 .5.5V6H10a.5.5 0 0 1 0 1H8.5v1.5a.5.5 0 0 1-1 0V7H6a.5.5 0 0 1 0-1h1.5V4.5A.5.5 0 0 1 8 4m-2.5 6.5A.5.5 0 0 1 6 10h4a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5"/>
+  <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2zm10-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1"/>
+</svg>
+              </button>
           </div>
           <Editor
               key={selectedFile?.name}
@@ -1097,13 +1115,35 @@ return (
             />
           </div>
         </WinBoxWindow>
+        {/* Diff Modal */}
+        {showDiffModal && selectedFile && selectedFile.name ? (
+          <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full h-[80vh] flex flex-col relative">
+              <button
+                className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl font-bold z-10"
+                onClick={() => setShowDiffModal(false)}
+                aria-label="Fechar comparação"
+              >
+                &times;
+              </button>
+              <div className="flex-1 min-h-0 min-w-0 p-4 overflow-auto">
+                <FileDiffViewer
+                  fileId={filesCurrent[selectedFile.name]?.id}
+                  currentCode={filesCurrent[selectedFile.name]?.value || ''}
+                  onCopyToCurrentFile={(code: string) => setFilesCurrentHandler(selectedFile.name, code)}
+                />
+              </div>
+            </div>
+          </div>
+        ) : null}
+
         <WinBoxWindow id="preview" title="Preview" x={1150} y={100} width={500} height={500}>
           <LiveProvider code={selectedFile?.value} scope={reactScope} noInline>
             <LivePreview />
             <LiveError className="text-wrap" />
           </LiveProvider>
         </WinBoxWindow>
-        <nav className="w-full h-20 block fixed w-full z-30 bottom-0 noselect shadow-lg bg-gray-900/30 rounded">
+        <nav className="w-full h-20 block fixed w-full z-[2147483647] bottom-0 noselect shadow-lg bg-gray-900/30 rounded">
           <div className="w-full h-full flex flex-row justify-between items-end mx-auto px-4 space-y-2">
             {/* Chat Controls */}
             <div className="w-full flex flex-col items-center space-y-1">
