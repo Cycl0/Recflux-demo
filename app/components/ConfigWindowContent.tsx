@@ -39,16 +39,20 @@ const ConfigWindowContent = ({ userId, selectedProjectId, setSelectedProjectId, 
       <section className="bg-white/60 rounded-lg shadow p-4 flex flex-col gap-2">
         <h2 className="text-lg font-semibold mb-1 text-cyan-700">Selecionar Projeto</h2>
         <p className="text-sm text-gray-600 mb-2">Escolha um projeto para editar ou visualizar.</p>
-        <div className="flex items-center gap-2">
-          <ProjectSelector
-            ref={projectSelectorRef}
-            userId={userId}
-            selectedProjectId={selectedProjectId}
-            onSelect={setSelectedProjectId}
-          />
+        <label className="block mb-1 font-medium text-left">Projeto</label>
+        <div className="flex items-center gap-1">
+          <div className="w-48 h-8 flex items-center">
+            <ProjectSelector
+              ref={projectSelectorRef}
+              userId={userId}
+              selectedProjectId={selectedProjectId}
+              onSelect={setSelectedProjectId}
+              className="w-full h-full"
+            />
+          </div>
           {selectedProjectId && (
             <button
-              className="ml-2 px-2 py-1 w-32 h-8 mt-4 rounded bg-cyan-600 text-white hover:bg-cyan-700 text-lg flex items-center justify-center"
+              className="px-2 py-1 w-32 h-8 rounded bg-cyan-600 text-white hover:bg-cyan-700 text-lg flex items-center justify-center"
               onClick={() => setShowEditModal(true)}
               title="Editar ou Remover Projeto"
             >
