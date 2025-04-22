@@ -692,15 +692,17 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
     }
   }, [selectedProjectId, publicUserId, allFilesCurrent]);
 
-  const saveEditorCode = useCallback(() => {
-    if (!selectedProjectId) return;
-    setSaveStatus('saving');
-    const storageKey = `editorCode_${selectedProjectId}`;
-    localStorage.setItem(storageKey, JSON.stringify(allFilesCurrent[selectedProjectId] || initialFiles));
-    saveProjectFilesToDB(); // Also save to DB on manual save
-    setSaveStatus('saved');
-    setTimeout(() => setSaveStatus('idle'), 1200);
-  }, [selectedProjectId, allFilesCurrent, saveProjectFilesToDB]);
+  // Throttle manual save to avoid rapid consecutive saves (2s window)
+const throttledSaveEditorCode = useMemo(() => throttle(() => {
+  if (!selectedProjectId) return;
+  setSaveStatus('saving');
+  const storageKey = `editorCode_${selectedProjectId}`;
+  localStorage.setItem(storageKey, JSON.stringify(allFilesCurrent[selectedProjectId] || initialFiles));
+  saveProjectFilesToDB(); // Also save to DB on manual save
+  setSaveStatus('saved');
+  setTimeout(() => setSaveStatus('idle'), 1200);
+}, 2000, { trailing: false }), [selectedProjectId, allFilesCurrent, saveProjectFilesToDB]);
+
 
   // Auto-save every 1 minute (localStorage only)
   useEffect(() => {
@@ -1053,8 +1055,8 @@ return (
         <div className="w-full h-full flex flex-col min-h-0 min-w-0">
           <div className="flex items-center gap-4 p-2 bg-white/70 border-b border-cyan-100">
             <button
-              onClick={saveEditorCode}
-              disabled={saveStatus === 'saving'}
+               onClick={throttledSaveEditorCode}
+               disabled={saveStatus === 'saving'}
               className={`px-2 py-1 rounded bg-cyan-600 text-white font-semibold shadow-md transition-all duration-300 ease-in-out flex items-center justify-center ${saveStatus === 'saving' ? 'opacity-60 cursor-not-allowed' : 'hover:bg-cyan-700'}`}
               style={{ minWidth: 24, minHeight: 24 }}
               aria-label="Salvar código do projeto"
