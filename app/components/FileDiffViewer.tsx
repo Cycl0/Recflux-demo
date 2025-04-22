@@ -88,10 +88,25 @@ export default function FileDiffViewer({ fileId, currentCode, onCopyToCurrentFil
     setOldCode('');
     setNewCode('');
   }
-  function copyToCurrentFile() {
-    if (selectedNew) {
-      const found = versions.find(v => v.id === selectedNew.value);
+  // State for copy modal
+  const [showCopyModal, setShowCopyModal] = useState(false);
+  const [copySelected, setCopySelected] = useState<OptionType | null>(null);
+
+  function openCopyModal() {
+    setCopySelected(null);
+    setShowCopyModal(true);
+  }
+  function closeCopyModal() {
+    setShowCopyModal(false);
+  }
+  function handleCopySelect(option: OptionType | null) {
+    setCopySelected(option);
+  }
+  function confirmCopyToCurrentFile() {
+    if (copySelected) {
+      const found = versions.find(v => v.id === copySelected.value);
       if (found) onCopyToCurrentFile(found.code);
+      setShowCopyModal(false);
     }
   }
 
@@ -124,20 +139,50 @@ export default function FileDiffViewer({ fileId, currentCode, onCopyToCurrentFil
           <RefreshCcw size={20} />
         </button>
         <button
-          onClick={copyToCurrentFile}
+          onClick={openCopyModal}
           className={`!absolute right-0 top-10 w-10 h-10 bg-[rgba(193,219,253,0.15)] backdrop-blur-md text-white p-1.5 hover:shadow-gradient transition-all transform-gpu  ease-in-out duration-200`}
           title="Copiar para arquivo atual"
         >
           <FileCopyIcon style={{ fontSize: 20 }} />
         </button>
+
+        {/* Copy-to-current-file Modal */}
+        {showCopyModal && (
+          <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/40 backdrop-blur-sm">
+            <div className="bg-white rounded-lg shadow-lg max-w-md w-full flex flex-col relative p-6">
+              <button
+                className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl font-bold z-10"
+                onClick={closeCopyModal}
+                aria-label="Fechar modal de cópia"
+              >
+                &times;
+              </button>
+              <h2 className="text-lg font-semibold mb-4">Copiar versão para o arquivo atual</h2>
+              <Select
+                options={options}
+                value={copySelected}
+                onChange={handleCopySelect}
+                styles={customStyleSelect}
+                className="mb-4"
+                placeholder="Selecione uma versão para copiar"
+                isDisabled={loading}
+              />
+              <button
+                className="px-4 py-2 bg-cyan-600 text-white rounded font-semibold shadow-md hover:bg-cyan-700 transition-all disabled:opacity-50"
+                onClick={confirmCopyToCurrentFile}
+                disabled={!copySelected}
+              >
+                Copiar para arquivo atual
+              </button>
+            </div>
+          </div>
+        )}
       </div>
       <div className="flex-1 overflow-auto mt-2">
         <ReactDiffViewer
           oldValue={oldCode}
           newValue={newCode}
           splitView={false}
-          leftTitle="Versão Antiga"
-          rightTitle="Versão Nova"
         />
       </div>
     </div>
