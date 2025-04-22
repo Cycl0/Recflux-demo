@@ -60,6 +60,15 @@ const ConfigWindowContent = ({ userId, selectedProjectId, setSelectedProjectId, 
             </button>
           )}
         </div>
+        {selectedProjectId && (() => {
+          const proj = projects.find(p => p.id === selectedProjectId);
+          return proj && proj.description ? (
+            <div className="text-gray-500 italic text-sm mt-1 ml-1 truncate max-w-[90%]" title={proj.description}>
+              {proj.description}
+            </div>
+          ) : null;
+        })()}
+
       </section>
       <section className="bg-white/60 rounded-lg shadow p-4 flex flex-col gap-2">
         <div className="mb-4">
