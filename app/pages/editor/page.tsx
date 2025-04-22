@@ -77,8 +77,6 @@ ${selectedFile?.value || ''}
 Edite o código acima conforme o pedido do usuário a seguir. NÃO reescreva tudo, apenas edite o necessário, mantendo o restante igual.
 
 Pedido do usuário: ${input}`;
-      console.log('EDITAR selectedFile:', selectedFile);
-      console.log('EDITAR editPrompt:', editPrompt);
       chat.append({ role: "user", content: editPrompt });
     } else if (chatAction.value === '3') { // FOCAR
       // Compose a prompt for focusing on a specific element
@@ -89,8 +87,6 @@ ${selectedFile?.value || ''}
 Extraia do código acima apenas o(s) elemento(s) que correspondem ao pedido do usuário a seguir. NÃO reescreva tudo, apenas retorne o(s) elemento(s) relevante(s), mantendo a estrutura original com <>[...]</> se houver múltiplos. NÃO SE ESQUEÇA DE MANTER O WRAP COM A FUNÇÃO E O METODO RENDER.
 
 Pedido do usuário: ${input}`;
-      console.log('FOCAR selectedFile:', selectedFile);
-      console.log('FOCAR focusPrompt:', focusPrompt);
       chat.append({ role: "user", content: focusPrompt });
     } else if (chatAction.value === '4') { // CHAT
       // Compose a prompt for chatting with context
@@ -103,8 +99,6 @@ Além disso, considere todas as seções de código já geradas nesta conversa:
 Considere todo esse contexto (o código atual e o código já gerado) para responder à solicitação do usuário de forma significativa. NÃO edite ou reescreva o código, apenas utilize o contexto para conversar sobre ele.
 
 Pedido do usuário: ${input}`;
-      console.log('CHAT selectedFile:', selectedFile);
-      console.log('CHAT chatPrompt:', chatPrompt);
       chat.append({ role: "user", content: chatPrompt });
     } else {
       baseHandleSubmit(e);
@@ -366,7 +360,7 @@ function TriggerableGoogleOneTapHandler({ open, onClose }: { open: boolean, onCl
  
   useGoogleOneTapLogin({
     onSuccess: async (credentialResponse) => {
-      console.log('One Tap Success:', credentialResponse);
+      // console.log('One Tap Success:', credentialResponse);
       const { credential } = credentialResponse;
       // Exchange Google credential for Supabase session
       const { data, error } = await supabase.auth.signInWithIdToken({
@@ -376,7 +370,7 @@ function TriggerableGoogleOneTapHandler({ open, onClose }: { open: boolean, onCl
       if (error) {
         console.error('Supabase signInWithIdToken error:', error);
       } else {
-        console.log('Supabase session:', data);
+        // console.log('Supabase session:', data);
       }
       onClose();
     },
@@ -385,7 +379,7 @@ function TriggerableGoogleOneTapHandler({ open, onClose }: { open: boolean, onCl
       onClose();
     },
     promptMomentNotification: notification => {
-      console.log('Prompt notification:', notification);
+      // console.log('Prompt notification:', notification);
       if (
         (notification.isNotDisplayed && notification.isNotDisplayed()) ||
         (notification.isSkippedMoment && notification.isSkippedMoment()) ||
@@ -409,7 +403,7 @@ function useSupabaseGoogleRegistration() {
       console.log('[registerUserIfNeeded] No sessionUser');
       return;
     }
-    console.log('[registerUserIfNeeded] sessionUser:', sessionUser);
+    // console.log('[registerUserIfNeeded] sessionUser:', sessionUser);
     setUser(sessionUser);
     const { id, email, user_metadata } = sessionUser;
     const { data: existingUser, error: selectError } = await supabase
@@ -451,7 +445,7 @@ function useSupabaseGoogleRegistration() {
   useEffect(() => {
     // Always check session on mount
     supabase.auth.getSession().then(({ data: { session } }) => {
-      console.log('[useEffect] getSession result:', session);
+      // console.log('[useEffect] getSession result:', session);
       if (session?.user) {
         registerUserIfNeeded(session.user);
       } else {
@@ -462,7 +456,7 @@ function useSupabaseGoogleRegistration() {
 
     // Listen for auth state changes
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[onAuthStateChange]', event, session);
+      // console.log('[onAuthStateChange]', event, session);
       if (event === 'SIGNED_IN' && session?.user) {
         registerUserIfNeeded(session.user);
       }
@@ -625,8 +619,6 @@ function GoogleSignInButton() {
             newState.push({ ...emptyFiles });
         }
 
-        console.log("Before update:", newState[index]);
-
         // Defensive check
         if (!newState[index]) {
             newState[index] = { ...emptyFiles };
@@ -640,8 +632,6 @@ function GoogleSignInButton() {
                 desc: desc
             },
         };
-
-        console.log("After update:", newState[index]);
 
         return newState;
     });
@@ -867,8 +857,6 @@ if (userLoading) {
   const email = user.email;
   const avatarUrl =
     user.user_metadata?.avatar_url || "/images/icon.png";
-  console.log('DEBUG user:', user);
-  console.log('DEBUG avatarUrl:', avatarUrl);
   navExtra = (
     <>
       <CurrentProjectLabel
