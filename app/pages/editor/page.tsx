@@ -499,18 +499,23 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
 
   // Step 2: Fetch and set projects when publicUserId changes
   useEffect(() => {
-    async function fetchProjects() {
-      console.log('publicUserId before fetching projects:', publicUserId);
+    async function fetchProjectsAndMaybeCreate() {
       if (!publicUserId) return;
       const projectsList = await import('@/utils/supabaseProjects').then(mod => mod.getUserProjects(publicUserId));
-      console.log('Fetched projectsList:', projectsList);
       setProjects(projectsList || []);
-    // Debug: log projects after DB fetch
-    console.log('Projects state updated:', projectsList);
+      // If no projects, create the initial one
+      if (projectsList.length === 0) {
+        try {
+          const { createProject } = await import('@/utils/supabaseProjects');
+          const newProj = await createProject(publicUserId, 'Primeiro Projeto');
+          setProjects([newProj]);
+          setSelectedProjectId(newProj.id);
+        } catch (e) {
+          console.error('Failed to create initial project:', e);
+        }
+      }
     }
-    if (publicUserId) {
-      fetchProjects();
-    }
+    fetchProjectsAndMaybeCreate();
   }, [publicUserId]);
 
   // Fetch and set publicUserId after login
@@ -549,7 +554,7 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
     (async () => {
       try {
         const { data: dbFiles, error } = await supabase
-          .from('files')
+          .from('files_metadata')
           .select('*')
           .eq('project_id', selectedProjectId);
         if (error) throw error;
@@ -627,7 +632,7 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
       const typedFileObj = fileObj as EditorFile;
       // 1. Upsert into files table by (project_id, name)
       const { data: fileRows, error: fileError } = await supabase
-        .from('files')
+        .from('files_metadata')
         .upsert([
           {
             project_id: selectedProjectId,
@@ -694,17 +699,17 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
     setTimeout(() => setSaveStatus('idle'), 1200);
   }, [selectedProjectId, allFilesCurrent, saveProjectFilesToDB]);
 
-  // Auto-save every 2 minutes (localStorage only)
+  // Auto-save every 1 minute (localStorage only)
   useEffect(() => {
     if (!selectedProjectId) return;
     const interval = setInterval(() => {
       const storageKey = `editorCode_${selectedProjectId}`;
       localStorage.setItem(storageKey, JSON.stringify(allFilesCurrent[selectedProjectId] || initialFiles));
-    }, 2 * 60 * 1000);
+    }, 1 * 60 * 1000);
     return () => clearInterval(interval);
   }, [selectedProjectId, allFilesCurrent]);
 
-  // Auto-save to DB every 5 minutes if files have changed
+  // Auto-save to DB every 2 minutes if files have changed
   const lastDBSavedRef = useRef<string | null>(null);
   useEffect(() => {
     if (!selectedProjectId || !publicUserId) return;
@@ -715,7 +720,7 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
         saveProjectFilesToDB();
         lastDBSavedRef.current = serialized;
       }
-    }, 5 * 60 * 1000); // 5 minutes
+    }, 2 * 60 * 1000); // 2 minutes
     return () => clearInterval(interval);
   }, [selectedProjectId, publicUserId, allFilesCurrent, saveProjectFilesToDB]);
 
