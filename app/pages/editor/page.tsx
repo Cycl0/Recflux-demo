@@ -39,7 +39,7 @@ import { useRouter } from 'next/navigation';
 
 // Editor context for sending code to the editor
 const EditorContext = React.createContext({
-  setFilesCurrentHandler: (fileName: string, code: string, index?: number) => {},
+  setFilesCurrentHandler: (fileName: string, code: string, index?: number) => {}, // Will be replaced below
   throttleEditorOpen: (open: boolean) => {},
   selectedFile: undefined as undefined | { value?: string; name?: string },
 });
@@ -523,26 +523,78 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
     fetchCustomUserId();
   }, [user]);
 
-  // Restore editor code from cookie
-  const [filesCurrent, setFilesCurrent] = useState(() => {
-    const saved = Cookies.get('editorCode');
+  // Project-specific editor state: maps projectId to files object
+  const [allFilesCurrent, setAllFilesCurrent] = useState<{ [projectId: string]: any }>({});
+  const filesCurrent = (selectedProjectId && allFilesCurrent[selectedProjectId]) || initialFiles;
+
+  // Track project loading state to avoid race condition
+  const [loadingProject, setLoadingProject] = useState(false);
+
+  // Load code for the selected project whenever it changes
+  useEffect(() => {
+    if (!selectedProjectId) {
+      console.warn('[LOAD] Skipped: selectedProjectId is falsy', selectedProjectId);
+      return;
+    }
+    setLoadingProject(true);
+    const storageKey = `editorCode_${selectedProjectId}`;
+    let saved = localStorage.getItem(storageKey);
+    // console.log('[LOAD] storageKey', storageKey, 'selectedProjectId', selectedProjectId, 'localStorage', saved);
     if (saved) {
       try {
-        return JSON.parse(saved);
-      } catch {
-        return [initialFiles];
+        const loaded = JSON.parse(saved);
+        console.log('[LOAD] Project', selectedProjectId, 'loaded', loaded);
+        setAllFilesCurrent(prev => ({
+          ...prev,
+          [selectedProjectId]: loaded
+        }));
+        setLoadingProject(false);
+        return;
+      } catch (e) {
+        console.error('[LOAD] JSON parse error', e);
       }
     }
-    return [initialFiles];
-  });
+    setAllFilesCurrent(prevState => ({ ...prevState, [selectedProjectId]: initialFiles }));
+    setSelectedFile(initialFiles["script.js"]);
+    setLastUpdatedFile("script.js");
+    setLoadingProject(false);
+  }, [selectedProjectId]);
 
-  // Persist editor code to cookie whenever it changes
+  // Persist editor code to the correct cookie whenever it changes
   useEffect(() => {
-    Cookies.set('editorCode', JSON.stringify(filesCurrent), { expires: 7 });
-  }, [filesCurrent]);
+    if (!selectedProjectId) {
+      console.warn('[SAVE] Skipped: selectedProjectId is falsy', selectedProjectId);
+      return;
+    }
+    if (loadingProject) {
+      console.log('[SAVE] Skipped: loadingProject is true');
+      return;
+    }
+    const storageKey = `editorCode_${selectedProjectId}`;
+    localStorage.setItem(storageKey, JSON.stringify(allFilesCurrent[selectedProjectId] || initialFiles));
+    // console.log('[SAVE] storageKey', storageKey, 'selectedProjectId', selectedProjectId, 'files', allFilesCurrent[selectedProjectId], 'localStorage', localStorage.getItem(storageKey));
+  }, [allFilesCurrent, selectedProjectId, loadingProject]);
+
+  // Manual Save logic
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const saveEditorCode = useCallback(() => {
+    if (!selectedProjectId) return;
+    setSaveStatus('saving');
+    const storageKey = `editorCode_${selectedProjectId}`;
+    localStorage.setItem(storageKey, JSON.stringify(allFilesCurrent[selectedProjectId] || initialFiles));
+    // console.log('[DEBUG] manual localStorage after set:', localStorage.getItem(storageKey));
+    setSaveStatus('saved');
+    setTimeout(() => setSaveStatus('idle'), 1200);
+  }, [selectedProjectId, allFilesCurrent]);
+
+  // Auto-save every 2 minutes
   useEffect(() => {
-    Cookies.set('editorCode', JSON.stringify(filesCurrent), { expires: 7 });
-  }, [filesCurrent]);
+    if (!selectedProjectId) return;
+    const interval = setInterval(() => {
+      saveEditorCode();
+    }, 2 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [selectedProjectId, filesCurrent, saveEditorCode]);
   // Track the last file sent to the editor
   const [lastUpdatedFile, setLastUpdatedFile] = useState('script.js');
   // ...existing Home logic
@@ -556,15 +608,15 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
 
   // Update selectedFile when filesCurrent or lastUpdatedFile changes
   useEffect(() => {
-    if (filesCurrent[0][lastUpdatedFile]) {
-      setSelectedFile(filesCurrent[0][lastUpdatedFile]);
+    if (filesCurrent[lastUpdatedFile]) {
+      setSelectedFile(filesCurrent[lastUpdatedFile]);
     }
   }, [filesCurrent, lastUpdatedFile]);
 
-  const [selectedFile, setSelectedFile] = useState(filesCurrent[0]["script.js"]);
+  const [selectedFile, setSelectedFile] = useState(filesCurrent["script.js"]);
   const handleFileSelect = (fileName) => (e) => {
     e.preventDefault();
-    setSelectedFile(filesCurrent[0][fileName]);
+    setSelectedFile(filesCurrent[fileName]);
     setLastUpdatedFile(fileName);
   };
 function GoogleSignInButton() {
@@ -610,47 +662,41 @@ function GoogleSignInButton() {
 }
 
     // Compose Handlers
-  function setFilesHandler(setter, fileName, content, desc, index = 0) {
-    setter(prevState => {
-        const newState = [...prevState];
-
-        // Ensure the array has enough elements
-        while (newState.length <= index) {
-            newState.push({ ...emptyFiles });
-        }
-
-        // Defensive check
-        if (!newState[index]) {
-            newState[index] = { ...emptyFiles };
-        }
-
-        newState[index] = {
-            ...newState[index],
-            [fileName]: {
-                ...(newState[index][fileName] || {}),  // Defensive
-                value: content,
-                desc: desc
-            },
-        };
-
-        return newState;
-    });
-}
+  function setFilesHandler(setter, fileName, content, desc) {
+    setter(prevState => ({
+      ...prevState,
+      [fileName]: {
+        ...(prevState[fileName] || {}),
+        value: content,
+        desc: desc
+      }
+    }));
+  }
 
     // Handlers
-    const setFilesGeneratedHandler = (fileName, content, index = 0) =>
-        setFilesHandler(setFilesGenerated, fileName, content, getDateTime(), index);
-    const setFilesRecentPromptHandler = (fileName, content, index = 0) =>
-        setFilesHandler(setFilesRecentPrompt, fileName, content, getDateTime(), index);
-    const setFilesCurrentHandler = (fileName, content, index = 0) => {
-    setFilesHandler(setFilesCurrent, fileName, content, getDateTime(), index);
-    setLastUpdatedFile(fileName);
-  };
+    const setFilesGeneratedHandler = (fileName, content) =>
+        setFilesHandler(setFilesGenerated, fileName, content, getDateTime());
+    const setFilesRecentPromptHandler = (fileName, content) =>
+        setFilesHandler(setFilesRecentPrompt, fileName, content, getDateTime());
+    const setFilesCurrentHandler = (fileName: string, content: string, index?: number) => {
+  if (!selectedProjectId) return;
+  setAllFilesCurrent(prev => ({
+    ...prev,
+    [selectedProjectId]: {
+      ...prev[selectedProjectId],
+      [fileName]: {
+        ...((prev[selectedProjectId] && prev[selectedProjectId][fileName]) || {}),
+        value: content,
+      },
+    },
+  }));
+  setLastUpdatedFile(fileName);
+};
 
   // Throttle editor value updates to 200ms to avoid UI overload
 const handleEditorChange = useMemo(
   () => throttle((value, event) => {
-    setFilesCurrentHandler(selectedFile?.name, value, 0);
+    setFilesCurrentHandler(selectedFile?.name, value);
   }, 200),
   [selectedFile?.name, setFilesCurrentHandler]
 );
@@ -894,15 +940,14 @@ return (
       <NavBar extra={navExtra} />
       {/* Modal for Project Configuration */}
       {showConfigModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
-          <div className="bg-white rounded-lg shadow-lg p-0 max-w-md w-full relative">
-            <button
-              className="absolute top-2 right-2 text-gray-400 hover:text-gray-700 text-2xl font-bold focus:outline-none"
-              onClick={() => setShowConfigModal(false)}
-              aria-label="Fechar"
-            >
-              &times;
-            </button>
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm"
+          onClick={() => setShowConfigModal(false)}
+        >
+          <div
+            className="bg-white rounded-lg shadow-lg p-0 max-w-md w-full relative"
+            onClick={e => e.stopPropagation()}
+          >
             <ConfigWindowContent
               userId={publicUserId}
               selectedProjectId={selectedProjectId}
@@ -918,6 +963,27 @@ return (
       </WinBoxWindow>
       <WinBoxWindow id="editor" title="Editor" x={500} y={100} width={600} height={500}>
         <div className="w-full h-full flex flex-col min-h-0 min-w-0">
+          <div className="flex items-center gap-4 p-2 bg-white/70 border-b border-cyan-100">
+            <button
+              onClick={saveEditorCode}
+              disabled={saveStatus === 'saving'}
+              className={`px-2 py-1 rounded bg-cyan-600 text-white font-semibold shadow-md transition-all duration-300 ease-in-out flex items-center justify-center ${saveStatus === 'saving' ? 'opacity-60 cursor-not-allowed' : 'hover:bg-cyan-700'}`}
+              style={{ minWidth: 24, minHeight: 24 }}
+              aria-label="Salvar código do projeto"
+            >
+              {saveStatus === 'saved' ? (
+                <svg className="w-[12px] h-[12px] text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+              ) : saveStatus === 'saving' ? (
+                <span className="animate-spin w-[12px] h-[12px] border-2 border-white border-t-transparent rounded-full" />
+              ) : (
+                // Save icon (floppy disk)
+                <svg className="w-[12px] h-[12px] text-white" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M11 2H9v3h2z"/>
+                  <path d="M1.5 0h11.586a1.5 1.5 0 0 1 1.06.44l1.415 1.414A1.5 1.5 0 0 1 16 2.914V14.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 14.5v-13A1.5 1.5 0 0 1 1.5 0M1 1.5v13a.5.5 0 0 0 .5.5H2v-4.5A1.5 1.5 0 0 1 3.5 9h9a1.5 1.5 0 0 1 1.5 1.5V15h.5a.5.5 0 0 0 .5-.5V2.914a.5.5 0 0 0-.146-.353l-1.415-1.415A.5.5 0 0 0 13.086 1H13v4.5A1.5 1.5 0 0 1 11.5 7h-7A1.5 1.5 0 0 1 3 5.5V1H1.5a.5.5 0 0 0-.5.5m3 4a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5V1H4zM3 15h10v-4.5a.5.5 0 0 0-.5-.5h-9a.5.5 0 0 0-.5.5z"/>
+                </svg>
+              )}
+            </button>
+          </div>
           <Editor
               key={selectedFile?.name}
               className="flex-1 w-full h-full min-h-0 min-w-0"
@@ -925,12 +991,14 @@ return (
               height="100%"
               path={selectedFile?.name}
               defaultLanguage={selectedFile?.language}
-              value={selectedFile?.value}
+              value={filesCurrent[selectedFile?.name]?.value ?? ''}
               onMount={(editor) => {
                 editorRef.current = editor;
                 setTimeout(() => editor.layout(), 100);
               }}
-              onChange={handleEditorChange}
+              onChange={(value) => {
+                setFilesCurrentHandler(selectedFile?.name, value ?? '');
+              }}
               options={{
                 minimap: { enabled: true },
                 fontSize: 14,

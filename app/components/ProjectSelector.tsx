@@ -34,7 +34,6 @@ const ProjectSelector = forwardRef<any, ProjectSelectorProps>(({ userId, selecte
 
   // Defensive: always use an array
   const safeProjects = Array.isArray(projects) ? projects : [];
-  console.log("[ProjectSelector] Rendering with projects:", safeProjects);
 
   // Ensure the last created project is selected if none is selected
   useEffect(() => {
