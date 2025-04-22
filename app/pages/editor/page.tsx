@@ -4,9 +4,6 @@ import Cookies from 'js-cookie';
 import { GoogleOAuthProvider, useGoogleOneTapLogin } from '@react-oauth/google';
 import WinBoxWindow from '@/components/WinBoxWindow';
 import ConfigWindowContent from '@/components/ConfigWindowContent';
-import dynamic from 'next/dynamic';
-
-const FileDiffWinBox = dynamic(() => import('./FileDiffWinBox'), { ssr: false });
 import NavBar from '@/components/NavBar';
 import CurrentProjectLabel from '@/components/CurrentProjectLabel';
 import NavStyledDropdown from '@/components/NavStyledDropdown';
