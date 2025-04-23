@@ -9,7 +9,8 @@ import CurrentProjectLabel from '@/components/CurrentProjectLabel';
 import NavStyledDropdown from '@/components/NavStyledDropdown';
 import Editor from "@monaco-editor/react";
 import 'react-resizable/css/styles.css';
-import { LiveProvider, LivePreview, LiveError } from "react-live";
+import { LiveProvider, LivePreview } from "react-live";
+import LiveErrorWithRef from "@/components/LiveErrorWithRef";
 import {emptyFiles, initialFiles} from "@/utils/files-editor";
 import { throttle } from 'lodash';
 import { supabase } from '@/utils/supabaseClient';
@@ -44,9 +45,13 @@ const EditorContext = React.createContext({
 
 interface ChatProps {
   onPromptSubmit?: (prompt: string, fileName?: string, code?: string) => void;
+  /**
+   * Ref for appending messages or scrolling, injected by parent if needed
+   */
+  appendRef?: React.MutableRefObject<any>;
 }
 
-function Chat({ onPromptSubmit, theme }: ChatProps & { theme: 'dark' | 'light' }) {
+function Chat({ onPromptSubmit, theme, appendRef }: ChatProps & { theme: 'dark' | 'light' }) {
   // Restore chat prompt from cookie
   const [input, setInput] = useState(() => Cookies.get('chatPrompt') || '');
   useEffect(() => {
@@ -58,6 +63,20 @@ function Chat({ onPromptSubmit, theme }: ChatProps & { theme: 'dark' | 'light' }
     api: '/api/chat',
   });
   const { messages, handleInputChange: baseHandleInputChange, handleSubmit: baseHandleSubmit, isLoading } = chat;
+
+  // Expose append method via appendRef
+  useEffect(() => {
+    if (appendRef) {
+      appendRef.current = (message: { role: "data" | "system" | "user" | "assistant"; content: string }) => {
+        if (typeof chat.append === 'function') {
+          chat.append(message);
+        }
+      };
+      return () => {
+        appendRef.current = null;
+      };
+    }
+  }, [appendRef, chat]);
 
   // Custom handleInputChange to sync with cookie
   const handleInputChange = (
@@ -107,8 +126,7 @@ Pedido do usuário: ${input}`;
       baseHandleSubmit(e);
     }
   };
-
-
+  
   const [allCodeGenerated, setAllCodeGenerated] = useState<string[]>([]);
   const [autoSentCodes, setAutoSentCodes] = useState<{[key: string]: boolean}>({});
   const [sendingToEditor, setSendingToEditor] = useState(false); // visual indicator
@@ -1148,6 +1166,24 @@ useEffect(() => {
   }
 }, [user, userLoading]);
 
+// Ref to access LiveError component
+const liveErrorRef = useRef<HTMLPreElement | null>(null);
+// Ref to access Chat's append method
+const chatAppendRef = useRef<any>(null);
+
+const handleFixCode = () => {
+  let errorText = '';
+  if (liveErrorRef.current) {
+    const pre = liveErrorRef.current.querySelector('pre');
+    if (pre) errorText = pre.textContent || '';
+  }
+  const fixPrompt = `Aqui está o código atual do arquivo ${selectedFile?.name || ''}:\r\n\r\n${selectedFile?.value || ''}\r\n\r\nNÃO SE ESQUEÇA DE MANTER O WRAP COM A FUNÇÃO E O METODO RENDER.\r\n\r\nPedido do usuário: Fix the code.\r\n\r\nCode error: ${errorText}`;
+  console.log('Fix prompt:', fixPrompt);
+  if (chatAppendRef.current && typeof chatAppendRef.current === 'function') {
+    chatAppendRef.current({ role: 'user', content: fixPrompt });
+  }
+};
+
 return (
   <GoogleOAuthProvider clientId={clientId}>
     {showOneTap && (
@@ -1158,7 +1194,7 @@ return (
         <NavBar extra={navExtra} />
         <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={525} height={500}>
           <div className="w-full h-full flex flex-col bg-white/70 dark:bg-[#232733] text-gray-900 dark:text-gray-100 border border-cyan-100 dark:border-cyan-700 rounded-b-md p-0">
-            <Chat onPromptSubmit={handlePromptSubmit} theme={theme} />
+            <Chat onPromptSubmit={handlePromptSubmit} theme={theme} appendRef={chatAppendRef} />
           </div>
         </WinBoxWindow>
         <WinBoxWindow id="editor" title="Editor" x={610} y={100} width={525} height={500}>
@@ -1176,24 +1212,32 @@ return (
                 ) : saveStatus === 'saving' ? (
                   <span className="animate-spin w-[12px] h-[12px] border-2 border-white border-t-transparent rounded-full" />
                 ) : (
-                  // Save icon (floppy disk)
-                  <svg className="w-[12px] h-[12px] text-white" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M11 2H9v3h2z"/>
-                    <path d="M1.5 0h11.586a1.5 1.5 0 0 1 1.06.44l1.415 1.414A1.5 1.5 0 0 1 16 2.914V14.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 14.5v-13A1.5 1.5 0 0 1 1.5 0M1 1.5v13a.5.5 0 0 0 .5.5H2v-4.5A1.5 1.5 0 0 1 3.5 9h9a1.5 1.5 0 0 1 1.5 1.5V15h.5a.5.5 0 0 0 .5-.5V2.914a.5.5 0 0 0-.146-.353l-1.415-1.415A.5.5 0 0 0 13.086 1H13v4.5A1.5 1.5 0 0 1 11.5 7h-7A1.5 1.5 0 0 1 3 5.5V1H1.5a.5.5 0 0 0-.5.5m3 4a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5V1H4zM3 15h10v-4.5a.5.5 0 0 0-.5-.5h-9a.5.5 0 0 0-.5.5z"/>
-                  </svg>
+                  <span className="text-white text-xs text-normal">
+                    Save
+                  </span>
                 )}
               </button>
               {/* Diff Modal Trigger Button */}
               <button
                 onClick={() => setShowDiffModal(true)}
-                className="z-[2147483647] px-2 py-1 rounded bg-cyan-600 text-white font-semibold shadow-md transition-all duration-300 ease-in-out flex items-center justify-center hover:bg-sky-600"
+                className="px-2 py-1 rounded bg-cyan-600 text-white font-semibold shadow-md transition-all duration-300 ease-in-out flex items-center justify-center hover:bg-sky-600"
                 style={{ minWidth: 24, minHeight: 24 }}
                 aria-label="Comparar versões do arquivo"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                  <path d="M8 4a.5.5 0 0 1 .5.5V6H10a.5.5 0 0 1 0 1H8.5v1.5a.5.5 0 0 1-1 0V7H6a.5.5 0 0 1 0-1h1.5V4.5A.5.5 0 0 1 8 4m-2.5 6.5A.5.5 0 0 1 6 10h4a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5"/>
-                  <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2zm10-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1"/>
-                </svg>
+                <span className="text-white text-xs text-normal">
+                  Diff
+                </span>
+              </button>
+              {/* Fix Button */}
+              <button
+                onClick={() => handleFixCode()}
+                className="px-2 py-1 rounded bg-cyan-600 text-white font-semibold shadow-md transition-all duration-300 ease-in-out flex items-center justify-center hover:bg-sky-600"
+                style={{ minWidth: 24, minHeight: 24 }}
+                aria-label="Corrigir código automaticamente"
+              >
+                <span className="text-white text-xs text-normal">
+                  Fix
+                </span>
               </button>
             </div>
             <Editor
@@ -1223,10 +1267,15 @@ return (
 
         <WinBoxWindow id="preview" title="Preview" x={1175} y={100} width={525} height={500}>
           <div className="w-full h-full flex flex-col bg-white/70 dark:bg-[#232733] text-gray-900 dark:text-gray-100 border border-cyan-100 dark:border-cyan-700 rounded-b-md p-0">
-            <LiveProvider code={selectedFile?.value} scope={reactScope} noInline>
+            <LiveProvider
+              code={selectedFile?.value}
+              scope={reactScope}
+              noInline
+            >
               <LivePreview />
-              <LiveError className="text-wrap" />
+              <LiveErrorWithRef ref={liveErrorRef} className="text-wrap"/>
             </LiveProvider>
+
           </div>
         </WinBoxWindow>
       {showConfigModal && (
