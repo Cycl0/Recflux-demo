@@ -15,7 +15,7 @@ import { throttle } from 'lodash';
 import { supabase } from '@/utils/supabaseClient';
 import { useChat } from 'ai/react'
 import CopyButton from '@/components/CopyButton'
-import { Bot, User } from 'lucide-react'
+import { Bot, User, Moon, Sun } from 'lucide-react'
 import ReactMarkdown from 'react-markdown';
 import rehypePrism from 'rehype-prism-plus';
 import remarkGfm from 'remark-gfm';
@@ -46,7 +46,7 @@ interface ChatProps {
   onPromptSubmit?: (prompt: string, fileName?: string, code?: string) => void;
 }
 
-function Chat({ onPromptSubmit }: ChatProps) {
+function Chat({ onPromptSubmit, theme }: ChatProps & { theme: 'dark' | 'light' }) {
   // Restore chat prompt from cookie
   const [input, setInput] = useState(() => Cookies.get('chatPrompt') || '');
   useEffect(() => {
@@ -180,13 +180,13 @@ Pedido do usuário: ${input}`;
   }, [messages, chatAction.value, isLoading]);
 
   return (
-    <div className="relative flex flex-col h-full rounded-lg shadow-lg bg-transparent">
+    <div className={`relative flex flex-col h-full rounded-lg shadow-lg bg-white dark:bg-[#232733] ${theme === 'dark' ? 'dark' : ''}`}>
       {/* Chat messages area */}
-      <div className="flex-1 space-y-4 !pb-[200px] p-4">
+      <div className="flex-1 space-y-4 !pb-[200px] p-4 bg-white dark:bg-[#232733]">
         {messages.map((message) => (
           <div
             key={message.id}
-            className={`p-4 rounded-lg shadow-gradient transition-all duration-300 ease-in-out text-gray-600 ${message.role === 'user' ? 'bg-blue-100' : 'bg-green-100'}`}
+            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <div className="relative mb-2">
               {message.role === 'user' ? (
@@ -199,7 +199,17 @@ Pedido do usuário: ${input}`;
                 </span>
               )}
             </div>
-            <div className="markdown-body">
+            <div className={`inline-block max-w-[80%] px-4 py-2 rounded-lg shadow-md break-words whitespace-pre-wrap
+                ${message.role === 'user'
+                  ? theme === 'dark'
+                    ? 'bg-cyan-400/20 text-cyan-100 border border-cyan-400/40 backdrop-blur-md'
+                    : 'bg-cyan-100 text-cyan-900 border border-cyan-200'
+                  : theme === 'dark'
+                    ? 'bg-white/10 text-cyan-100 border border-cyan-700/70 backdrop-blur-lg'
+                    : 'bg-white text-gray-900 border border-cyan-100'}
+              `}
+              style={theme === 'dark' ? { boxShadow: '0 4px 32px 0 rgba(34,211,238,0.10)', backgroundClip: 'padding-box' } : {}}>
+
               <ReactMarkdown
                 remarkPlugins={[remarkGfm]}
                 rehypePlugins={[rehypePrism]}
@@ -256,7 +266,7 @@ Pedido do usuário: ${input}`;
         ))}
       </div>
       {/* Chat input form below messages */}
-      <form onSubmit={handleSubmit} className="sticky bottom-0 left-0 w-full bg-transparent p-4 z-10 flex flex-col gap-2">
+      <form onSubmit={handleSubmit} className="sticky bottom-0 left-0 w-full dark:bg-[#232733] bg-transparent p-4 z-10 flex flex-col gap-2">
         <Select
           className="w-32 mb-2"
           value={chatAction}
@@ -266,18 +276,22 @@ Pedido do usuário: ${input}`;
           styles={{
             control: (provided, state) => ({
               ...provided,
-              background: state.isFocused
-                ? 'rgba(186,230,253,0.35)'
-                : 'rgba(255,255,255,0.18)',
-              backdropFilter: 'blur(12px)',
-              WebkitBackdropFilter: 'blur(12px)',
+              background: theme === 'dark'
+                ? (state.isFocused
+                    ? 'rgba(255,255,255,0.92)'
+                    : 'rgba(255,255,255,0.82)')
+                : (state.isFocused
+                    ? 'rgba(186,230,253,0.35)'
+                    : 'rgba(255,255,255,0.18)'),
+              color: theme === 'dark' ? '#232733' : '#0e7490',
               border: state.isFocused
-                ? '2px solid rgba(34,211,238,0.30)'
-                : '1.5px solid rgba(14,116,144,0.13)',
+                ? (theme === 'dark' ? '2px solid #67e8f9' : '2px solid rgba(34,211,238,0.30)')
+                : (theme === 'dark' ? '1.5px solid #164e63' : '1.5px solid rgba(14,116,144,0.13)'),
               boxShadow: state.isFocused
                 ? '0 4px 32px 0 rgba(34,211,238,0.18)'
                 : '0 2px 12px 0 rgba(14,116,144,0.10)',
-              color: '#0e7490',
+              backdropFilter: 'blur(12px)',
+              WebkitBackdropFilter: 'blur(12px)',
               cursor: 'pointer',
               fontWeight: 500,
               borderRadius: 14,
@@ -286,24 +300,31 @@ Pedido do usuário: ${input}`;
             }),
             menu: (provided) => ({
               ...provided,
-              background: 'rgba(255,255,255,0.22)',
+              background: theme === 'dark' ? 'rgba(255,255,255,0.97)' : 'rgba(255,255,255,0.22)',
+              color: theme === 'dark' ? '#232733' : '#0e7490',
               backdropFilter: 'blur(16px)',
               WebkitBackdropFilter: 'blur(16px)',
               borderRadius: 16,
               boxShadow: '0 8px 32px 0 rgba(34,211,238,0.12)',
-              border: '1.5px solid rgba(14,116,144,0.13)',
+              border: theme === 'dark' ? '1.5px solid #67e8f9' : '1.5px solid rgba(14,116,144,0.13)',
               marginBottom: 8,
               marginTop: 0,
               overflow: 'hidden',
             }),
             option: (provided, state) => ({
               ...provided,
-              background: state.isSelected
-                ? 'rgba(186,230,253,0.42)'
-                : state.isFocused
-                ? 'rgba(186,230,253,0.22)'
-                : 'transparent',
-              color: '#0e7490',
+              background: theme === 'dark'
+                ? (state.isSelected
+                    ? 'rgba(186,230,253,0.42)'
+                    : state.isFocused
+                      ? 'rgba(186,230,253,0.22)'
+                      : 'transparent')
+                : (state.isSelected
+                    ? 'rgba(186,230,253,0.42)'
+                    : state.isFocused
+                      ? 'rgba(186,230,253,0.22)'
+                      : 'transparent'),
+              color: theme === 'dark' ? '#232733' : '#0e7490',
               fontWeight: state.isSelected ? 700 : 500,
               borderRadius: 8,
               cursor: 'pointer',
@@ -311,21 +332,20 @@ Pedido do usuário: ${input}`;
             }),
             singleValue: (provided) => ({
               ...provided,
-              color: '#0e7490',
+              color: theme === 'dark' ? '#232733' : '#0e7490',
               fontWeight: 700,
             }),
             dropdownIndicator: (provided) => ({
               ...provided,
-              color: '#0e7490',
+              color: theme === 'dark' ? '#232733' : '#0e7490',
             }),
             indicatorSeparator: (provided) => ({
               ...provided,
-              backgroundColor: 'rgba(14,116,144,0.13)',
+              backgroundColor: theme === 'dark' ? '#67e8f9' : 'rgba(14,116,144,0.13)',
             }),
             input: (provided) => ({
               ...provided,
-              color: '#0e7490',
-              fontWeight: 600,
+              color: theme === 'dark' ? '#232733' : '#0e7490',
             }),
           }}
           menuPlacement="top"
@@ -335,7 +355,7 @@ Pedido do usuário: ${input}`;
             value={input}
             onChange={handleInputChange}
             placeholder="Digite o que deseja fazer..."
-            className="flex-1 resize-none p-2 bg-gradient-to-br from-cyan-200/70 to-blue-100/60 backdrop-blur-md text-cyan-900 focus:bg-cyan-100/70 border-none placeholder-cyan-900/70 rounded-xl shadow-[0_4px_32px_0_rgba(34,211,238,0.18)] outline-none focus:ring-2 focus:ring-cyan-200/40 transition-all duration-300 ease-in-out"
+            className="flex-1 resize-none p-2 bg-gray-100 dark:bg-[#1a1d22] backdrop-blur-md text-gray-900 dark:text-gray-100 focus:bg-gray-200 dark:focus:bg-[#1a1d22] border-none placeholder-gray-900 dark:placeholder-gray-100 rounded-xl shadow-[0_4px_32px_0_rgba(34,211,238,0.18)] outline-none focus:ring-2 focus:ring-cyan-200/40 transition-all duration-300 ease-in-out"
             rows={1}
           />
           {sendingToEditor && (
@@ -411,41 +431,18 @@ function useSupabaseGoogleRegistration() {
     }
     // console.log('[registerUserIfNeeded] sessionUser:', sessionUser);
     setUser(sessionUser);
-    const { id, email, user_metadata } = sessionUser;
-    const { data: existingUser, error: selectError } = await supabase
+    const userEmail = sessionUser.email;
+    if (!userEmail) return;
+    const { data: customUser } = await supabase
       .from('users')
       .select('id')
-      .eq('email', email)
+      .eq('email', userEmail)
       .single();
-    if (selectError) {
-      console.error('[registerUserIfNeeded] select error:', selectError);
-    }
-    if (!existingUser) {
-      const { error: insertError } = await supabase.from('users').insert([
-        {
-          email,
-          username: user_metadata?.full_name || user_metadata?.name || email.split('@')[0],
-          google_id: user_metadata?.sub || id,
-          full_name: user_metadata?.full_name || user_metadata?.name || email.split('@')[0],
-          avatar_url: user_metadata?.avatar_url || null,
-        }
-      ]);
-      if (insertError) {
-        console.error('User insert error:', insertError);
-      } else {
-        console.log('User inserted in users table');
-      }
-    } else {
-      const { error: updateError } = await supabase.from('users').update({
-        full_name: user_metadata?.full_name || user_metadata?.name || email.split('@')[0],
-        avatar_url: user_metadata?.avatar_url || null,
-      }).eq('email', email);
-      if (updateError) {
-        console.error('User update error:', updateError);
-      } else {
-        console.log('User updated in users table');
-      }
-    }
+    // Do not call setPublicUserId here. Only handle user registration/updating in this hook.
+    // Setting publicUserId is handled in the Home component's useEffect.
+    // if (customUser) {
+    //   setPublicUserId(customUser.id);
+    // }
   };
 
   useEffect(() => {
@@ -480,6 +477,21 @@ function useSupabaseGoogleRegistration() {
 }
 
 export default function Home({ onLayoutChange = () => {}, ...props }) {
+  // Editor theme state (dark/light) for editor page only
+  const [theme, setTheme] = React.useState<'dark' | 'light'>(() => {
+    if (typeof window !== 'undefined') {
+      return (localStorage.getItem('editorTheme') as 'dark' | 'light') || 'dark';
+    }
+    return 'dark';
+  });
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('editorTheme', theme);
+    }
+  }, [theme]);
+
+  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
   const [showDiffModal, setShowDiffModal] = useState(false);
   // Track the last submitted prompt
   const [lastPrompt, setLastPrompt] = useState<string>('');
@@ -1030,6 +1042,20 @@ const centerWinBox = (id: string) => {
 };
 
 let navExtra;
+const themeToggleButton = (
+  <button
+    onClick={toggleTheme}
+    aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
+    className="px-3 py-1 rounded border border-cyan-400 bg-transparent text-black dark:text-white dark:border-cyan-400 hover:bg-blue-100 dark:hover:bg-[#232733] transition mr-4 flex items-center justify-center"
+
+  >
+    {theme === 'dark' ? (
+      <Sun size={24} strokeWidth={2} />
+    ) : (
+      <Moon size={24} strokeWidth={2} color="#67e8f9" />
+    )}
+  </button>
+);
 const handleLogout = async () => {
   // Sign out from Supabase
   await supabase.auth.signOut();
@@ -1043,6 +1069,7 @@ const handleLogout = async () => {
 if (userLoading) {
   navExtra = (
     <div className="flex items-center justify-center h-9 px-4">
+      {themeToggleButton}
       <span className="animate-spin rounded-full h-6 w-6 border-b-2 border-cyan-400"></span>
     </div>
   );
@@ -1056,6 +1083,7 @@ if (userLoading) {
     user.user_metadata?.avatar_url || "/images/icon.png";
   navExtra = (
     <>
+      {themeToggleButton}
       {(publicUserId && selectedProjectId) && (
         <CurrentProjectLabel
           userId={publicUserId}
@@ -1073,13 +1101,24 @@ if (userLoading) {
     </>
   );
 } else {
-  navExtra = <GoogleSignInButton />;
+  navExtra = <>{themeToggleButton}<GoogleSignInButton /></>;
 }
 
 // State for modal
 const [showConfigModal, setShowConfigModal] = useState(false);
+const [showCopyModal, setShowCopyModal] = useState(false);
+const [copyTargetFile, setCopyTargetFile] = useState("");
+const [codeToCopy, setCodeToCopy] = useState("");
 const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "YOUR_GOOGLE_CLIENT_ID_HERE";
 const [showOneTap, setShowOneTap] = useState(false);
+
+// Handler for FileDiffViewer to open the copy modal
+function handleCopyToCurrentFile(code: string) {
+  setCodeToCopy(code);
+  setShowCopyModal(true);
+  setCopyTargetFile("");
+}
+
 
 // Show Google One Tap automatically for unauthenticated users
 useEffect(() => {
@@ -1091,81 +1130,62 @@ useEffect(() => {
 }, [user, userLoading]);
 
 return (
-<GoogleOAuthProvider clientId={clientId}>
-  {showOneTap && (
-    <TriggerableGoogleOneTapHandler open={showOneTap} onClose={() => setShowOneTap(false)} />
-  )}
-
-  <div className="bg-blue-gradient min-h-screen w-full relative">
-    <EditorContext.Provider value={{ setFilesCurrentHandler, throttleEditorOpen, selectedFile }}>
-      <NavBar extra={navExtra} />
-      {/* Modal for Project Configuration */}
-      {showConfigModal && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm"
-          onClick={() => setShowConfigModal(false)}
-        >
-          <div
-            className="bg-white rounded-lg shadow-lg p-0 max-w-md w-full relative"
-            onClick={e => e.stopPropagation()}
-          >
-            <ConfigWindowContent
-              userId={publicUserId}
-              selectedProjectId={selectedProjectId}
-              setSelectedProjectId={setSelectedProjectId}
-              onProjectCreated={handleProjectCreate}
-            />
+  <GoogleOAuthProvider clientId={clientId}>
+    {showOneTap && (
+      <TriggerableGoogleOneTapHandler open={showOneTap} onClose={() => setShowOneTap(false)} />
+    )}
+    <div className={theme === 'dark' ? 'dark bg-blue-gradient min-h-screen w-full relative' : 'bg-blue-gradient min-h-screen w-full relative'}>
+      <EditorContext.Provider value={{ setFilesCurrentHandler, throttleEditorOpen, selectedFile }}>
+        <NavBar extra={navExtra} />
+        <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={400} height={500}>
+          <div className="w-full h-full flex flex-col bg-white/70 dark:bg-[#232733] text-gray-900 dark:text-gray-100 border border-cyan-100 dark:border-cyan-700 rounded-b-md p-0">
+            <Chat onPromptSubmit={handlePromptSubmit} theme={theme} />
           </div>
-        </div>
-      )}
-
-      <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={400} height={500}>
-        <Chat onPromptSubmit={handlePromptSubmit} />
-      </WinBoxWindow>
-
-      <WinBoxWindow id="editor" title="Editor" x={500} y={100} width={600} height={500}>
-        <div className="w-full h-full flex flex-col min-h-0 min-w-0">
-          <div className="flex items-center gap-4 p-2 bg-white/70 border-b border-cyan-100">
-            <button
-               onClick={throttledSaveEditorCode}
-               disabled={saveStatus === 'saving'}
-              className={`px-2 py-1 rounded bg-cyan-600 text-white font-semibold shadow-md transition-all duration-300 ease-in-out flex items-center justify-center ${saveStatus === 'saving' ? 'opacity-60 cursor-not-allowed' : 'hover:bg-cyan-700'}`}
-              style={{ minWidth: 24, minHeight: 24 }}
-              aria-label="Salvar código do projeto"
-            >
-              {saveStatus === 'saved' ? (
-                <svg className="w-[12px] h-[12px] text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-              ) : saveStatus === 'saving' ? (
-                <span className="animate-spin w-[12px] h-[12px] border-2 border-white border-t-transparent rounded-full" />
-              ) : (
-                // Save icon (floppy disk)
-                <svg className="w-[12px] h-[12px] text-white" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-                  <path d="M11 2H9v3h2z"/>
-                  <path d="M1.5 0h11.586a1.5 1.5 0 0 1 1.06.44l1.415 1.414A1.5 1.5 0 0 1 16 2.914V14.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 14.5v-13A1.5 1.5 0 0 1 1.5 0M1 1.5v13a.5.5 0 0 0 .5.5H2v-4.5A1.5 1.5 0 0 1 3.5 9h9a1.5 1.5 0 0 1 1.5 1.5V15h.5a.5.5 0 0 0 .5-.5V2.914a.5.5 0 0 0-.146-.353l-1.415-1.415A.5.5 0 0 0 13.086 1H13v4.5A1.5 1.5 0 0 1 11.5 7h-7A1.5 1.5 0 0 1 3 5.5V1H1.5a.5.5 0 0 0-.5.5m3 4a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5V1H4zM3 15h10v-4.5a.5.5 0 0 0-.5-.5h-9a.5.5 0 0 0-.5.5z"/>
-                </svg>
-              )}
-            </button>
-            {/* Diff Modal Trigger Button */}
+        </WinBoxWindow>
+        <WinBoxWindow id="editor" title="Editor" x={500} y={100} width={600} height={500}>
+          <div className="w-full h-full flex flex-col min-h-0 min-w-0 bg-white/70 dark:bg-[#232733] text-gray-900 dark:text-gray-100 border border-cyan-100 dark:border-cyan-700 rounded-b-md p-0">
+            <div className={`flex items-center gap-4 p-2 border-b ${theme === 'dark' ? 'bg-[#232733] border-cyan-400' : 'bg-white/70 border-cyan-100'}`}>
+              <button
+                onClick={throttledSaveEditorCode}
+                disabled={saveStatus === 'saving'}
+                className={`px-2 py-1 rounded bg-cyan-600 text-white font-semibold shadow-md transition-all duration-300 ease-in-out flex items-center justify-center ${saveStatus === 'saving' ? 'opacity-60 cursor-not-allowed' : 'hover:bg-cyan-700'}`}
+                style={{ minWidth: 24, minHeight: 24 }}
+                aria-label="Salvar código do projeto"
+              >
+                {saveStatus === 'saved' ? (
+                  <svg className="w-[12px] h-[12px] text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                ) : saveStatus === 'saving' ? (
+                  <span className="animate-spin w-[12px] h-[12px] border-2 border-white border-t-transparent rounded-full" />
+                ) : (
+                  // Save icon (floppy disk)
+                  <svg className="w-[12px] h-[12px] text-white" xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M11 2H9v3h2z"/>
+                    <path d="M1.5 0h11.586a1.5 1.5 0 0 1 1.06.44l1.415 1.414A1.5 1.5 0 0 1 16 2.914V14.5a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 0 14.5v-13A1.5 1.5 0 0 1 1.5 0M1 1.5v13a.5.5 0 0 0 .5.5H2v-4.5A1.5 1.5 0 0 1 3.5 9h9a1.5 1.5 0 0 1 1.5 1.5V15h.5a.5.5 0 0 0 .5-.5V2.914a.5.5 0 0 0-.146-.353l-1.415-1.415A.5.5 0 0 0 13.086 1H13v4.5A1.5 1.5 0 0 1 11.5 7h-7A1.5 1.5 0 0 1 3 5.5V1H1.5a.5.5 0 0 0-.5.5m3 4a.5.5 0 0 0 .5.5h7a.5.5 0 0 0 .5-.5V1H4zM3 15h10v-4.5a.5.5 0 0 0-.5-.5h-9a.5.5 0 0 0-.5.5z"/>
+                  </svg>
+                )}
+              </button>
+              {/* Diff Modal Trigger Button */}
               <button
                 onClick={() => setShowDiffModal(true)}
-                className="px-2 py-1 rounded bg-cyan-600 text-white font-semibold shadow-md transition-all duration-300 ease-in-out flex items-center justify-center hover:bg-sky-600"
+                className="z-[2147483647] px-2 py-1 rounded bg-cyan-600 text-white font-semibold shadow-md transition-all duration-300 ease-in-out flex items-center justify-center hover:bg-sky-600"
                 style={{ minWidth: 24, minHeight: 24 }}
                 aria-label="Comparar versões do arquivo"
               >
                 <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-  <path d="M8 4a.5.5 0 0 1 .5.5V6H10a.5.5 0 0 1 0 1H8.5v1.5a.5.5 0 0 1-1 0V7H6a.5.5 0 0 1 0-1h1.5V4.5A.5.5 0 0 1 8 4m-2.5 6.5A.5.5 0 0 1 6 10h4a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5"/>
-  <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2zm10-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1"/>
-</svg>
+                  <path d="M8 4a.5.5 0 0 1 .5.5V6H10a.5.5 0 0 1 0 1H8.5v1.5a.5.5 0 0 1-1 0V7H6a.5.5 0 0 1 0-1h1.5V4.5A.5.5 0 0 1 8 4m-2.5 6.5A.5.5 0 0 1 6 10h4a.5.5 0 0 1 0 1H6a.5.5 0 0 1-.5-.5"/>
+                  <path d="M2 2a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2zm10-1H4a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1"/>
+                </svg>
               </button>
-          </div>
-          <Editor
+            </div>
+            <Editor
               key={selectedFile?.name}
-              className="flex-1 w-full h-full min-h-0 min-w-0"
+              className="flex-1 w-full h-full min-h-0 min-w-0 bg-white/90 dark:bg-[#232733] text-gray-900 dark:text-gray-100"
               width="100%"
               height="100%"
               path={selectedFile?.name}
               defaultLanguage={selectedFile?.language}
               value={filesCurrent[selectedFile?.name]?.value ?? ''}
+              theme={theme === 'dark' ? 'vs-dark' : 'light'}
               onMount={(editor) => {
                 editorRef.current = editor;
                 setTimeout(() => editor.layout(), 100);
@@ -1181,42 +1201,92 @@ return (
             />
           </div>
         </WinBoxWindow>
-        {/* Diff Modal */}
-        {showDiffModal && selectedFile && selectedFile.name ? (
-          <div className="fixed inset-0 z-[2147483647] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div className="bg-white rounded-lg shadow-lg max-w-4xl w-full h-[80vh] flex flex-col relative">
-              <button
-                className="absolute top-2 right-2 text-gray-500 hover:text-gray-700 text-2xl font-bold z-10"
-                onClick={() => setShowDiffModal(false)}
-                aria-label="Fechar comparação"
-              >
-                &times;
-              </button>
-              <div className="flex-1 min-h-0 min-w-0 p-4 overflow-auto">
-                <FileDiffViewer
-                  fileId={filesCurrent[selectedFile.name]?.id}
-                  currentCode={filesCurrent[selectedFile.name]?.value || ''}
-                  onCopyToCurrentFile={(code: string) => setFilesCurrentHandler(selectedFile.name, code)}
-                />
-              </div>
-            </div>
-          </div>
-        ) : null}
-
         <WinBoxWindow id="preview" title="Preview" x={1150} y={100} width={500} height={500}>
-          <LiveProvider code={selectedFile?.value} scope={reactScope} noInline>
-            <LivePreview />
-            <LiveError className="text-wrap" />
-          </LiveProvider>
+          <div className="w-full h-full flex flex-col bg-white/70 dark:bg-[#232733] text-gray-900 dark:text-gray-100 border border-cyan-100 dark:border-cyan-700 rounded-b-md p-0">
+            <LiveProvider code={selectedFile?.value} scope={reactScope} noInline>
+              <LivePreview />
+              <LiveError className="text-wrap" />
+            </LiveProvider>
+          </div>
         </WinBoxWindow>
-        <nav className="w-full h-20 block fixed w-full z-[2147483647] bottom-0 noselect shadow-lg bg-gray-900/30 rounded">
-          <div className="w-full h-full flex flex-row justify-between items-end mx-auto px-4 space-y-2">
-            {/* Chat Controls */}
-            <div className="w-full flex flex-col items-center space-y-1">
-              <span className="text-xs text-blue-100 mb-1">Chat</span>
+      {showConfigModal && (
+        <div
+          className="z-[2147483647] fixed top-0 left-0 w-full h-full bg-black/50 dark:bg-[#232733]/50 flex items-center justify-center"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowConfigModal(false);
+            }
+          }}
+        >
+          <ConfigWindowContent
+            userId={publicUserId}
+            selectedProjectId={selectedProjectId}
+            setSelectedProjectId={setSelectedProjectId}
+            onProjectCreated={handleProjectCreate}
+          />
+        </div>
+      )}
+      {showDiffModal && (
+        <div
+          className="z-[2147483647] fixed top-0 left-0 w-full h-full bg-black/50 dark:bg-[#232733]/50 flex items-center justify-center"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              setShowDiffModal(false);
+            }
+          }}
+        >
+          <FileDiffViewer
+            fileId={selectedFile?.id}
+            currentCode={selectedFile?.value}
+            onCopyToCurrentFile={handleCopyToCurrentFile}
+          />
+        </div>
+      )}
+      {/* File Copy Modal */}
+      {showCopyModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 dark:bg-black/70">
+          <div className="bg-white dark:bg-[#232733] text-gray-900 dark:text-gray-100 border-2 border-cyan-100 dark:border-cyan-700 rounded-lg shadow-xl min-w-[340px] max-w-md w-full p-6 relative">
+            <button onClick={() => setShowCopyModal(false)} className="absolute top-2 right-2 text-gray-400 hover:text-cyan-400 transition-all text-2xl">&times;</button>
+            <h2 className="text-lg font-bold mb-4">Copiar código para arquivo</h2>
+            <select
+              className="w-full mb-4 p-2 rounded border border-cyan-200 dark:border-cyan-700 bg-gray-100 dark:bg-[#1a1d22] text-gray-900 dark:text-gray-100"
+              value={copyTargetFile}
+              onChange={e => setCopyTargetFile(e.target.value)}
+            >
+              <option value="" disabled>Escolha um arquivo</option>
+              {Object.keys(filesCurrent).map(name => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+            <button
+              className="w-full py-2 rounded bg-cyan-600 text-white font-semibold shadow-md hover:bg-cyan-700 transition-all"
+              disabled={!copyTargetFile}
+              onClick={() => {
+                setFilesCurrentHandler(copyTargetFile, codeToCopy);
+                setShowCopyModal(false);
+              }}
+            >
+              Copiar
+            </button>
+          </div>
+        </div>
+      )}
+              <nav className={`
+        w-full h-20 block fixed w-full z-[2147483647] bottom-0 noselect
+        shadow-lg bg-gray-900/30 text-blue-100 rounded
+        dark:shadow-xl dark:border-t dark:border-cyan-900/40
+        dark:bg-[#1a1d22]/80 dark:backdrop-blur-lg dark:backdrop-saturate-150
+        dark:shadow-cyan-900/30 dark:border-cyan-900/40
+        dark:rounded-t-xl
+        transition-all
+      `}>
+        <div className="w-full h-full flex flex-row justify-between items-end mx-auto px-4 space-y-2">
+          {/* Chat Controls */}
+          <div className="w-full flex flex-col items-center space-y-1">
+            <span className="text-xs text-blue-100 dark:text-cyan-200 mb-1 font-semibold tracking-wide">Chat</span>
               <div className="flex w-full justify-center space-x-2">
                 <button
-                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
                   title="Centralizar e focar Chat"
                   onClick={() => { centerWinBox('chat'); push('#chat'); }}
                 >
@@ -1224,7 +1294,7 @@ return (
                   <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
                 </button>
                 <button
-                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
                   title="Focar Chat"
                   onClick={() => { window.winboxWindows?.['chat']?.focus(); push('#chat'); }}
                 >
@@ -1238,7 +1308,7 @@ return (
               <span className="text-xs text-blue-100 mb-1">Editor</span>
               <div className="flex w-full justify-center space-x-2">
                 <button
-                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
                   title="Centralizar e focar Editor"
                   onClick={() => { centerWinBox('editor'); push('#editor'); }}
                 >
@@ -1246,7 +1316,7 @@ return (
                   <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
                 </button>
                 <button
-                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
                   title="Focar Editor"
                   onClick={() => { window.winboxWindows?.['editor']?.focus(); push('#editor'); }}
                 >
@@ -1260,7 +1330,7 @@ return (
               <span className="text-xs text-blue-100 mb-1">Preview</span>
               <div className="flex w-full justify-center space-x-2">
                 <button
-                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
                   title="Centralizar e focar Preview"
                   onClick={() => { centerWinBox('preview'); push('#preview'); }}
                 >
@@ -1268,7 +1338,7 @@ return (
                   <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
                 </button>
                 <button
-                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition"
+                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
                   title="Focar Preview"
                   onClick={() => { window.winboxWindows?.['preview']?.focus(); push('#preview'); }}
                 >
