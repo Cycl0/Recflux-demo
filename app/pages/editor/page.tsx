@@ -496,7 +496,7 @@ function useSupabaseGoogleRegistration() {
   return { user, loading };
 }
 
-export default function Home({ onLayoutChange = () => {}, ...props }) {
+function Home({ onLayoutChange = () => {}, ...props }) {
   // Editor theme state (dark/light) for editor page only
   const [theme, setTheme] = React.useState<'dark' | 'light'>(() => {
     if (typeof window !== 'undefined') {
@@ -1481,3 +1481,6 @@ return (
   </GoogleOAuthProvider>
 );
 }
+
+import dynamic from 'next/dynamic';
+export default dynamic(() => Promise.resolve(Home), { ssr: false });
