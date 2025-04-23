@@ -1203,16 +1203,25 @@ return (
               <button
                 onClick={throttledSaveEditorCode}
                 disabled={saveStatus === 'saving'}
-                className={`px-2 py-1 rounded bg-cyan-600 text-white font-semibold shadow-md transition-all duration-300 ease-in-out flex items-center justify-center ${saveStatus === 'saving' ? 'opacity-60 cursor-not-allowed' : 'hover:bg-cyan-700'}`}
+                className={`px-3 py-1.5 rounded-xl font-semibold transition-all duration-300 ease-in-out flex items-center justify-center
+                  min-w-[48px] min-h-[32px]
+                  bg-white/30 dark:bg-white/10
+                  backdrop-blur-md
+                  shadow-[0_4px_24px_0_rgba(0,255,255,0.15),0_1.5px_8px_0_rgba(0,0,0,0.12)] dark:shadow-[0_4px_24px_0_rgba(0,255,255,0.12),0_1.5px_8px_0_rgba(0,0,0,0.25)]
+                  border border-white/40 dark:border-white/10
+                  hover:bg-white/50 hover:shadow-cyan-200/60 dark:hover:bg-white/20 dark:hover:shadow-cyan-400/40
+                  focus:outline-none focus:ring-2 focus:ring-cyan-300 dark:focus:ring-cyan-600
+                  text-cyan-900 dark:text-cyan-100
+                  ${saveStatus === 'saving' ? 'opacity-60 cursor-not-allowed' : ''}`}
                 style={{ minWidth: 24, minHeight: 24 }}
                 aria-label="Salvar código do projeto"
               >
                 {saveStatus === 'saved' ? (
-                  <svg className="w-[12px] h-[12px] text-white" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  <svg className="w-[14px] h-[14px] text-cyan-800 dark:text-cyan-100" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
                 ) : saveStatus === 'saving' ? (
-                  <span className="animate-spin w-[12px] h-[12px] border-2 border-white border-t-transparent rounded-full" />
+                  <span className="animate-spin w-[14px] h-[14px] border-2 border-cyan-800 dark:border-cyan-100 border-t-transparent rounded-full" />
                 ) : (
-                  <span className="text-white text-xs text-normal">
+                  <span className="text-cyan-900 dark:text-cyan-100 text-xs text-normal">
                     Save
                   </span>
                 )}
@@ -1220,22 +1229,38 @@ return (
               {/* Diff Modal Trigger Button */}
               <button
                 onClick={() => setShowDiffModal(true)}
-                className="px-2 py-1 rounded bg-cyan-600 text-white font-semibold shadow-md transition-all duration-300 ease-in-out flex items-center justify-center hover:bg-sky-600"
+                className="px-3 py-1.5 rounded-xl font-semibold transition-all duration-300 ease-in-out flex items-center justify-center
+                  min-w-[48px] min-h-[32px]
+                  bg-white/30 dark:bg-white/10
+                  backdrop-blur-md
+                  shadow-[0_4px_24px_0_rgba(0,255,255,0.15),0_1.5px_8px_0_rgba(0,0,0,0.12)] dark:shadow-[0_4px_24px_0_rgba(0,255,255,0.12),0_1.5px_8px_0_rgba(0,0,0,0.25)]
+                  border border-white/40 dark:border-white/10
+                  hover:bg-white/50 hover:shadow-cyan-200/60 dark:hover:bg-white/20 dark:hover:shadow-cyan-400/40
+                  focus:outline-none focus:ring-2 focus:ring-cyan-300 dark:focus:ring-cyan-600
+                  text-cyan-900 dark:text-cyan-100"
                 style={{ minWidth: 24, minHeight: 24 }}
                 aria-label="Comparar versões do arquivo"
               >
-                <span className="text-white text-xs text-normal">
+                <span className="text-cyan-900 dark:text-cyan-100 text-xs text-normal">
                   Diff
                 </span>
               </button>
               {/* Fix Button */}
               <button
                 onClick={() => handleFixCode()}
-                className="px-2 py-1 rounded bg-cyan-600 text-white font-semibold shadow-md transition-all duration-300 ease-in-out flex items-center justify-center hover:bg-sky-600"
+                className="px-3 py-1.5 rounded-xl font-semibold transition-all duration-300 ease-in-out flex items-center justify-center
+                  min-w-[48px] min-h-[32px]
+                  bg-white/30 dark:bg-white/10
+                  backdrop-blur-md
+                  shadow-[0_4px_24px_0_rgba(0,255,255,0.15),0_1.5px_8px_0_rgba(0,0,0,0.12)] dark:shadow-[0_4px_24px_0_rgba(0,255,255,0.12),0_1.5px_8px_0_rgba(0,0,0,0.25)]
+                  border border-white/40 dark:border-white/10
+                  hover:bg-white/50 hover:shadow-cyan-200/60 dark:hover:bg-white/20 dark:hover:shadow-cyan-400/40
+                  focus:outline-none focus:ring-2 focus:ring-cyan-300 dark:focus:ring-cyan-600
+                  text-cyan-900 dark:text-cyan-100"
                 style={{ minWidth: 24, minHeight: 24 }}
                 aria-label="Corrigir código automaticamente"
               >
-                <span className="text-white text-xs text-normal">
+                <span className="text-cyan-900 dark:text-cyan-100 text-xs text-normal">
                   Fix
                 </span>
               </button>
