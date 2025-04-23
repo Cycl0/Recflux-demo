@@ -886,7 +886,7 @@ function GoogleSignInButton() {
     await supabase.auth.signInWithOAuth({
   provider: 'google',
   options: {
-    redirectTo: `/pages/editor`
+    redirectTo: `${window.origin}/pages/editor`
   }
 });
   };
