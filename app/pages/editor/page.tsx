@@ -660,11 +660,44 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
   // Editor file type for type safety
   type EditorFile = { value?: string; [key: string]: any };
 
-  // Save project files to Supabase DB (using user's schema)
+
+  // Save project files to Supabase DB (skip if unchanged)
   const saveProjectFilesToDB = useCallback(async () => {
     if (!selectedProjectId || !publicUserId) return;
     const filesToSave: Record<string, EditorFile> = allFilesCurrent[selectedProjectId] || {};
+
+    // Build a map of { fileName: code } for current in-memory code
+    const currentFilesCode: Record<string, string> = {};
+    for (const [fileName, fileObj] of Object.entries(filesToSave)) {
+      // Only compare the 'value' (code) field for each file
+      currentFilesCode[fileName] = typeof fileObj.value === 'string' ? fileObj.value : '';
+    }
+
+    // Get previous code from localStorage
+    const storageKey = `files_${publicUserId}_${selectedProjectId}`;
+    let previousFilesCode: Record<string, string> = {};
+    const localStorageFilesRaw = localStorage.getItem(storageKey);
+    if (localStorageFilesRaw) {
+      try {
+        const parsed = JSON.parse(localStorageFilesRaw);
+        for (const [fileName, fileObj] of Object.entries(parsed)) {
+          // Only compare the 'value' (code) field for each file
+          previousFilesCode[fileName] = (fileObj as EditorFile).value || '';
+        }
+      } catch (e) {
+        previousFilesCode = {};
+      }
+    }
+
+    // Skip save if previous code from localStorage is the same as current
+    if (JSON.stringify(previousFilesCode) === JSON.stringify(currentFilesCode)) {
+      // No code changes, skip save
+      return;
+    }
+
     const now = new Date().toISOString();
+    // Track if any file failed to save
+    let allSuccess = true;
     for (const [fileName, fileObj] of Object.entries(filesToSave)) {
       const typedFileObj = fileObj as EditorFile;
       // 1. Upsert into files table by (project_id, name)
@@ -675,18 +708,20 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
             project_id: selectedProjectId,
             name: fileName,
             updated_at: now,
-            // You may want to add more fields if needed
           }
         ], { onConflict: 'project_id,name', ignoreDuplicates: false })
         .select();
+
       if (fileError) {
         console.error(`[DB SAVE] Failed to upsert file '${fileName}':`, fileError);
-        continue;
+        allSuccess = false;
+        break;
       }
       const fileId = fileRows && fileRows.length > 0 ? fileRows[0].id : undefined;
       if (!fileId) {
         console.error(`[DB SAVE] Could not get file_id for '${fileName}' after upsert.`);
-        continue;
+        allSuccess = false;
+        break;
       }
       // 2. Insert new file_versions row for history
       // Fetch the latest version for this file
@@ -712,6 +747,18 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
         console.log(`[DB SAVE] Saved file '${fileName}' and version to DB.`);
       } catch (versionError) {
         console.error(`[DB SAVE] Failed to insert file_version for '${fileName}':`, versionError);
+        allSuccess = false;
+        break;
+      }
+    }
+
+    // After all upserts succeed, update localStorage to match current files
+    // This ensures the next save compares to the latest version
+    if (allSuccess) {
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(filesToSave));
+      } catch (e) {
+        console.error('Failed to update localStorage after save:', e);
       }
     }
   }, [selectedProjectId, publicUserId, allFilesCurrent]);
