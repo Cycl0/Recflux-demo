@@ -1167,7 +1167,7 @@ useEffect(() => {
 }, [user, userLoading]);
 
 // Ref to access LiveError component
-const liveErrorRef = useRef<HTMLPreElement | null>(null);
+const liveErrorRef = useRef<HTMLDivElement | null>(null);
 // Ref to access Chat's append method
 const chatAppendRef = useRef<any>(null);
 
