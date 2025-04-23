@@ -488,7 +488,22 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('editorTheme', theme);
+      // Apply deep dark background to body in dark mode
+      if (theme === 'dark') {
+        document.body.style.background = '#15171c';
+        document.body.classList.add('dark');
+      } else {
+        document.body.style.background = '';
+        document.body.classList.remove('dark');
+      }
     }
+    // Cleanup on unmount
+    return () => {
+      if (typeof window !== 'undefined') {
+        document.body.style.background = '';
+        document.body.classList.remove('dark');
+      }
+    };
   }, [theme]);
 
   const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
