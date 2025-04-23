@@ -180,15 +180,9 @@ Pedido do usuário: ${input}`;
   }, [messages, chatAction.value, isLoading]);
 
   return (
-<<<<<<< HEAD
     <div className={`relative flex flex-col h-full rounded-lg shadow-lg  ${theme === 'dark' ? 'bg-[#232733]' : 'bg-white'}`}>
       {/* Chat messages area */}
       <div className={`flex-1 space-y-4 !pb-[200px] p-4 ${theme === 'dark' ? 'bg-[#232733]' : 'bg-white'}`}>
-=======
-    <div className={`relative flex flex-col h-full rounded-lg shadow-lg bg-white dark:bg-[#232733] ${theme === 'dark' ? 'dark' : ''}`}>
-      {/* Chat messages area */}
-      <div className="flex-1 space-y-4 !pb-[200px] p-4 bg-white dark:bg-[#232733]">
->>>>>>> 0c8a90b74ed97d806563784bc70f12ff809b3d41
         {messages.map((message) => (
           <div
             key={message.id}
@@ -1143,20 +1137,12 @@ return (
     <div className={theme === 'dark' ? 'dark bg-blue-gradient min-h-screen w-full relative' : 'bg-blue-gradient min-h-screen w-full relative'}>
       <EditorContext.Provider value={{ setFilesCurrentHandler, throttleEditorOpen, selectedFile }}>
         <NavBar extra={navExtra} />
-<<<<<<< HEAD
         <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={525} height={500}>
-=======
-        <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={400} height={500}>
->>>>>>> 0c8a90b74ed97d806563784bc70f12ff809b3d41
           <div className="w-full h-full flex flex-col bg-white/70 dark:bg-[#232733] text-gray-900 dark:text-gray-100 border border-cyan-100 dark:border-cyan-700 rounded-b-md p-0">
             <Chat onPromptSubmit={handlePromptSubmit} theme={theme} />
           </div>
         </WinBoxWindow>
-<<<<<<< HEAD
         <WinBoxWindow id="editor" title="Editor" x={610} y={100} width={525} height={500}>
-=======
-        <WinBoxWindow id="editor" title="Editor" x={500} y={100} width={600} height={500}>
->>>>>>> 0c8a90b74ed97d806563784bc70f12ff809b3d41
           <div className="w-full h-full flex flex-col min-h-0 min-w-0 bg-white/70 dark:bg-[#232733] text-gray-900 dark:text-gray-100 border border-cyan-100 dark:border-cyan-700 rounded-b-md p-0">
             <div className={`flex items-center gap-4 p-2 border-b ${theme === 'dark' ? 'bg-[#232733] border-cyan-400' : 'bg-white/70 border-cyan-100'}`}>
               <button
@@ -1215,11 +1201,8 @@ return (
             />
           </div>
         </WinBoxWindow>
-<<<<<<< HEAD
+
         <WinBoxWindow id="preview" title="Preview" x={1175} y={100} width={525} height={500}>
-=======
-        <WinBoxWindow id="preview" title="Preview" x={1150} y={100} width={500} height={500}>
->>>>>>> 0c8a90b74ed97d806563784bc70f12ff809b3d41
           <div className="w-full h-full flex flex-col bg-white/70 dark:bg-[#232733] text-gray-900 dark:text-gray-100 border border-cyan-100 dark:border-cyan-700 rounded-b-md p-0">
             <LiveProvider code={selectedFile?.value} scope={reactScope} noInline>
               <LivePreview />
