@@ -1333,6 +1333,8 @@ return (
             fileId={selectedFile?.id}
             currentCode={selectedFile?.value}
             onCopyToCurrentFile={handleCopyToCurrentFile}
+            onClose={() => setShowDiffModal(false)}
+            theme={theme}
           />
         </div>
       )}
