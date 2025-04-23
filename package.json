@@ -73,7 +73,7 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
-    "eslint": "^8.57.1",
+    "eslint": "^9.25.1",
     "eslint-config-next": "^0.2.4",
     "monaco-editor-core": "^0.50.0",
     "monaco-editor-webpack-plugin": "^7.1.0",
