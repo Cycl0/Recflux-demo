@@ -88,7 +88,9 @@ function Chat({ onPromptSubmit, theme, appendRef }: ChatProps & { theme: 'dark' 
 
   const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
   if (onPromptSubmit) onPromptSubmit(input);
-    Cookies.remove('chatPrompt');
+    if (typeof window !== 'undefined') {
+      Cookies.remove('chatPrompt');
+    }
     e.preventDefault();
     if (chatAction.value === '2') { // EDITAR
       // Compose a prompt referencing the code from the editor
@@ -700,7 +702,9 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
       return;
     }
     const storageKey = `editorCode_${selectedProjectId}`;
-    localStorage.setItem(storageKey, JSON.stringify(allFilesCurrent[selectedProjectId]));
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(storageKey, JSON.stringify(allFilesCurrent[selectedProjectId]));
+    }
     // console.log('[SAVE] storageKey', storageKey, 'selectedProjectId', selectedProjectId, 'files', allFilesCurrent[selectedProjectId], 'localStorage', localStorage.getItem(storageKey));
   }, [allFilesCurrent, selectedProjectId, loadingProject]);
 
@@ -725,16 +729,18 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
     // Get previous code from localStorage
     const storageKey = `files_${publicUserId}_${selectedProjectId}`;
     let previousFilesCode: Record<string, string> = {};
-    const localStorageFilesRaw = localStorage.getItem(storageKey);
-    if (localStorageFilesRaw) {
-      try {
-        const parsed = JSON.parse(localStorageFilesRaw);
-        for (const [fileName, fileObj] of Object.entries(parsed)) {
-          // Only compare the 'value' (code) field for each file
-          previousFilesCode[fileName] = (fileObj as EditorFile).value || '';
+    if (typeof window !== 'undefined') {
+      const localStorageFilesRaw = localStorage.getItem(storageKey);
+      if (localStorageFilesRaw) {
+        try {
+          const parsed = JSON.parse(localStorageFilesRaw);
+          for (const [fileName, fileObj] of Object.entries(parsed)) {
+            // Only compare the 'value' (code) field for each file
+            previousFilesCode[fileName] = (fileObj as EditorFile).value || '';
+          }
+        } catch (e) {
+          previousFilesCode = {};
         }
-      } catch (e) {
-        previousFilesCode = {};
       }
     }
 
@@ -805,7 +811,9 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
     // This ensures the next save compares to the latest version
     if (allSuccess) {
       try {
-        localStorage.setItem(storageKey, JSON.stringify(filesToSave));
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(storageKey, JSON.stringify(filesToSave));
+        }
       } catch (e) {
         console.error('Failed to update localStorage after save:', e);
       }
@@ -817,7 +825,9 @@ const throttledSaveEditorCode = useMemo(() => throttle(() => {
   if (!selectedProjectId) return;
   setSaveStatus('saving');
   const storageKey = `editorCode_${selectedProjectId}`;
-  localStorage.setItem(storageKey, JSON.stringify(allFilesCurrent[selectedProjectId] || initialFiles));
+  if (typeof window !== 'undefined') {
+    localStorage.setItem(storageKey, JSON.stringify(allFilesCurrent[selectedProjectId] || initialFiles));
+  }
   saveProjectFilesToDB(); // Also save to DB on manual save
   setSaveStatus('saved');
   setTimeout(() => setSaveStatus('idle'), 1200);
@@ -829,7 +839,9 @@ const throttledSaveEditorCode = useMemo(() => throttle(() => {
     if (!selectedProjectId) return;
     const interval = setInterval(() => {
       const storageKey = `editorCode_${selectedProjectId}`;
-      localStorage.setItem(storageKey, JSON.stringify(allFilesCurrent[selectedProjectId] || initialFiles));
+      if (typeof window !== 'undefined') {
+        localStorage.setItem(storageKey, JSON.stringify(allFilesCurrent[selectedProjectId] || initialFiles));
+      }
     }, 1 * 60 * 1000);
     return () => clearInterval(interval);
   }, [selectedProjectId, allFilesCurrent]);
@@ -874,7 +886,7 @@ function GoogleSignInButton() {
     await supabase.auth.signInWithOAuth({
   provider: 'google',
   options: {
-    redirectTo: `${window.location.origin}/pages/editor`
+    redirectTo: `/pages/editor`
   }
 });
   };
@@ -1055,26 +1067,31 @@ const handleEditorChange = useMemo(
 
    useEffect(() => {
     const handleHashScroll = (e: Event) => {
-      e.preventDefault();
-      const hash = window.location.hash;
-      if (hash) {
-        const element = document.querySelector(hash);
+      if (typeof window !== 'undefined') {
+        e.preventDefault();
+        const hash = window.location.hash;
+        if (hash) {
+          const element = document.querySelector(hash);
+        }
       }
     };
-
+    if (typeof window !== 'undefined') {
   window.addEventListener('hashchange', handleHashScroll);
   return () => window.removeEventListener('hashchange', handleHashScroll);
+    }
 }, []);
 
 const centerWinBox = (id: string) => {
-  const winbox = window.winboxWindows?.[id];
-  if (winbox) {
-    const width = winbox.width;
-    const height = winbox.height;
-    const x = Math.max(0, (window.innerWidth - width) / 2);
-    const y = Math.max(0, (window.innerHeight - height) / 2);
-    winbox.move(x, y);
-    winbox.focus();
+  if (typeof window !== 'undefined') {
+    const winbox = window.winboxWindows?.[id];
+    if (winbox) {
+      const width = winbox.width;
+      const height = winbox.height;
+      const x = Math.max(0, (window.innerWidth - width) / 2);
+      const y = Math.max(0, (window.innerHeight - height) / 2);
+      winbox.move(x, y);
+      winbox.focus();
+    }
   }
 };
 
@@ -1097,7 +1114,9 @@ const handleLogout = async () => {
   // Sign out from Supabase
   await supabase.auth.signOut();
   // Optionally clear user state or reload
+  if (typeof window !== 'undefined') {
   window.location.reload();
+  }
 };
 // console.log('user:', user);
 // console.log('publicUserId:', publicUserId);
@@ -1392,7 +1411,11 @@ return (
                 <button
                   className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
                   title="Focar Chat"
-                  onClick={() => { window.winboxWindows?.['chat']?.focus(); push('#chat'); }}
+                  onClick={() => { 
+                    if (typeof window !== 'undefined') {
+                      window.winboxWindows?.['chat']?.focus(); push('#chat'); 
+                    }
+                  }}
                 >
                   <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
                   <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
@@ -1414,7 +1437,11 @@ return (
                 <button
                   className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
                   title="Focar Editor"
-                  onClick={() => { window.winboxWindows?.['editor']?.focus(); push('#editor'); }}
+                  onClick={() => { 
+                    if (typeof window !== 'undefined') {
+                      window.winboxWindows?.['editor']?.focus(); push('#editor'); 
+                    }
+                  }}
                 >
                   <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
                   <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
@@ -1436,7 +1463,11 @@ return (
                 <button
                   className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
                   title="Focar Preview"
-                  onClick={() => { window.winboxWindows?.['preview']?.focus(); push('#preview'); }}
+                  onClick={() => { 
+                    if (typeof window !== 'undefined') {
+                      window.winboxWindows?.['preview']?.focus(); push('#preview'); 
+                    }
+                  }}
                 >
                   <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
                   <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
