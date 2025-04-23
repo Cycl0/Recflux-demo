@@ -34,12 +34,12 @@ const ConfigWindowContent = ({ userId, selectedProjectId, setSelectedProjectId, 
   }, [selectedProjectId, projects]);
 
   return (
-    <div className="p-6 min-w-[340px] flex flex-col gap-6">
-      <h1 className="text-2xl font-bold mb-2 text-cyan-800">Configuração de Projetos</h1>
-      <section className="bg-white/60 rounded-lg shadow p-4 flex flex-col gap-2">
-        <h2 className="text-lg font-semibold mb-1 text-cyan-700">Selecionar Projeto</h2>
-        <p className="text-sm text-gray-600 mb-2">Escolha um projeto para editar ou visualizar.</p>
-        <label className="block mb-1 font-medium text-left">Projeto</label>
+    <div className="p-6 min-w-[340px] flex flex-col gap-6 bg-white/90 dark:bg-[#1a1d22]/80 backdrop-blur-md rounded-2xl">
+      <h1 className="text-2xl font-bold mb-2 text-cyan-800 dark:text-cyan-200 drop-shadow">Configuração de Projetos</h1>
+      <section className="bg-white/90 dark:bg-[#1a1d22]/80 backdrop-blur-md border border-cyan-200 dark:border-cyan-900 rounded-2xl shadow-xl p-4 flex flex-col gap-2 transition-colors duration-300">
+        <h2 className="text-lg font-semibold mb-1 text-cyan-700 dark:text-cyan-300">Selecionar Projeto</h2>
+        <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">Escolha um projeto para editar ou visualizar.</p>
+        <label className="block mb-1 font-medium text-left text-gray-900 dark:text-gray-200">Projeto</label>
         <div className="flex items-center gap-1">
           <div className="w-48 h-8 flex items-center">
             <ProjectSelector
@@ -70,11 +70,11 @@ const ConfigWindowContent = ({ userId, selectedProjectId, setSelectedProjectId, 
         })()}
 
       </section>
-      <section className="bg-white/60 rounded-lg shadow p-4 flex flex-col gap-2">
+      <section className="bg-white/90 dark:bg-[#1a1d22]/80 backdrop-blur-md border border-cyan-200 dark:border-cyan-900 rounded-2xl shadow-xl p-4 flex flex-col gap-2 transition-colors duration-300">
         <div className="mb-4">
-          <h2 className="text-lg font-semibold mb-2 text-cyan-700">Criar novo projeto</h2>
+          <h2 className="text-lg font-semibold mb-2 text-cyan-700 dark:text-cyan-300">Criar novo projeto</h2>
           <button
-            className="px-3 py-1 rounded bg-cyan-600 text-white hover:bg-cyan-700 mb-2"
+            className="px-3 py-1 rounded-xl bg-cyan-600 dark:bg-cyan-700 text-white font-semibold shadow hover:bg-cyan-700 dark:hover:bg-cyan-800 focus:outline-none focus:ring-2 focus:ring-cyan-300/60 transition-colors duration-200 mb-2"
             onClick={() => setShowProjectModal(true)}
           >
             + Novo Projeto

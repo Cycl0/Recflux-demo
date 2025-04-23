@@ -73,7 +73,9 @@ const ProjectSelector = forwardRef<any, ProjectSelectorProps>(({ userId, selecte
           onChange={opt => onSelect(opt?.value)}
           options={safeProjects.map(p => ({ value: p.id, label: p.name }))}
           placeholder="Nenhum projeto"
+          menuPortalTarget={typeof window !== 'undefined' ? document.body : undefined}
           styles={{
+            menuPortal: base => ({ ...base, zIndex: 2147483647 }),
             control: (provided, state) => ({
               ...provided,
               background: state.isFocused ? 'rgba(186,230,253,0.35)' : 'rgba(255,255,255,0.18)',

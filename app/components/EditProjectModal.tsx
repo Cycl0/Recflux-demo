@@ -15,27 +15,27 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ project, onSave, on
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-lg p-6 min-w-[320px] relative">
+      <div className="bg-white/90 dark:bg-[#1a1d22]/90 border border-cyan-200 dark:border-cyan-900 rounded-2xl shadow-xl p-6 min-w-[320px] relative transition-colors duration-300">
         <button
-          className="absolute top-2 right-2 text-gray-500 hover:text-gray-800"
+          className="absolute top-2 right-2 text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-cyan-200 text-xl font-bold transition-colors duration-200"
           onClick={onClose}
         >
           ×
         </button>
-        <h2 className="text-xl font-bold mb-4 text-cyan-700">Editar Projeto</h2>
+        <h2 className="text-xl font-bold mb-4 text-cyan-700 dark:text-cyan-200">Editar Projeto</h2>
         <div className="mb-3">
-          <label className="block text-sm font-semibold mb-1">Nome do Projeto</label>
+          <label className="block text-sm font-semibold mb-1 text-gray-900 dark:text-gray-200">Nome do Projeto</label>
           <input
-            className="w-full border rounded px-2 py-1"
+            className="w-full border border-cyan-200 dark:border-cyan-900 rounded px-2 py-1 bg-white/80 dark:bg-[#232733] text-gray-900 dark:text-cyan-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-300/40 transition-colors duration-200"
             value={name}
             onChange={e => setName(e.target.value)}
             disabled={loading}
           />
         </div>
         <div className="mb-3">
-          <label className="block text-sm font-semibold mb-1">Descrição</label>
+          <label className="block text-sm font-semibold mb-1 text-gray-900 dark:text-gray-200">Descrição</label>
           <textarea
-            className="w-full border rounded px-2 py-1"
+            className="w-full border border-cyan-200 dark:border-cyan-900 rounded px-2 py-1 bg-white/80 dark:bg-[#232733] text-gray-900 dark:text-cyan-100 placeholder-gray-400 dark:placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-300/40 transition-colors duration-200"
             value={description}
             onChange={e => setDescription(e.target.value)}
             rows={3}
