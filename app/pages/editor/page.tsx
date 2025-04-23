@@ -492,9 +492,13 @@ export default function Home({ onLayoutChange = () => {}, ...props }) {
       if (theme === 'dark') {
         document.body.style.background = '#15171c';
         document.body.classList.add('dark');
+        // Set a darker gradient for dark mode
+        document.body.style.setProperty('--background-gradient', 'radial-gradient(circle, rgba(21,23,28,1) 5%, rgba(30,41,59,1) 27%, rgba(17,24,39,1) 62%, rgba(2,6,23,1) 92%)');
       } else {
         document.body.style.background = '';
         document.body.classList.remove('dark');
+        // Reset to default gradient
+        document.body.style.setProperty('--background-gradient', 'radial-gradient(circle, rgba(148,248,240,1) 5%, rgba(0,225,240,1) 27%, rgba(0,107,125,1) 62%, rgba(0,32,32,1) 92%)');
       }
     }
     // Cleanup on unmount

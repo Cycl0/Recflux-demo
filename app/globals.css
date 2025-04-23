@@ -61,7 +61,7 @@ html {
 
   /* bg blue gradient */
   .bg-blue-gradient {
-    background: radial-gradient(circle, rgba(148,248,240,1) 5%, rgba(0,225,240,1) 27%, rgba(0,107,125,1) 62%, rgba(0,32,32,1) 92%);
+    background: var(--background-gradient, radial-gradient(circle, rgba(148,248,240,1) 5%, rgba(0,225,240,1) 27%, rgba(0,107,125,1) 62%, rgba(0,32,32,1) 92%));
   }
 
   /* bubble animation on click*/
