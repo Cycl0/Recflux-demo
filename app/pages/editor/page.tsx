@@ -1151,9 +1151,9 @@ const [showOneTap, setShowOneTap] = useState(false);
 
 // Handler for FileDiffViewer to open the copy modal
 function handleCopyToCurrentFile(code: string) {
-  setCodeToCopy(code);
-  setShowCopyModal(true);
-  setCopyTargetFile("");
+  if (selectedFile?.name) {
+    setFilesCurrentHandler(selectedFile.name, code);
+  }
 }
 
 

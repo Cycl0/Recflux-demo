@@ -155,8 +155,9 @@ export default function FileDiffViewer({ fileId, currentCode, onCopyToCurrentFil
     setCopySelected(option);
   }
   function confirmCopyToCurrentFile() {
-    if (copySelected) {
-      const found = versions.find(v => v.id === copySelected.value);
+    // Copy the code of the currently selected "new" version to the current file
+    if (selectedNew) {
+      const found = versions.find(v => v.id === selectedNew.value);
       if (found) onCopyToCurrentFile(found.code);
       setShowCopyModal(false);
     }
@@ -222,19 +223,12 @@ export default function FileDiffViewer({ fileId, currentCode, onCopyToCurrentFil
                 &times;
               </button>
               <h2 className="text-lg font-semibold mb-4">Copiar versão para o arquivo atual</h2>
-              <Select
-                options={options}
-                value={copySelected}
-                onChange={handleCopySelect}
-                styles={customStyleSelect(theme)}
-                className="mb-4"
-                placeholder="Selecione uma versão para copiar"
-                isDisabled={loading}
-              />
+<p className="mb-4">Tem certeza que deseja copiar a versão selecionada (<span className="font-mono font-semibold">{selectedNew?.label}</span>) para o arquivo atual?</p>
+              
               <button
                 className="px-4 py-2 bg-cyan-600 text-white rounded font-semibold shadow-md hover:bg-cyan-700 transition-all disabled:opacity-50"
                 onClick={confirmCopyToCurrentFile}
-                disabled={!copySelected}
+                disabled={!selectedNew}
               >
                 Copiar para arquivo atual
               </button>
