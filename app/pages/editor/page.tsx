@@ -249,7 +249,7 @@ Pedido do usuário: ${input}`;
                             Enviar para o Editor
                           </button>
                         </div>
-                        <pre className={className} {...props}>
+                        <pre className={`${className} !min-h-10`} {...props}>
                           <code className={className}>{children}</code>
                         </pre>
                       </div>
