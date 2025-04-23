@@ -1,5 +1,5 @@
 import type { Config } from "tailwindcss";
-import flowbite from "flowbite-react/tailwind";
+import flowbite from "flowbite/plugin";
 
 const config: Config = {
   content: [
@@ -7,7 +7,6 @@ const config: Config = {
     "./components/**/*.{js,ts,jsx,tsx,mdx}",
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
     "./node_modules/flowbite/**/*.js",
-    flowbite.content(),
   ],
   safelist: [
     { pattern: /^grid$/ },
@@ -16,6 +15,7 @@ const config: Config = {
     { pattern: /^grid-rows-/, variants: ['2xs'] },
     { pattern: /^grid-in-/, variants: ['2xs'] }
   ],
+  darkMode: 'class',
   theme: {
      screens: {
       'xs': '380px',
@@ -111,7 +111,7 @@ const config: Config = {
     }
   },
   plugins: [
-    require('flowbite/plugin'),
+    flowbite,
     require('@savvywombat/tailwindcss-grid-areas'),
   ]
 };
