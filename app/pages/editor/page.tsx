@@ -14,7 +14,7 @@ import LiveErrorWithRef from "@/components/LiveErrorWithRef";
 import {emptyFiles, initialFiles} from "@/utils/files-editor";
 import { throttle } from 'lodash';
 import { supabase } from '@/utils/supabaseClient';
-import { useChat } from 'ai/react'
+import { useChat } from "@ai-sdk/react";
 import CopyButton from '@/components/CopyButton'
 import { Bot, User, Moon, Sun } from 'lucide-react'
 import ReactMarkdown from 'react-markdown';
