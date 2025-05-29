@@ -886,7 +886,7 @@ function GoogleSignInButton() {
     await supabase.auth.signInWithOAuth({
   provider: 'google',
   options: {
-    redirectTo: `${window.origin}/pages/editor`
+    redirectTo: `https://recflux-demo.vercel.app/pages/editor`
   }
 });
   };
