@@ -37,10 +37,10 @@ export default function NavBar({ extra }) {
         <NavStyledCollapse
           className="md:flex md:w-auto md:order-1 md:mx-auto"
           list={[
-            "Início", "/inicio",
-            "Sobre", "/sobre",
-            "Planos", "/planos",
-            "Contato", "/contato"
+            "Início", "/",
+            "Sobre", "/pages/sobre",
+            "Planos", "/pages/planos",
+            "Contato", "/pages/contato"
           ]}
           activeIndex={0}
         />
