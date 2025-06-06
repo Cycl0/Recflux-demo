@@ -449,20 +449,41 @@ function useSupabaseGoogleRegistration() {
       console.log('[registerUserIfNeeded] No sessionUser');
       return;
     }
-    // console.log('[registerUserIfNeeded] sessionUser:', sessionUser);
     setUser(sessionUser);
     const userEmail = sessionUser.email;
     if (!userEmail) return;
-    const { data: customUser } = await supabase
+    // Check if user exists in your users table
+    let { data: customUser, error: customUserError } = await supabase
       .from('users')
-      .select('id')
+      .select('id, stripe_customer_id')
       .eq('email', userEmail)
       .single();
-    // Do not call setPublicUserId here. Only handle user registration/updating in this hook.
-    // Setting publicUserId is handled in the Home component's useEffect.
-    // if (customUser) {
-    //   setPublicUserId(customUser.id);
-    // }
+    // If not found, insert the user
+    if (customUserError && customUserError.code === 'PGRST116') {
+      const username = userEmail.split('@')[0];
+      const { data: newUser, error: insertError } = await supabase
+        .from('users')
+        .insert([{ email: userEmail, username }])
+        .select('id, stripe_customer_id')
+        .single();
+      if (insertError) {
+        console.error('Failed to insert user:', insertError.message);
+        return;
+      }
+      customUser = newUser;
+    } else if (customUserError) {
+      console.error('Error fetching user:', customUserError.message);
+      return;
+    }
+    // If user exists and has no stripe_customer_id, create one
+    if (customUser && !customUser.stripe_customer_id) {
+      // Call API route to create Stripe customer and update user
+      await fetch('/api/stripe/create-customer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: customUser.id, email: userEmail })
+      });
+    }
   };
 
   useEffect(() => {
@@ -884,11 +905,11 @@ const throttledSaveEditorCode = useMemo(() => throttle(() => {
 function GoogleSignInButton() {
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
-  provider: 'google',
-  options: {
-    redirectTo: `https://recflux-demo.vercel.app/pages/editor`
-  }
-});
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/pages/editor`
+      }
+    });
   };
   return (
     <button
