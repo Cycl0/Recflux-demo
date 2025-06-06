@@ -1,8 +1,61 @@
+'use client';
 import VideoBackground from "@/components/VideoBackground";
 import PlanCard from "@/components/PlanCard";
 import NavBar from "@/components/NavBar";
+import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { supabase } from "@/utils/supabaseClient";
 
 export default function PlanosPage() {
+    const router = useRouter();
+    const [stripeCustomerId, setStripeCustomerId] = useState<string | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    useEffect(() => {
+        async function fetchStripeCustomerId() {
+            const { data: authUserData, error: authUserError } = await supabase.auth.getUser();
+            if (authUserError || !authUserData?.user?.email) {
+                setStripeCustomerId(null);
+                setLoading(false);
+                return;
+            }
+            const userEmail = authUserData.user.email;
+            const { data: customUser, error: customUserError } = await supabase
+                .from('users')
+                .select('stripe_customer_id')
+                .eq('email', userEmail)
+                .single();
+            if (customUserError || !customUser) {
+                setStripeCustomerId(null);
+            } else {
+                setStripeCustomerId(customUser.stripe_customer_id);
+            }
+            setLoading(false);
+        }
+        fetchStripeCustomerId();
+    }, []);
+
+    const handleSubscribe = async (priceId: string) => {
+        if (!stripeCustomerId) {
+            alert('Usuário não autenticado ou Stripe Customer ID não encontrado. Faça login novamente.');
+            return;
+        }
+        const res = await fetch('/api/stripe/checkout', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                priceId,
+                customerId: stripeCustomerId,
+            }),
+        });
+        const data = await res.json();
+        if (data.url) {
+            window.location.href = data.url;
+        } else {
+            alert('Erro ao criar sessão de pagamento');
+        }
+    };
+
     return (
         <>
             <NavBar extra={null} />
@@ -32,6 +85,8 @@ export default function PlanosPage() {
                                 { text: "feature 2", available: true },
                                 { text: "feature 3", available: true },
                             ]}
+                            priceId="price_1RWQ6t2LODbcMK9P2MS9ljZm" // replace with your real Stripe Price ID
+                            onSubscribe={() => handleSubscribe('price_1RWQ6t2LODbcMK9P2MS9ljZm')}
                         />
                     </div>
                 </div>

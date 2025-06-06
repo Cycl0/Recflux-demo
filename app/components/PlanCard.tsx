@@ -6,9 +6,11 @@ interface PlanCardProps {
     price: string;
     color: string;
     features: { text: string; available: boolean }[];
+    priceId?: string;
+    onSubscribe?: () => void;
 }
 
-const PlanCard = ({ title, price, color, features }: PlanCardProps) => {
+const PlanCard = ({ title, price, color, features, onSubscribe }: PlanCardProps) => {
     return (
         <div className="flex flex-col w-full sm:w-2/3 md:w-1/3 min-w-[200px] bg-gray-600 rounded-xl shadow-lg overflow-hidden">
             <div className={`p-6 text-white text-center ${color}`}>
@@ -27,7 +29,7 @@ const PlanCard = ({ title, price, color, features }: PlanCardProps) => {
                         </li>
                     ))}
                 </ul>
-                <button className={`w-full py-3 ${color} hover:opacity-90 text-white font-semibold rounded-lg transition-all`}>
+                <button className={`w-full py-3 ${color} hover:opacity-90 text-white font-semibold rounded-lg transition-all`} onClick={onSubscribe}>
                     Assinar
                 </button>
             </div>
