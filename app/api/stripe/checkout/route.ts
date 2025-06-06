@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       line_items: [{ price: priceId, quantity: 1 }],
       customer: customerId,
       success_url: `${origin}/success`,
-      cancel_url: `${origin}/planos`,
+      cancel_url: `${origin}/pages/planos`,
     });
 
     return new Response(JSON.stringify({ url: session.url }), { status: 200 });

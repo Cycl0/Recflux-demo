@@ -1,10 +1,37 @@
 'use client';
 import { useState } from 'react';
+import { useSupabaseUser } from '@/utils/useSupabaseUser';
+import NavStyledDropdown from '@/components/NavStyledDropdown';
+import TesteAgoraButton from '@/components/TesteAgoraButton';
 import NavBar from '@/components/NavBar';
 
 export default function ContatoPage() {
+  const { user, loading } = useSupabaseUser();
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', message: '' });
+  let navExtra = null;
+  if (!loading) {
+    if (user) {
+      const name = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")?.[0] || "";
+      const email = user.email;
+      const avatarUrl = user.user_metadata?.avatar_url || "/images/icon.png";
+      const handleLogout = async () => {
+        await import('@/utils/supabaseClient').then(({ supabase }) => supabase.auth.signOut());
+        if (typeof window !== 'undefined') window.location.reload();
+      };
+      navExtra = (
+        <NavStyledDropdown
+          name={name}
+          email={email}
+          avatarUrl={avatarUrl}
+          onLogout={handleLogout}
+          mode="simple"
+        />
+      );
+    } else {
+      navExtra = <TesteAgoraButton />;
+    }
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -17,7 +44,7 @@ export default function ContatoPage() {
 
   return (
     <>
-      <NavBar extra={null} />
+      <NavBar extra={navExtra} />
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#15171c] via-[#232733] to-[#0e7490] dark:from-[#15171c] dark:via-[#232733] dark:to-[#0e7490] p-8">
         <div className="max-w-xl w-full rounded-2xl shadow-2xl p-8 text-center border border-cyan-700/30 bg-[#181c23]/80 dark:bg-[#181c23]/80 backdrop-blur-xl backdrop-saturate-150">
           <h1 className="text-4xl font-bold mb-4 text-cyan-300 drop-shadow-lg">Contato</h1>

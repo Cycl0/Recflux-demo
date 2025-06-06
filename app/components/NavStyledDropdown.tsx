@@ -1,7 +1,17 @@
 import React, { useState, useEffect } from "react";
 import { Dropdown, Avatar } from "flowbite-react";
+import Link from 'next/link';
 
-export default function NavStyledDropdown({ name, email, avatarUrl, onLogout, onOpenProjectModal }) {
+export interface NavStyledDropdownProps {
+  name: string;
+  email: string;
+  avatarUrl: string;
+  onLogout: () => void;
+  onOpenProjectModal?: () => void;
+  mode?: 'full' | 'simple';
+}
+
+const NavStyledDropdown: React.FC<NavStyledDropdownProps> = ({ name, email, avatarUrl, onLogout, onOpenProjectModal, mode = 'full' }) => {
   const [imgSrc, setImgSrc] = useState(avatarUrl && avatarUrl.startsWith('http') ? avatarUrl : "/images/icon.png");
   useEffect(() => {
     setImgSrc(avatarUrl && avatarUrl.startsWith('http') ? avatarUrl : "/images/icon.png");
@@ -31,27 +41,46 @@ export default function NavStyledDropdown({ name, email, avatarUrl, onLogout, on
         <span className="block text-sm">{name}</span>
         <span className="block truncate text-sm font-medium">{email}</span>
       </Dropdown.Header>
-      <Dropdown.Item
-        className="text-white bg-transparent focus:bg-transparent hover:bg-transparent hover:shadow-gradient hover:text-white transition-all duration-300"
-        onClick={onOpenProjectModal}
-      >
-        Projetos
-      </Dropdown.Item>
-      <Dropdown.Item className="
-                                text-white bg-transparent
-                                focus:bg-transparent
-                                hover:bg-transparent hover:shadow-gradient hover:text-white
-                                transition-all duration-300">
-        Dashboard
-      </Dropdown.Item>
-      <Dropdown.Divider />
-      <Dropdown.Item
-        className="text-white bg-transparent focus:bg-transparent hover:bg-transparent hover:shadow-gradient hover:text-white transition-all duration-300"
-        onClick={onLogout}
-      >
-        Sair
-      </Dropdown.Item>
+      {mode === 'full' ? (
+        <>
+          <Dropdown.Item
+            className="text-white bg-transparent focus:bg-transparent hover:bg-transparent hover:shadow-gradient hover:text-white transition-all duration-300"
+            onClick={onOpenProjectModal}
+          >
+            Projetos
+          </Dropdown.Item>
+          <Dropdown.Item className="text-white bg-transparent focus:bg-transparent hover:bg-transparent hover:shadow-gradient hover:text-white transition-all duration-300">
+            Dashboard
+          </Dropdown.Item>
+          <Dropdown.Divider />
+          <Dropdown.Item
+            className="text-white bg-transparent focus:bg-transparent hover:bg-transparent hover:shadow-gradient hover:text-white transition-all duration-300"
+            onClick={onLogout}
+          >
+            Sair
+          </Dropdown.Item>
+        </>
+      ) : (
+        <>
+          <Dropdown.Item
+            className="text-white bg-transparent focus:bg-transparent hover:bg-transparent hover:shadow-gradient hover:text-white transition-all duration-300"
+            as={Link}
+            href="/pages/editor"
+          >
+            Ir para o Editor
+          </Dropdown.Item>
+          <Dropdown.Divider />
+          <Dropdown.Item
+            className="text-white bg-transparent focus:bg-transparent hover:bg-transparent hover:shadow-gradient hover:text-white transition-all duration-300"
+            onClick={onLogout}
+          >
+            Sair
+          </Dropdown.Item>
+        </>
+      )}
     </Dropdown>
   );
-}
+};
+
+export default NavStyledDropdown;
 

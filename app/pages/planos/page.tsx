@@ -5,11 +5,38 @@ import NavBar from "@/components/NavBar";
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
 import { supabase } from "@/utils/supabaseClient";
+import { useSupabaseUser } from '@/utils/useSupabaseUser';
+import NavStyledDropdown from '@/components/NavStyledDropdown';
+import TesteAgoraButton from '@/components/TesteAgoraButton';
 
 export default function PlanosPage() {
     const router = useRouter();
     const [stripeCustomerId, setStripeCustomerId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
+    const { user, loading: userLoading } = useSupabaseUser();
+    let navExtra = null;
+    if (!userLoading) {
+        if (user) {
+            const name = user.user_metadata?.full_name || user.user_metadata?.name || user.email?.split("@")?.[0] || "";
+            const email = user.email;
+            const avatarUrl = user.user_metadata?.avatar_url || "/images/icon.png";
+            const handleLogout = async () => {
+                await import('@/utils/supabaseClient').then(({ supabase }) => supabase.auth.signOut());
+                if (typeof window !== 'undefined') window.location.reload();
+            };
+            navExtra = (
+                <NavStyledDropdown
+                    name={name}
+                    email={email}
+                    avatarUrl={avatarUrl}
+                    onLogout={handleLogout}
+                    mode="simple"
+                />
+            );
+        } else {
+            navExtra = <TesteAgoraButton />;
+        }
+    }
 
     useEffect(() => {
         async function fetchStripeCustomerId() {
@@ -58,7 +85,7 @@ export default function PlanosPage() {
 
     return (
         <>
-            <NavBar extra={null} />
+            <NavBar extra={navExtra} />
             <div className="relative min-h-screen text-white pt-24">
                 <VideoBackground />
                 <div className="relative container mx-auto px-4 z-10">
