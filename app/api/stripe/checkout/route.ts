@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
       customer: customerId,
-      success_url: `${origin}/success`,
+      success_url: `${origin}/pages/planos/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${origin}/pages/planos`,
     });
 
