@@ -373,7 +373,7 @@ export default function Home() {
                     </main>
                 </div>
             </ReactPageScroller>
-            <SplineBackground />
+            <SplineBackground url="https://prod.spline.design/5HOhMSJjIIF09Xnm/scene.splinecode" />
         </>
     );
 }

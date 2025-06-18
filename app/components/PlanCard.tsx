@@ -4,34 +4,42 @@ import { CheckCircle, Cancel } from '@mui/icons-material'; // Importando os íco
 interface PlanCardProps {
     title: string;
     price: string;
-    color: string;
+    color: string; // Used only for the button now
     features: { text: string; available: boolean }[];
     priceId?: string;
     onSubscribe?: () => void;
+    hasButton?: boolean;
 }
 
-const PlanCard = ({ title, price, color, features, onSubscribe }: PlanCardProps) => {
+const PlanCard = ({ title, price, color, features, onSubscribe, hasButton = true }: PlanCardProps) => {
     return (
-        <div className="flex flex-col w-full sm:w-2/3 md:w-1/3 min-w-[200px] bg-gray-600 rounded-xl shadow-lg overflow-hidden">
-            <div className={`p-6 text-white text-center ${color}`}>
-                <h2 className="text-xl sm:text-2x1 font-bold">{title}</h2>
-                <p className="text:3x1 sm:text-4xl font-extrabold my-2">{price}</p>
-                <p className="text-xs sm:text-sm">por mês</p>
+        <div className="flex flex-col w-full sm:w-2/3 md:w-1/3 min-w-[200px] bg-white/10 backdrop-blur-lg border border-white/20 rounded-2xl shadow-2xl overflow-hidden transition-all hover:scale-105 hover:shadow-3xl">
+            <div className="p-6 text-white text-center">
+                <h2 className="text-xl sm:text-2xl font-bold drop-shadow-lg text-white/90">{title}</h2>
+                <p className="text-3xl sm:text-4xl font-extrabold my-2 text-white/95 drop-shadow-lg">{price}</p>
+                <p className="text-xs sm:text-sm text-white/70">por mês</p>
             </div>
             <div className="p-6 flex flex-col flex-1">
-                <ul className="space-y-2 sm:space-y-3 mb-4 sm:mb-6 text-gray-400 flex-1">
+                <ul className="space-y-2 sm:space-y-3 mb-4 sm:mb-6 text-white/80 flex-1 ml-auto mr-auto">
                     {features.map((feature, index) => (
-                        <li key={index} className={`flex items-center gap-2 ${!feature.available && "opacity-50"}`}>
-                            <span className={`text-${feature.available ? 'green' : 'red'}-500`}>
+                        <li key={index} className={`flex items-center justify-start gap-2 ${!feature.available ? "opacity-50" : ""}`}>
+                            <span className={feature.available ? "text-emerald-400" : "text-rose-400"}>
                                 {feature.available ? <CheckCircle /> : <Cancel />}
                             </span>
-                            {feature.text}
+                            <span className="text-base sm:text-lg font-medium">{feature.text}</span>
                         </li>
                     ))}
                 </ul>
-                <button className={`w-full py-3 ${color} hover:opacity-90 text-white font-semibold rounded-lg transition-all`} onClick={onSubscribe}>
-                    Assinar
-                </button>
+                {hasButton ? (
+                <button className={`w-full py-3 ${color} hover:opacity-90 text-white font-semibold rounded-lg transition-all shadow-lg backdrop-blur-md bg-gradient-to-r from-white/20 to-white/10 border border-white/30`} onClick={onSubscribe}>
+                        Assinar
+                    </button>
+                ) : (
+                    <button className={`w-full py-3 ${color} text-white font-semibold rounded-lg transition-all shadow-lg backdrop-blur-md bg-gradient-to-r from-white/20 to-white/10 border border-white/30`}>
+                        Adquirido
+                    </button>
+                )}
+
             </div>
         </div>
     );

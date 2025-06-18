@@ -8,6 +8,7 @@ import { supabase } from "@/utils/supabaseClient";
 import { useSupabaseUser } from '@/utils/useSupabaseUser';
 import NavStyledDropdown from '@/components/NavStyledDropdown';
 import TesteAgoraButton from '@/components/TesteAgoraButton';
+import SplineBackground from "@/components/SplineBackground";
 
 export default function PlanosPage() {
     const router = useRouter();
@@ -87,7 +88,7 @@ export default function PlanosPage() {
         <>
             <NavBar extra={navExtra} />
             <div className="relative min-h-screen text-white pt-24">
-                <VideoBackground />
+                <SplineBackground url="https://prod.spline.design/BKTBtT5vYVQ8pfce/scene.splinecode" />
                 <div className="relative container mx-auto px-4 z-10">
                     <h1 className="text-3xl sm:text-4x1 font-bold text-center mb-8 sm:mb-12 text-white">
                         Nossos Planos
@@ -98,22 +99,23 @@ export default function PlanosPage() {
                             price="free"
                             color="bg-gradient-to-r from-teal-600 to-teal-800"
                             features={[
-                                { text: "feature 1", available: true },
-                                { text: "feature 2", available: true },
-                                { text: "restriction 1", available: false },
+                                { text: "1 Projeto", available: true },
+                                { text: "5 Modificações", available: true },
+                                { text: "Suporte 24h", available: false },
                             ]}
+                            hasButton={false}
                         />
                         <PlanCard
                             title="Premium"
                             price="$59"
                             color="bg-gradient-to-r from-purple-600 to-purple-800"
                             features={[
-                                { text: "feature 1", available: true },
-                                { text: "feature 2", available: true },
-                                { text: "feature 3", available: true },
+                                { text: "10 Projetos", available: true },
+                                { text: "50 Modificações", available: true },
+                                { text: "Suporte 24h", available: true },
                             ]}
-                            priceId="price_1RWQ6t2LODbcMK9P2MS9ljZm" // replace with your real Stripe Price ID
-                            onSubscribe={() => handleSubscribe('price_1RWQ6t2LODbcMK9P2MS9ljZm')}
+                            priceId="price_1RbUoL2LODbcMK9PfX6Ilsf3" // replace with your real Stripe Price ID
+                            onSubscribe={() => handleSubscribe('price_1RbUoL2LODbcMK9PfX6Ilsf3')}
                         />
                     </div>
                 </div>
