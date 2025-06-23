@@ -88,6 +88,27 @@ export default function PlanosPage() {
         }
     };
 
+    const handleBuyCredits = async () => {
+        if (!stripeCustomerId) {
+            alert('Usuário não autenticado ou Stripe Customer ID não encontrado. Faça login novamente.');
+            return;
+        }
+        const res = await fetch('/api/stripe/checkout-credits', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                customerId: stripeCustomerId,
+                amount: 2599 // R$ 25.99 in cents
+            }),
+        });
+        const data = await res.json();
+        if (data.url) {
+            window.location.href = data.url;
+        } else {
+            alert('Erro ao criar sessão de pagamento');
+        }
+    };
+
     return (
         <>
             <NavBar extra={navExtra} />
@@ -109,6 +130,7 @@ export default function PlanosPage() {
                             ]}
                             hasButton={false}
                         />
+                        
                         <PlanCard
                             title="Premium"
                             price="$59"
@@ -120,6 +142,23 @@ export default function PlanosPage() {
                             ]}
                             priceId="price_1RbUoL2LODbcMK9PfX6Ilsf3" // replace with your real Stripe Price ID
                             onSubscribe={() => handleSubscribe('price_1RbUoL2LODbcMK9PfX6Ilsf3')}
+                        />
+                        
+                        {/* Cool Credit Purchase Card */}
+                        <PlanCard
+                            title="Créditos IA"
+                            price="R$ 25,99"
+                            priceSubtext="pagamento único"
+                            color="bg-gradient-to-r from-orange-500 to-red-600"
+                            buttonColor="bg-gradient-to-r from-emerald-500 to-green-600"
+                            buttonText="Comprar"
+                            isSpecial={true}
+                            features={[
+                                { text: "200 Créditos", available: true },
+                                { text: "Não expira", available: true },
+                                { text: "Uso imediato", available: true },
+                            ]}
+                            onSubscribe={handleBuyCredits}
                         />
                     </div>
                 </div>

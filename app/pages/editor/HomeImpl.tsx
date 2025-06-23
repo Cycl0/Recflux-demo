@@ -516,7 +516,7 @@ function useSupabaseGoogleRegistration() {
       const username = userEmail.split('@')[0];
       const { data: newUser, error: insertError } = await supabase
         .from('users')
-        .insert([{ email: userEmail, username }])
+        .insert([{ email: userEmail, username, plan: 'free' }])
         .select('id, stripe_customer_id')
         .single();
       if (insertError) {
