@@ -8,13 +8,14 @@ import { supabase } from "@/utils/supabaseClient";
 import { useSupabaseUser } from '@/utils/useSupabaseUser';
 import NavStyledDropdown from '@/components/NavStyledDropdown';
 import TesteAgoraButton from '@/components/TesteAgoraButton';
+import CreditsDisplay from '@/components/CreditsDisplay';
 import SplineBackground from "@/components/SplineBackground";
 
 export default function PlanosPage() {
     const router = useRouter();
     const [stripeCustomerId, setStripeCustomerId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const { user, loading: userLoading } = useSupabaseUser();
+    const { user, loading: userLoading, credits, creditsLoading } = useSupabaseUser();
     let navExtra = null;
     if (!userLoading) {
         if (user) {
@@ -26,13 +27,16 @@ export default function PlanosPage() {
                 if (typeof window !== 'undefined') window.location.reload();
             };
             navExtra = (
-                <NavStyledDropdown
-                    name={name}
-                    email={email}
-                    avatarUrl={avatarUrl}
-                    onLogout={handleLogout}
-                    mode="simple"
-                />
+                <>
+                    <CreditsDisplay credits={credits} loading={creditsLoading} />
+                    <NavStyledDropdown
+                        name={name}
+                        email={email}
+                        avatarUrl={avatarUrl}
+                        onLogout={handleLogout}
+                        mode="simple"
+                    />
+                </>
             );
         } else {
             navExtra = <TesteAgoraButton />;

@@ -3,10 +3,11 @@ import { useState } from 'react';
 import { useSupabaseUser } from '@/utils/useSupabaseUser';
 import NavStyledDropdown from '@/components/NavStyledDropdown';
 import TesteAgoraButton from '@/components/TesteAgoraButton';
+import CreditsDisplay from '@/components/CreditsDisplay';
 import NavBar from '@/components/NavBar';
 
 export default function ContatoPage() {
-  const { user, loading } = useSupabaseUser();
+  const { user, loading, credits, creditsLoading } = useSupabaseUser();
   const [submitted, setSubmitted] = useState(false);
   const [form, setForm] = useState({ name: '', email: '', message: '' });
   let navExtra = null;
@@ -20,13 +21,16 @@ export default function ContatoPage() {
         if (typeof window !== 'undefined') window.location.reload();
       };
       navExtra = (
-        <NavStyledDropdown
-          name={name}
-          email={email}
-          avatarUrl={avatarUrl}
-          onLogout={handleLogout}
-          mode="simple"
-        />
+        <>
+          <CreditsDisplay credits={credits} loading={creditsLoading} />
+          <NavStyledDropdown
+            name={name}
+            email={email}
+            avatarUrl={avatarUrl}
+            onLogout={handleLogout}
+            mode="simple"
+          />
+        </>
       );
     } else {
       navExtra = <TesteAgoraButton />;

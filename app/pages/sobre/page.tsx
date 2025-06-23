@@ -3,9 +3,10 @@ import NavBar from '@/components/NavBar';
 import { useSupabaseUser } from '@/utils/useSupabaseUser';
 import NavStyledDropdown from '@/components/NavStyledDropdown';
 import TesteAgoraButton from '@/components/TesteAgoraButton';
+import CreditsDisplay from '@/components/CreditsDisplay';
 
 export default function SobrePage() {
-  const { user, loading } = useSupabaseUser();
+  const { user, loading, credits, creditsLoading } = useSupabaseUser();
   let navExtra = null;
   if (!loading) {
     if (user) {
@@ -17,13 +18,16 @@ export default function SobrePage() {
         if (typeof window !== 'undefined') window.location.reload();
       };
       navExtra = (
-        <NavStyledDropdown
-          name={name}
-          email={email}
-          avatarUrl={avatarUrl}
-          onLogout={handleLogout}
-          mode="simple"
-        />
+        <>
+          <CreditsDisplay credits={credits} loading={creditsLoading} />
+          <NavStyledDropdown
+            name={name}
+            email={email}
+            avatarUrl={avatarUrl}
+            onLogout={handleLogout}
+            mode="simple"
+          />
+        </>
       );
     } else {
       navExtra = <TesteAgoraButton />;

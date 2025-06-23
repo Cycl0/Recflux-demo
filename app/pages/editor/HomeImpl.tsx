@@ -7,6 +7,7 @@ import ConfigWindowContent from '@/components/ConfigWindowContent';
 import NavBar from '@/components/NavBar';
 import CurrentProjectLabel from '@/components/CurrentProjectLabel';
 import NavStyledDropdown from '@/components/NavStyledDropdown';
+import CreditsDisplay from '@/components/CreditsDisplay';
 import Editor from "@monaco-editor/react";
 import 'react-resizable/css/styles.css';
 import { LiveProvider, LivePreview } from "react-live";
@@ -14,7 +15,9 @@ import LiveErrorWithRef from "@/components/LiveErrorWithRef";
 import {emptyFiles, initialFiles} from "@/utils/files-editor";
 import { throttle } from 'lodash';
 import { supabase } from '@/utils/supabaseClient';
+import { useSupabaseUser } from '@/utils/useSupabaseUser';
 import { useChat } from "@ai-sdk/react";
+import { checkAndDeductCredits } from '@/utils/creditSystem';
 import CopyButton from '@/components/CopyButton'
 import { Bot, User, Moon, Sun } from 'lucide-react'
 import ReactMarkdown from 'react-markdown';
@@ -49,9 +52,11 @@ interface ChatProps {
    * Ref for appending messages or scrolling, injected by parent if needed
    */
   appendRef?: React.MutableRefObject<any>;
+  user?: any;
+  onCreditsUpdate?: () => void;
 }
 
-function Chat({ onPromptSubmit, theme, appendRef }: ChatProps & { theme: 'dark' | 'light' }) {
+function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatProps & { theme: 'dark' | 'light' }) {
   // Restore chat prompt from cookie
   const [input, setInput] = useState(() => Cookies.get('chatPrompt') || '');
   useEffect(() => {
@@ -86,13 +91,47 @@ function Chat({ onPromptSubmit, theme, appendRef }: ChatProps & { theme: 'dark' 
     baseHandleInputChange(e as any);
   }
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-  if (onPromptSubmit) onPromptSubmit(input);
-    if (typeof window !== 'undefined') {
-      Cookies.remove('chatPrompt');
-    }
+  const [creditError, setCreditError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (chatAction.value === '2') { // EDITAR
+    
+    if (isSubmitting || isLoading) return;
+    
+    // Check if user is authenticated
+    if (!user || !user.email) {
+      setCreditError('Você precisa estar logado para enviar prompts.');
+      return;
+    }
+
+    // Clear previous errors
+    setCreditError(null);
+    setIsSubmitting(true);
+
+    try {
+      // Check and deduct credits before sending prompt
+      const creditResult = await checkAndDeductCredits(user.email);
+      
+      if (!creditResult.hasEnoughCredits) {
+        setCreditError(creditResult.message);
+        setIsSubmitting(false);
+        return;
+      }
+
+      // Credits were successfully deducted, now send the prompt
+      if (onPromptSubmit) onPromptSubmit(input);
+      if (typeof window !== 'undefined') {
+        Cookies.remove('chatPrompt');
+      }
+      
+      // Update credits display
+      if (onCreditsUpdate) {
+        onCreditsUpdate();
+      }
+
+      // Now proceed with the chat logic
+      if (chatAction.value === '2') { // EDITAR
       // Compose a prompt referencing the code from the editor
       const editPrompt = `Aqui está o código atual do arquivo ${selectedFile?.name || ''}: 
 
@@ -126,6 +165,13 @@ Pedido do usuário: ${input}`;
       chat.append({ role: "user", content: chatPrompt });
     } else {
       baseHandleSubmit(e);
+    }
+    
+    } catch (error) {
+      console.error('Error in handleSubmit:', error);
+      setCreditError('Erro ao processar prompt. Tente novamente.');
+    } finally {
+      setIsSubmitting(false);
     }
   };
   
@@ -201,6 +247,13 @@ Pedido do usuário: ${input}`;
 
   return (
     <div className={`relative flex flex-col h-full rounded-lg shadow-lg  ${theme === 'dark' ? 'bg-[#232733]' : 'bg-white'}`}>
+      {/* Credit error display */}
+      {creditError && (
+        <div className="p-3 mx-4 mt-2 bg-red-500/20 border border-red-500/40 rounded-lg text-red-200 text-sm">
+          {creditError}
+        </div>
+      )}
+      
       {/* Chat messages area */}
       <div className={`flex-1 space-y-4 !pb-[200px] p-4 ${theme === 'dark' ? 'bg-[#232733]' : 'bg-white'}`}>
         {messages.map((message) => (
@@ -388,7 +441,7 @@ Pedido do usuário: ${input}`;
           )}
           <button
             type="submit"
-            disabled={isLoading}
+            disabled={isLoading || isSubmitting}
             className="py-3 px-4 bg-gradient-to-br from-cyan-300/80 to-blue-100/70 backdrop-blur-md text-cyan-900 rounded-xl shadow-[0_4px_32px_0_rgba(34,211,238,0.22)] hover:from-cyan-200/90 hover:to-blue-50/80 focus:bg-cyan-100/80 active:bg-cyan-400/80 transition-all duration-300 ease-in-out disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-cyan-200/40"
             aria-label="Enviar mensagem"
           >
@@ -586,6 +639,8 @@ function Home({ onLayoutChange = () => {}, ...props }) {
   const [projects, setProjects] = useState<any[]>([]); // Replace 'any' with your Project type if available
   // Auth state - must be declared FIRST so it's available everywhere
   const { user, loading: userLoading } = useSupabaseGoogleRegistration();
+  // Enhanced user hook for credits
+  const { credits, creditsLoading, refetchCredits } = useSupabaseUser();
 
   // Project selection state for ConfigWindowContent
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -1168,6 +1223,7 @@ if (userLoading) {
           onOpenConfig={() => setShowConfigModal(true)}
         />
       )}
+      <CreditsDisplay credits={credits} loading={creditsLoading} />
       <NavStyledDropdown
         name={name}
         email={email}
@@ -1211,16 +1267,40 @@ const liveErrorRef = useRef<HTMLDivElement | null>(null);
 // Ref to access Chat's append method
 const chatAppendRef = useRef<any>(null);
 
-const handleFixCode = () => {
-  let errorText = '';
-  if (liveErrorRef.current) {
-    const pre = liveErrorRef.current.querySelector('pre');
-    if (pre) errorText = pre.textContent || '';
+const handleFixCode = async () => {
+  // Check if user is authenticated and has enough credits
+  if (!user || !user.email) {
+    alert('Você precisa estar logado para usar esta funcionalidade.');
+    return;
   }
-  const fixPrompt = `Aqui está o código atual do arquivo ${selectedFile?.name || ''}:\r\n\r\n${selectedFile?.value || ''}\r\n\r\nNÃO SE ESQUEÇA DE MANTER O WRAP COM A FUNÇÃO E O METODO RENDER.\r\n\r\nPedido do usuário: Fix the code.\r\n\r\nCode error: ${errorText}`;
-  console.log('Fix prompt:', fixPrompt);
-  if (chatAppendRef.current && typeof chatAppendRef.current === 'function') {
-    chatAppendRef.current({ role: 'user', content: fixPrompt });
+
+  try {
+    // Check and deduct credits
+    const creditResult = await checkAndDeductCredits(user.email);
+    
+    if (!creditResult.hasEnoughCredits) {
+      alert(creditResult.message);
+      return;
+    }
+
+    // Proceed with fix code functionality
+    let errorText = '';
+    if (liveErrorRef.current) {
+      const pre = liveErrorRef.current.querySelector('pre');
+      if (pre) errorText = pre.textContent || '';
+    }
+    const fixPrompt = `Aqui está o código atual do arquivo ${selectedFile?.name || ''}:\r\n\r\n${selectedFile?.value || ''}\r\n\r\nNÃO SE ESQUEÇA DE MANTER O WRAP COM A FUNÇÃO E O METODO RENDER.\r\n\r\nPedido do usuário: Fix the code.\r\n\r\nCode error: ${errorText}`;
+    console.log('Fix prompt:', fixPrompt);
+    if (chatAppendRef.current && typeof chatAppendRef.current === 'function') {
+      chatAppendRef.current({ role: 'user', content: fixPrompt });
+    }
+
+    // Update credits display
+    refetchCredits();
+
+  } catch (error) {
+    console.error('Error in handleFixCode:', error);
+    alert('Erro ao processar solicitação. Tente novamente.');
   }
 };
 
@@ -1234,7 +1314,13 @@ return (
         <NavBar extra={navExtra} />
         <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={525} height={500}>
           <div className="w-full h-full flex flex-col bg-white/70 dark:bg-[#232733] text-gray-900 dark:text-gray-100 border border-cyan-100 dark:border-cyan-700 rounded-b-md p-0">
-            <Chat onPromptSubmit={handlePromptSubmit} theme={theme} appendRef={chatAppendRef} />
+            <Chat 
+              onPromptSubmit={handlePromptSubmit} 
+              theme={theme} 
+              appendRef={chatAppendRef} 
+              user={user}
+              onCreditsUpdate={refetchCredits}
+            />
           </div>
         </WinBoxWindow>
         <WinBoxWindow id="editor" title="Editor" x={610} y={100} width={525} height={500}>
