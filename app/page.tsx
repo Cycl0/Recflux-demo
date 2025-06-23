@@ -149,19 +149,60 @@ export default function Home() {
     const [showArrow, setShowArrow] = useState(true);
     const [arrowGone, setArrowGone] = useState(false);
     const arrowRef = useRef(null);
+    const glowRef1 = useRef(null);
+    const glowRef2 = useRef(null);
+    const animationFrameRef = useRef(null);
 
-    function handleHeroMouseMove(e) {
+    const throttledMouseMove = useCallback(
+        throttle((x, y) => {
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
+            
+            animationFrameRef.current = requestAnimationFrame(() => {
+                // Update DOM directly for better performance
+                if (glowRef1.current && glowRef2.current) {
+                    const glow1 = glowRef1.current;
+                    const glow2 = glowRef2.current;
+                    
+                    // Use transform instead of left/top for better performance
+                    glow1.style.transform = `translate(${x - (glowExpand ? 600 : 24)}px, ${y - (glowExpand ? 600 : 24)}px)`;
+                    glow2.style.transform = `translate(${x - (glowExpand ? 800 : 60)}px, ${y - (glowExpand ? 800 : 60)}px)`;
+                    glow1.style.opacity = '1';
+                    glow2.style.opacity = '1';
+                }
+                
+                // Only update state for visibility if needed
+                setGlowPos(prev => prev.visible ? prev : { x, y, visible: true });
+            });
+        }, 16), // ~60fps
+        [glowExpand]
+    );
+
+    const handleHeroMouseMove = useCallback((e) => {
+        // Capture values immediately to avoid stale event references
+        if (!e.currentTarget) return;
+        
         const rect = e.currentTarget.getBoundingClientRect();
-        setGlowPos({
-            x: e.clientX - rect.left,
-            y: e.clientY - rect.top,
-            visible: true
-        });
-    }
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        
+        throttledMouseMove(x, y);
+    }, [throttledMouseMove]);
 
-    function handleHeroMouseLeave() {
+    const handleHeroMouseLeave = useCallback(() => {
+        if (animationFrameRef.current) {
+            cancelAnimationFrame(animationFrameRef.current);
+        }
+        
+        // Hide glow elements directly
+        if (glowRef1.current && glowRef2.current) {
+            glowRef1.current.style.opacity = '0';
+            glowRef2.current.style.opacity = '0';
+        }
+        
         setGlowPos((g) => ({ ...g, visible: false }));
-    }
+    }, []);
 
     function handleTesteAgoraClick(e) {
         e.preventDefault();
@@ -181,6 +222,15 @@ export default function Home() {
 
     useEffect(() => {
         AOS.init({ once: true, duration: 900, offset: 80 });
+    }, []);
+
+    // Cleanup animation frames on unmount
+    useEffect(() => {
+        return () => {
+            if (animationFrameRef.current) {
+                cancelAnimationFrame(animationFrameRef.current);
+            }
+        };
     }, []);
 
     useEffect(() => {
@@ -217,8 +267,8 @@ export default function Home() {
             <ReactPageScroller
                 pageOnChange={setCurrentPage}
                 customPageNumber={currentPage}
-                animationTimer={900}
-                renderAllPagesOnFirstRender={false}
+                animationTimer={800}
+                renderAllPagesOnFirstRender={true}
             >
                 {/* Slide 1: Hero Section */}
                 <div className="min-h-screen flex flex-col items-center justify-center relative">
@@ -237,39 +287,44 @@ export default function Home() {
                         width: '100%',
                         height: '100%',
                         pointerEvents: 'none',
-                        opacity: glowPos.visible ? 1 : 0,
-                        transition: 'opacity 0.3s',
                         zIndex: 1,
+                        overflow: 'hidden',
                       }}
                     >
                       <div
+                        ref={glowRef1}
                         style={{
                           position: 'absolute',
-                          left: glowPos.x - (glowExpand ? 600 : 24),
-                          top: glowPos.y - (glowExpand ? 600 : 24),
-                          width: glowExpand ? 1200 : 48,
-                          height: glowExpand ? 1200 : 48,
+                          left: 0,
+                          top: 0,
+                          width: glowExpand ? '1200px' : '48px',
+                          height: glowExpand ? '1200px' : '48px',
                           pointerEvents: 'none',
                           background: 'radial-gradient(circle, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.12) 60%, rgba(255,255,255,0.04) 80%, rgba(255,255,255,0) 100%)',
                           filter: glowExpand ? 'blur(48px)' : 'blur(2px)',
                           borderRadius: '50%',
                           zIndex: 2,
-                          transition: 'left 1s cubic-bezier(.4,2,.6,1), top 1s cubic-bezier(.4,2,.6,1), width 1s cubic-bezier(.4,2,.6,1), height 1s cubic-bezier(.4,2,.6,1), filter 1s cubic-bezier(.4,2,.6,1)',
+                          opacity: 0,
+                          transition: 'width 1s cubic-bezier(.4,2,.6,1), height 1s cubic-bezier(.4,2,.6,1), filter 1s cubic-bezier(.4,2,.6,1), opacity 0.3s ease-out',
+                          willChange: 'transform, opacity',
                         }}
                       />
                       <div
+                        ref={glowRef2}
                         style={{
                           position: 'absolute',
-                          left: glowPos.x - (glowExpand ? 800 : 60),
-                          top: glowPos.y - (glowExpand ? 800 : 60),
-                          width: glowExpand ? 1600 : 120,
-                          height: glowExpand ? 1600 : 120,
+                          left: 0,
+                          top: 0,
+                          width: glowExpand ? '1600px' : '120px',
+                          height: glowExpand ? '1600px' : '120px',
                           pointerEvents: 'none',
                           background: 'radial-gradient(circle, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 60%, rgba(255,255,255,0) 100%)',
                           filter: glowExpand ? 'blur(96px)' : 'blur(8px)',
                           borderRadius: '50%',
                           zIndex: 1,
-                          transition: 'left 1s cubic-bezier(.4,2,.6,1), top 1s cubic-bezier(.4,2,.6,1), width 1s cubic-bezier(.4,2,.6,1), height 1s cubic-bezier(.4,2,.6,1), filter 1s cubic-bezier(.4,2,.6,1)',
+                          opacity: 0,
+                          transition: 'width 1s cubic-bezier(.4,2,.6,1), height 1s cubic-bezier(.4,2,.6,1), filter 1s cubic-bezier(.4,2,.6,1), opacity 0.3s ease-out',
+                          willChange: 'transform, opacity',
                         }}
                       />
                     </div>
