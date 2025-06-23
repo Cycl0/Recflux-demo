@@ -64,13 +64,13 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ userId, onProjectCreated, o
         <h2 className="text-xl font-bold mb-4">Criar Novo Projeto</h2>
         <input
           className="w-full border rounded p-2 mb-2"
-          placeholder="Project Name"
+          placeholder="Nome do Projeto"
           value={name}
           onChange={e => setName(e.target.value)}
         />
         <textarea
           className="w-full border rounded p-2 mb-2"
-          placeholder="Description (optional)"
+          placeholder="Descrição (opcional)"
           value={description}
           onChange={e => setDescription(e.target.value)}
         />
@@ -81,14 +81,14 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ userId, onProjectCreated, o
             onClick={onClose}
             disabled={loading}
           >
-            Cancel
+            Cancelar
           </button>
           <button
             className="px-4 py-2 rounded bg-cyan-600 text-white hover:bg-cyan-700"
             onClick={handleCreate}
             disabled={loading || !name.trim()}
           >
-            {loading ? "Creating..." : "Create"}
+            {loading ? "Criando..." : "Criar"}
           </button>
         </div>
       </div>

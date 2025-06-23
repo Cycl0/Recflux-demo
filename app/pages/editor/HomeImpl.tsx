@@ -1219,13 +1219,6 @@ if (userLoading) {
   navExtra = (
     <>
       {themeToggleButton}
-      {(publicUserId && selectedProjectId) && (
-        <CurrentProjectLabel
-          userId={publicUserId}
-          selectedProjectId={selectedProjectId}
-          onOpenConfig={() => setShowConfigModal(true)}
-        />
-      )}
       <CreditsDisplay credits={credits} loading={creditsLoading} />
       <NavStyledDropdown
         name={name}
@@ -1328,8 +1321,9 @@ return (
         </WinBoxWindow>
         <WinBoxWindow id="editor" title="Editor" x={610} y={100} width={525} height={500}>
           <div className="w-full h-full flex flex-col min-h-0 min-w-0 bg-white/70 dark:bg-[#232733] text-gray-900 dark:text-gray-100 border border-cyan-100 dark:border-cyan-700 rounded-b-md p-0">
-            <div className={`flex items-center gap-4 p-2 border-b ${theme === 'dark' ? 'bg-[#232733] border-cyan-400' : 'bg-white/70 border-cyan-100'}`}>
-              <button
+            <div className={`flex items-center justify-between gap-4 p-2 border-b ${theme === 'dark' ? 'bg-[#232733] border-cyan-400' : 'bg-white/70 border-cyan-100'}`}>
+              <div className="flex items-center gap-4">
+                <button
                 onClick={throttledSaveEditorCode}
                 disabled={saveStatus === 'saving'}
                 className={`px-3 py-1.5 rounded-xl font-semibold transition-all duration-300 ease-in-out flex items-center justify-center
@@ -1393,6 +1387,14 @@ return (
                   Fix
                 </span>
               </button>
+              </div>
+              {(publicUserId && selectedProjectId) && (
+                <CurrentProjectLabel
+                  userId={publicUserId}
+                  selectedProjectId={selectedProjectId}
+                  onOpenConfig={() => setShowConfigModal(true)}
+                />
+              )}
             </div>
             <Editor
               key={selectedFile?.name}
