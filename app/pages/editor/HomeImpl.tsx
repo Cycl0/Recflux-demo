@@ -125,6 +125,9 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatP
         Cookies.remove('chatPrompt');
       }
       
+      // Clear the input field
+      setInput('');
+      
       // Update credits display
       if (onCreditsUpdate) {
         onCreditsUpdate();
