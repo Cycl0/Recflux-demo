@@ -2,6 +2,49 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef, useContext } from "react";
 import Cookies from 'js-cookie';
 import { GoogleOAuthProvider, useGoogleOneTapLogin } from '@react-oauth/google';
+// Material UI imports
+import { 
+  ThemeProvider, 
+  createTheme, 
+  CssBaseline,
+  Box,
+  Button,
+  TextField,
+  Typography,
+  Paper,
+  IconButton,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Card,
+  CardContent,
+  Avatar,
+  Chip,
+  Divider,
+  Tabs,
+  Tab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  AppBar,
+  Toolbar,
+  Container,
+  Grid,
+  Stack
+} from '@mui/material';
+import {
+  Send as SendIcon,
+  DarkMode as DarkModeIcon,
+  LightMode as LightModeIcon,
+  Save as SaveIcon,
+  CompareArrows as CompareArrowsIcon,
+  Build as BuildIcon,
+  Person as PersonIcon,
+  SmartToy as SmartToyIcon,
+  Close as CloseIcon
+} from '@mui/icons-material';
 import WinBoxWindow from '@/components/WinBoxWindow';
 import ConfigWindowContent from '@/components/ConfigWindowContent';
 import NavBar from '@/components/NavBar';
@@ -26,7 +69,7 @@ import remarkGfm from 'remark-gfm';
 import 'prismjs/themes/prism-tomorrow.css';
 import TextareaAutosize from 'react-textarea-autosize';
 import IconSend from "@/components/IconSend";
-import Select from 'react-select';
+import ReactSelect from 'react-select';
 
 // Chat action options for the Select component
 const chatActionOptions = [
@@ -38,6 +81,80 @@ const chatActionOptions = [
 
 import { useRouter } from 'next/navigation';
 import FileDiffViewer from "@/components/FileDiffViewer";
+
+// Material UI Theme
+const createMuiTheme = (isDarkMode: boolean) => createTheme({
+  palette: {
+    mode: isDarkMode ? 'dark' : 'light',
+    primary: {
+      main: '#00bcd4', // cyan
+      light: '#33c9dc',
+      dark: '#00838f',
+    },
+    secondary: {
+      main: '#2196f3', // blue
+      light: '#64b5f6',
+      dark: '#1976d2',
+    },
+    background: {
+      default: isDarkMode ? '#15171c' : '#f0f9ff',
+      paper: isDarkMode ? '#232733' : '#ffffff',
+    },
+    text: {
+      primary: isDarkMode ? '#e0f2f1' : '#0e7490',
+      secondary: isDarkMode ? '#b2dfdb' : '#0891b2',
+    }
+  },
+  typography: {
+    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
+    h1: {
+      fontWeight: 700,
+    },
+    h2: {
+      fontWeight: 600,
+    },
+    h3: {
+      fontWeight: 600,
+    },
+    button: {
+      textTransform: 'none',
+      fontWeight: 500,
+    }
+  },
+  shape: {
+    borderRadius: 12,
+  },
+  components: {
+    MuiButton: {
+      styleOverrides: {
+        root: {
+          borderRadius: 12,
+          textTransform: 'none',
+          fontWeight: 600,
+          padding: '8px 24px',
+        },
+      },
+    },
+    MuiPaper: {
+      styleOverrides: {
+        root: {
+          backgroundImage: 'none',
+          backdropFilter: 'blur(10px)',
+        },
+      },
+    },
+    MuiCard: {
+      styleOverrides: {
+        root: {
+          borderRadius: 16,
+          boxShadow: isDarkMode 
+            ? '0 8px 32px rgba(0,0,0,0.3)' 
+            : '0 8px 32px rgba(34,211,238,0.1)',
+        },
+      },
+    },
+  },
+});
 
 // Editor context for sending code to the editor
 const EditorContext = React.createContext({
@@ -343,7 +460,7 @@ Pedido do usuário: ${input}`;
       </div>
       {/* Chat input form below messages */}
       <form onSubmit={handleSubmit} className="sticky bottom-0 left-0 w-full dark:bg-[#232733] bg-transparent p-4 z-10 flex flex-col gap-2">
-        <Select
+        <ReactSelect
           className="w-32 mb-2"
           value={chatAction}
           onChange={setChatAction}
@@ -970,35 +1087,21 @@ function GoogleSignInButton() {
     });
   };
   return (
-    <button
+    <Button
       onClick={handleGoogleLogin}
-      title="Sign in with Google"
-      className="
-        px-4 h-9 flex items-center justify-center
-        rounded-full
-        bg-cyan-400/30
-        text-cyan-200
-        font-semibold
-        shadow-md
-        border border-cyan-200/30
-        backdrop-blur-md
-        transition-all
-        hover:bg-cyan-400/50
-        hover:text-white
-        hover:shadow-cyan-400/40
-        hover:scale-105
-        focus:outline-none
-        focus:ring-2 focus:ring-cyan-300
-      "
-      style={{
-        WebkitBackdropFilter: 'blur(8px)',
-        backdropFilter: 'blur(8px)',
-        fontSize: 15,
-        letterSpacing: 0.5,
+      variant="contained"
+      color="primary"
+      size="small"
+      startIcon={<PersonIcon />}
+      sx={{ 
+        borderRadius: 3,
+        minWidth: 120,
+        textTransform: 'none',
+        fontWeight: 600
       }}
     >
       Sign in
-    </button>
+    </Button>
   );
 }
 
@@ -1176,18 +1279,18 @@ const centerWinBox = (id: string) => {
 
 let navExtra;
 const themeToggleButton = (
-  <button
+  <IconButton
     onClick={toggleTheme}
     aria-label={theme === 'dark' ? 'Ativar tema claro' : 'Ativar tema escuro'}
-    className="px-3 py-1 rounded border border-cyan-400 bg-transparent text-black dark:text-white dark:border-cyan-400 hover:bg-blue-100 dark:hover:bg-[#232733] transition mr-4 flex items-center justify-center"
-
+    color="primary"
+    sx={{ mr: 2 }}
   >
     {theme === 'dark' ? (
-      <Sun size={24} strokeWidth={2} />
+      <LightModeIcon />
     ) : (
-      <Moon size={24} strokeWidth={2} color="#67e8f9" />
+      <DarkModeIcon />
     )}
-  </button>
+  </IconButton>
 );
 const handleLogout = async () => {
   // Sign out from Supabase
@@ -1300,12 +1403,16 @@ const handleFixCode = async () => {
   }
 };
 
+const muiTheme = useMemo(() => createMuiTheme(theme === 'dark'), [theme]);
+
 return (
-  <GoogleOAuthProvider clientId={clientId}>
-    {showOneTap && (
-      <TriggerableGoogleOneTapHandler open={showOneTap} onClose={() => setShowOneTap(false)} />
-    )}
-    <div className={theme === 'dark' ? 'dark bg-blue-gradient min-h-screen w-full relative' : 'bg-blue-gradient min-h-screen w-full relative'}>
+  <ThemeProvider theme={muiTheme}>
+    <CssBaseline />
+    <GoogleOAuthProvider clientId={clientId}>
+      {showOneTap && (
+        <TriggerableGoogleOneTapHandler open={showOneTap} onClose={() => setShowOneTap(false)} />
+      )}
+      <div className={theme === 'dark' ? 'dark bg-blue-gradient min-h-screen w-full relative' : 'bg-blue-gradient min-h-screen w-full relative'}>
       <EditorContext.Provider value={{ setFilesCurrentHandler, throttleEditorOpen, selectedFile }}>
         <NavBar extra={navExtra} />
         <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={525} height={500}>
@@ -1324,69 +1431,69 @@ return (
             <div className={`flex items-center justify-between gap-4 p-2 border-b ${theme === 'dark' ? 'bg-[#232733] border-cyan-400' : 'bg-white/70 border-cyan-100'}`}>
               <div className="flex items-center gap-4">
                 <button
-                onClick={throttledSaveEditorCode}
-                disabled={saveStatus === 'saving'}
-                className={`px-3 py-1.5 rounded-xl font-semibold transition-all duration-300 ease-in-out flex items-center justify-center
-                  min-w-[48px] min-h-[32px]
-                  bg-white/30 dark:bg-white/10
-                  backdrop-blur-md
-                  shadow-[0_4px_24px_0_rgba(0,255,255,0.15),0_1.5px_8px_0_rgba(0,0,0,0.12)] dark:shadow-[0_4px_24px_0_rgba(0,255,255,0.12),0_1.5px_8px_0_rgba(0,0,0,0.25)]
-                  border border-white/40 dark:border-white/10
-                  hover:bg-white/50 hover:shadow-cyan-200/60 dark:hover:bg-white/20 dark:hover:shadow-cyan-400/40
-                  focus:outline-none focus:ring-2 focus:ring-cyan-300 dark:focus:ring-cyan-600
-                  text-cyan-900 dark:text-cyan-100
-                  ${saveStatus === 'saving' ? 'opacity-60 cursor-not-allowed' : ''}`}
-                style={{ minWidth: 24, minHeight: 24 }}
-                aria-label="Salvar código do projeto"
-              >
-                {saveStatus === 'saved' ? (
-                  <svg className="w-[14px] h-[14px] text-cyan-800 dark:text-cyan-100" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
-                ) : saveStatus === 'saving' ? (
-                  <span className="animate-spin w-[14px] h-[14px] border-2 border-cyan-800 dark:border-cyan-100 border-t-transparent rounded-full" />
-                ) : (
+                  onClick={throttledSaveEditorCode}
+                  disabled={saveStatus === 'saving'}
+                  className={`px-3 py-1.5 rounded-xl font-semibold transition-all duration-300 ease-in-out flex items-center justify-center
+                    min-w-[48px] min-h-[32px]
+                    bg-white/30 dark:bg-white/10
+                    backdrop-blur-md
+                    shadow-[0_4px_24px_0_rgba(0,255,255,0.15),0_1.5px_8px_0_rgba(0,0,0,0.12)] dark:shadow-[0_4px_24px_0_rgba(0,255,255,0.12),0_1.5px_8px_0_rgba(0,0,0,0.25)]
+                    border border-white/40 dark:border-white/10
+                    hover:bg-white/50 hover:shadow-cyan-200/60 dark:hover:bg-white/20 dark:hover:shadow-cyan-400/40
+                    focus:outline-none focus:ring-2 focus:ring-cyan-300 dark:focus:ring-cyan-600
+                    text-cyan-900 dark:text-cyan-100
+                    ${saveStatus === 'saving' ? 'opacity-60 cursor-not-allowed' : ''}`}
+                  style={{ minWidth: 24, minHeight: 24 }}
+                  aria-label="Salvar código do projeto"
+                >
+                  {saveStatus === 'saved' ? (
+                    <svg className="w-[14px] h-[14px] text-cyan-800 dark:text-cyan-100" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
+                  ) : saveStatus === 'saving' ? (
+                    <span className="animate-spin w-[14px] h-[14px] border-2 border-cyan-800 dark:border-cyan-100 border-t-transparent rounded-full" />
+                  ) : (
+                    <span className="text-cyan-900 dark:text-cyan-100 text-xs text-normal">
+                      Save
+                    </span>
+                  )}
+                </button>
+                {/* Diff Modal Trigger Button */}
+                <button
+                  onClick={() => setShowDiffModal(true)}
+                  className="px-3 py-1.5 rounded-xl font-semibold transition-all duration-300 ease-in-out flex items-center justify-center
+                    min-w-[48px] min-h-[32px]
+                    bg-white/30 dark:bg-white/10
+                    backdrop-blur-md
+                    shadow-[0_4px_24px_0_rgba(0,255,255,0.15),0_1.5px_8px_0_rgba(0,0,0,0.12)] dark:shadow-[0_4px_24px_0_rgba(0,255,255,0.12),0_1.5px_8px_0_rgba(0,0,0,0.25)]
+                    border border-white/40 dark:border-white/10
+                    hover:bg-white/50 hover:shadow-cyan-200/60 dark:hover:bg-white/20 dark:hover:shadow-cyan-400/40
+                    focus:outline-none focus:ring-2 focus:ring-cyan-300 dark:focus:ring-cyan-600
+                    text-cyan-900 dark:text-cyan-100"
+                  style={{ minWidth: 24, minHeight: 24 }}
+                  aria-label="Comparar versões do arquivo"
+                >
                   <span className="text-cyan-900 dark:text-cyan-100 text-xs text-normal">
-                    Save
+                    Diff
                   </span>
-                )}
-              </button>
-              {/* Diff Modal Trigger Button */}
-              <button
-                onClick={() => setShowDiffModal(true)}
-                className="px-3 py-1.5 rounded-xl font-semibold transition-all duration-300 ease-in-out flex items-center justify-center
-                  min-w-[48px] min-h-[32px]
-                  bg-white/30 dark:bg-white/10
-                  backdrop-blur-md
-                  shadow-[0_4px_24px_0_rgba(0,255,255,0.15),0_1.5px_8px_0_rgba(0,0,0,0.12)] dark:shadow-[0_4px_24px_0_rgba(0,255,255,0.12),0_1.5px_8px_0_rgba(0,0,0,0.25)]
-                  border border-white/40 dark:border-white/10
-                  hover:bg-white/50 hover:shadow-cyan-200/60 dark:hover:bg-white/20 dark:hover:shadow-cyan-400/40
-                  focus:outline-none focus:ring-2 focus:ring-cyan-300 dark:focus:ring-cyan-600
-                  text-cyan-900 dark:text-cyan-100"
-                style={{ minWidth: 24, minHeight: 24 }}
-                aria-label="Comparar versões do arquivo"
-              >
-                <span className="text-cyan-900 dark:text-cyan-100 text-xs text-normal">
-                  Diff
-                </span>
-              </button>
-              {/* Fix Button */}
-              <button
-                onClick={() => handleFixCode()}
-                className="px-3 py-1.5 rounded-xl font-semibold transition-all duration-300 ease-in-out flex items-center justify-center
-                  min-w-[48px] min-h-[32px]
-                  bg-white/30 dark:bg-white/10
-                  backdrop-blur-md
-                  shadow-[0_4px_24px_0_rgba(0,255,255,0.15),0_1.5px_8px_0_rgba(0,0,0,0.12)] dark:shadow-[0_4px_24px_0_rgba(0,255,255,0.12),0_1.5px_8px_0_rgba(0,0,0,0.25)]
-                  border border-white/40 dark:border-white/10
-                  hover:bg-white/50 hover:shadow-cyan-200/60 dark:hover:bg-white/20 dark:hover:shadow-cyan-400/40
-                  focus:outline-none focus:ring-2 focus:ring-cyan-300 dark:focus:ring-cyan-600
-                  text-cyan-900 dark:text-cyan-100"
-                style={{ minWidth: 24, minHeight: 24 }}
-                aria-label="Corrigir código automaticamente"
-              >
-                <span className="text-cyan-900 dark:text-cyan-100 text-xs text-normal">
-                  Fix
-                </span>
-              </button>
+                </button>
+                {/* Fix Button */}
+                <button
+                  onClick={() => handleFixCode()}
+                  className="px-3 py-1.5 rounded-xl font-semibold transition-all duration-300 ease-in-out flex items-center justify-center
+                    min-w-[48px] min-h-[32px]
+                    bg-white/30 dark:bg-white/10
+                    backdrop-blur-md
+                    shadow-[0_4px_24px_0_rgba(0,255,255,0.15),0_1.5px_8px_0_rgba(0,0,0,0.12)] dark:shadow-[0_4px_24px_0_rgba(0,255,255,0.12),0_1.5px_8px_0_rgba(0,0,0,0.25)]
+                    border border-white/40 dark:border-white/10
+                    hover:bg-white/50 hover:shadow-cyan-200/60 dark:hover:bg-white/20 dark:hover:shadow-cyan-400/40
+                    focus:outline-none focus:ring-2 focus:ring-cyan-300 dark:focus:ring-cyan-600
+                    text-cyan-900 dark:text-cyan-100"
+                  style={{ minWidth: 24, minHeight: 24 }}
+                  aria-label="Corrigir código automaticamente"
+                >
+                  <span className="text-cyan-900 dark:text-cyan-100 text-xs text-normal">
+                    Fix
+                  </span>
+                </button>
               </div>
               {(publicUserId && selectedProjectId) && (
                 <CurrentProjectLabel
@@ -1589,8 +1696,9 @@ return (
           </div>
         </nav>
       </EditorContext.Provider>
-    </div>
-  </GoogleOAuthProvider>
+      </div>
+    </GoogleOAuthProvider>
+  </ThemeProvider>
 );
 }
 
