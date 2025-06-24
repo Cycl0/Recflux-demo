@@ -5,9 +5,10 @@ interface EditProjectModalProps {
   onSave: (updated: { id: string; name: string; description: string }) => void;
   onDelete: (projectId: string) => void;
   onClose: () => void;
+  theme?: 'dark' | 'light';
 }
 
-const EditProjectModal: React.FC<EditProjectModalProps> = ({ project, onSave, onDelete, onClose }) => {
+const EditProjectModal: React.FC<EditProjectModalProps> = ({ project, onSave, onDelete, onClose, theme = 'dark' }) => {
   const [name, setName] = useState(project.name || "");
   const [description, setDescription] = useState(project.description || "");
   const [loading, setLoading] = useState(false);
@@ -64,12 +65,12 @@ const EditProjectModal: React.FC<EditProjectModalProps> = ({ project, onSave, on
         </div>
         {showConfirm && (
           <div className="fixed inset-0 flex items-center justify-center z-50 bg-black/40">
-            <div className="bg-white rounded-lg shadow-lg p-6 min-w-[300px] relative flex flex-col items-center">
-              <h3 className="text-lg font-semibold text-red-600 mb-2">Tem certeza que deseja remover este projeto?</h3>
-              <p className="text-gray-700 mb-4 text-center">Esta ação não pode ser desfeita.</p>
+            <div className={`rounded-lg shadow-lg p-6 min-w-[300px] relative flex flex-col items-center ${theme === 'dark' ? 'bg-[#232733] text-gray-100' : 'bg-white text-gray-900'}`}>
+              <h3 className="text-lg font-semibold text-red-500 mb-2">Tem certeza que deseja remover este projeto?</h3>
+              <p className="text-gray-400 mb-4 text-center">Esta ação não pode ser desfeita.</p>
               <div className="flex gap-4">
                 <button
-                  className="px-4 py-1 rounded bg-gray-200 hover:bg-gray-300 text-gray-800"
+                  className={`px-4 py-1 rounded ${theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-200 hover:bg-gray-300'}`}
                   onClick={() => setShowConfirm(false)}
                   disabled={loading}
                 >

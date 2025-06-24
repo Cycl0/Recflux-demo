@@ -8,12 +8,13 @@ interface ConfigWindowContentProps {
   selectedProjectId: string | null;
   setSelectedProjectId: (id: string) => void;
   onProjectCreated: (project: any) => void;
+  theme: string;
 }
 
 import EditProjectModal from "@/components/EditProjectModal";
 import { updateProject, deleteProject, getUserProjects } from "@/utils/supabaseProjects";
 
-const ConfigWindowContent = ({ userId, selectedProjectId, setSelectedProjectId, onProjectCreated }) => {
+const ConfigWindowContent = ({ userId, selectedProjectId, setSelectedProjectId, onProjectCreated, theme }) => {
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
@@ -95,6 +96,7 @@ const ConfigWindowContent = ({ userId, selectedProjectId, setSelectedProjectId, 
                 }, 100);
               }}
               onClose={() => setShowProjectModal(false)}
+              theme={theme}
             />
           )}
         </div>
@@ -116,6 +118,7 @@ const ConfigWindowContent = ({ userId, selectedProjectId, setSelectedProjectId, 
             if (projectSelectorRef.current?.refreshProjects) projectSelectorRef.current.refreshProjects();
           }}
           onClose={() => setShowEditModal(false)}
+          theme={theme}
         />
       )}
     </div>

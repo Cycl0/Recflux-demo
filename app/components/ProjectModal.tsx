@@ -6,9 +6,10 @@ interface ProjectModalProps {
   userId: string;
   onProjectCreated: (project: any) => void;
   onClose: () => void;
+  theme?: 'dark' | 'light';
 }
 
-const ProjectModal: React.FC<ProjectModalProps> = ({ userId, onProjectCreated, onClose }) => {
+const ProjectModal: React.FC<ProjectModalProps> = ({ userId, onProjectCreated, onClose, theme = 'dark' }) => {
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [loading, setLoading] = useState(false);
@@ -60,16 +61,16 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ userId, onProjectCreated, o
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white p-6 rounded-lg shadow-lg min-w-[320px]">
+      <div className={`p-6 rounded-lg shadow-lg min-w-[320px] ${theme === 'dark' ? 'bg-[#232733] text-gray-100' : 'bg-white text-gray-900'}`}>
         <h2 className="text-xl font-bold mb-4">Criar Novo Projeto</h2>
         <input
-          className="w-full border rounded p-2 mb-2"
+          className={`w-full border rounded p-2 mb-2 ${theme === 'dark' ? 'bg-[#1a1d22] border-cyan-700' : 'bg-gray-50 border-gray-300'}`}
           placeholder="Nome do Projeto"
           value={name}
           onChange={e => setName(e.target.value)}
         />
         <textarea
-          className="w-full border rounded p-2 mb-2"
+          className={`w-full border rounded p-2 mb-2 ${theme === 'dark' ? 'bg-[#1a1d22] border-cyan-700' : 'bg-gray-50 border-gray-300'}`}
           placeholder="Descrição (opcional)"
           value={description}
           onChange={e => setDescription(e.target.value)}
@@ -77,7 +78,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ userId, onProjectCreated, o
         {error && <div className="text-red-500 mb-2">{error}</div>}
         <div className="flex gap-2 justify-end">
           <button
-            className="px-4 py-2 rounded bg-gray-200 hover:bg-gray-300"
+            className={`px-4 py-2 rounded ${theme === 'dark' ? 'bg-gray-600 hover:bg-gray-500' : 'bg-gray-200 hover:bg-gray-300'}`}
             onClick={onClose}
             disabled={loading}
           >

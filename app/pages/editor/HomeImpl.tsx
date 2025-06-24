@@ -2225,6 +2225,7 @@ return (
             selectedProjectId={selectedProjectId}
             setSelectedProjectId={setSelectedProjectId}
             onProjectCreated={handleProjectCreate}
+            theme={theme}
           />
         </div>
       )}
