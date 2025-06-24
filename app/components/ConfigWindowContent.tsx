@@ -2,6 +2,9 @@
 import React, { useState, useRef } from "react";
 import ProjectModal from "@/components/ProjectModal";
 import ProjectSelector from "@/components/ProjectSelector";
+import EditProjectModal from "@/components/EditProjectModal";
+import { updateProject, deleteProject, getUserProjects } from "@/utils/supabaseProjects";
+import { useSupabaseUser } from "@/utils/useSupabaseUser";
 
 interface ConfigWindowContentProps {
   userId: string;
@@ -11,15 +14,14 @@ interface ConfigWindowContentProps {
   theme: string;
 }
 
-import EditProjectModal from "@/components/EditProjectModal";
-import { updateProject, deleteProject, getUserProjects } from "@/utils/supabaseProjects";
-
 const ConfigWindowContent = ({ userId, selectedProjectId, setSelectedProjectId, onProjectCreated, theme }) => {
   const [showProjectModal, setShowProjectModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
   const [editingProject, setEditingProject] = useState<any>(null);
   const [projects, setProjects] = useState<any[]>([]);
   const projectSelectorRef = useRef<any>(null);
+  const { subscriptionStatus } = useSupabaseUser();
+  const isPremium = subscriptionStatus === 'premium';
 
   // Fetch projects for edit modal
   React.useEffect(() => {
@@ -74,12 +76,24 @@ const ConfigWindowContent = ({ userId, selectedProjectId, setSelectedProjectId, 
       <section className="bg-white/90 dark:bg-[#1a1d22]/80 backdrop-blur-md border border-cyan-200 dark:border-cyan-900 rounded-2xl shadow-xl p-4 flex flex-col gap-2 transition-colors duration-300">
         <div className="mb-4">
           <h2 className="text-lg font-semibold mb-2 text-cyan-700 dark:text-cyan-300">Criar novo projeto</h2>
-          <button
-            className="px-3 py-1 rounded-xl bg-cyan-600 dark:bg-cyan-700 text-white font-semibold shadow hover:bg-cyan-700 dark:hover:bg-cyan-800 focus:outline-none focus:ring-2 focus:ring-cyan-300/60 transition-colors duration-200 mb-2"
-            onClick={() => setShowProjectModal(true)}
-          >
-            + Novo Projeto
-          </button>
+          <div className="relative inline-block">
+            <button
+              className={`px-3 py-1 rounded-xl bg-cyan-600 dark:bg-cyan-700 text-white font-semibold shadow hover:bg-cyan-700 dark:hover:bg-cyan-800 focus:outline-none focus:ring-2 focus:ring-cyan-300/60 transition-colors duration-200 mb-2 ${!isPremium ? 'opacity-50 cursor-not-allowed' : ''}`}
+              onClick={() => isPremium && setShowProjectModal(true)}
+              disabled={!isPremium}
+              title={!isPremium ? "Funcionalidade disponível no plano Premium" : "Criar um novo projeto"}
+            >
+              + Novo Projeto
+            </button>
+            {!isPremium && (
+              <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-max px-2 py-1 bg-gray-800 text-white text-xs rounded-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity"
+                   style={{
+                       clipPath: 'polygon(0% 0%, 100% 0%, 100% 75%, 60% 75%, 50% 100%, 40% 75%, 0% 75%)',
+                   }}>
+                  Plano Premium
+              </div>
+            )}
+          </div>
           {showProjectModal && (
             <ProjectModal
               userId={userId}
