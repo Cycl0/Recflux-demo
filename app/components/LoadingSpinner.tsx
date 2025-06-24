@@ -56,7 +56,7 @@ export default function LoadingSpinner({
         <div className={`absolute inset-0 ${sizeClasses[size]} rounded-full border-2 ${
           theme === 'dark' 
             ? 'border-cyan-400/30 border-t-cyan-400' 
-            : 'border-blue-300/30 border-t-blue-500'
+            : 'border-blue-500/40 border-t-blue-600'
         } animate-spin`} 
         style={{ animationDuration: '1s' }} />
         
@@ -64,7 +64,7 @@ export default function LoadingSpinner({
         <div className={`absolute inset-2 rounded-full ${
           theme === 'dark' 
             ? 'bg-gradient-to-r from-cyan-400/20 to-blue-400/20' 
-            : 'bg-gradient-to-r from-blue-300/20 to-cyan-300/20'
+            : 'bg-gradient-to-r from-blue-400/20 to-cyan-400/20'
         } animate-pulse`} 
         style={{ animationDuration: '1.5s' }} />
         
@@ -72,7 +72,7 @@ export default function LoadingSpinner({
         <div className={`absolute inset-3 rounded-full border ${
           theme === 'dark' 
             ? 'border-blue-400/50 border-b-transparent' 
-            : 'border-cyan-400/50 border-b-transparent'
+            : 'border-blue-500/50 border-b-transparent'
         } animate-spin`} 
         style={{ animationDuration: '0.8s', animationDirection: 'reverse' }} />
         
@@ -80,7 +80,7 @@ export default function LoadingSpinner({
         <div className={`w-2 h-2 rounded-full ${
           theme === 'dark' 
             ? 'bg-gradient-to-r from-cyan-400 to-blue-400' 
-            : 'bg-gradient-to-r from-blue-500 to-cyan-500'
+            : 'bg-gradient-to-r from-blue-600 to-cyan-600'
         } animate-ping`} 
         style={{ animation: 'ping 1s cubic-bezier(0, 0, 0.2, 1) infinite, glow 2s ease-in-out infinite' }} />
         
@@ -90,7 +90,7 @@ export default function LoadingSpinner({
             <div
               key={i}
               className={`absolute w-1 h-1 rounded-full ${
-                theme === 'dark' ? 'bg-cyan-300' : 'bg-blue-400'
+                theme === 'dark' ? 'bg-cyan-300' : 'bg-blue-500'
               } animate-bounce`}
               style={{
                 top: `${20 + Math.sin(i * Math.PI / 3) * 30}%`,
@@ -106,7 +106,7 @@ export default function LoadingSpinner({
       {/* Loading Text with Typewriter Effect */}
       <div className="text-center">
         <div className={`text-sm font-medium ${
-          theme === 'dark' ? 'text-cyan-100' : 'text-blue-700'
+          theme === 'dark' ? 'text-cyan-100' : 'text-blue-800'
         } transition-all duration-500 ease-in-out`}>
           {currentMessage}
         </div>
@@ -117,7 +117,7 @@ export default function LoadingSpinner({
             <div
               key={i}
               className={`w-1.5 h-1.5 rounded-full ${
-                theme === 'dark' ? 'bg-cyan-400' : 'bg-blue-500'
+                theme === 'dark' ? 'bg-cyan-400' : 'bg-blue-600'
               } animate-bounce`}
               style={{
                 animationDelay: `${i * 0.3}s`,
@@ -155,10 +155,10 @@ export function InlineLoader({ theme = 'dark' }: { theme?: 'dark' | 'light' }) {
       <div className={`w-4 h-4 rounded-full border-2 ${
         theme === 'dark' 
           ? 'border-cyan-400/30 border-t-cyan-400' 
-          : 'border-blue-300/30 border-t-blue-500'
+          : 'border-blue-500/40 border-t-blue-600'
       } animate-spin`} />
       <span className={`text-xs ${
-        theme === 'dark' ? 'text-cyan-100' : 'text-blue-700'
+        theme === 'dark' ? 'text-cyan-100' : 'text-blue-800'
       } animate-pulse`}>
         Carregando...
       </span>

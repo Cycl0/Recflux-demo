@@ -50,7 +50,7 @@ const ConfigWindowContent = ({ userId, selectedProjectId, setSelectedProjectId, 
               userId={userId}
               selectedProjectId={selectedProjectId}
               onSelect={setSelectedProjectId}
-              className="w-full h-full"
+              theme={theme}
             />
           </div>
           {selectedProjectId && (

@@ -8,9 +8,10 @@ interface ProjectSelectorProps {
   selectedProjectId: string | null;
   onSelect: (projectId: string) => void;
   className?: string;
+  theme?: 'light' | 'dark';
 }
 
-const ProjectSelector = forwardRef<any, ProjectSelectorProps>(({ userId, selectedProjectId, onSelect, className }, ref) => {
+const ProjectSelector = forwardRef<any, ProjectSelectorProps>(({ userId, selectedProjectId, onSelect, className, theme = 'light' }, ref) => {
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,12 +79,15 @@ const ProjectSelector = forwardRef<any, ProjectSelectorProps>(({ userId, selecte
             menuPortal: base => ({ ...base, zIndex: 2147483647 }),
             control: (provided, state) => ({
               ...provided,
-              background: state.isFocused ? 'rgba(186,230,253,0.35)' : 'rgba(255,255,255,0.18)',
+              background: theme === 'dark' 
+                ? (state.isFocused ? 'rgba(14, 116, 144, 0.3)' : 'rgba(14, 116, 144, 0.15)')
+                : (state.isFocused ? 'rgba(186,230,253,0.35)' : 'rgba(255,255,255,0.18)'),
               backdropFilter: 'blur(8px)',
               WebkitBackdropFilter: 'blur(8px)',
-              border: state.isFocused ? '2px solid rgba(34,211,238,0.30)' : '1.5px solid rgba(14,116,144,0.13)',
+              border: theme === 'dark'
+                ? (state.isFocused ? '2px solid rgba(34,211,238,0.4)' : '1.5px solid rgba(14,116,144,0.3)')
+                : (state.isFocused ? '2px solid rgba(34,211,238,0.30)' : '1.5px solid rgba(14,116,144,0.13)'),
               boxShadow: state.isFocused ? '0 4px 32px 0 rgba(34,211,238,0.18)' : '0 2px 12px 0 rgba(14,116,144,0.10)',
-              color: '#0e7490',
               borderRadius: '0.75rem',
               minHeight: '38px',
               minWidth: '180px',
@@ -94,12 +98,12 @@ const ProjectSelector = forwardRef<any, ProjectSelectorProps>(({ userId, selecte
             }),
             singleValue: (provided) => ({
               ...provided,
-              color: '#0e7490',
+              color: theme === 'dark' ? '#f0f9ff' : '#0e7490',
               fontWeight: 500,
             }),
             menu: (provided) => ({
               ...provided,
-              background: 'rgba(255,255,255,0.7)',
+              background: theme === 'dark' ? 'rgba(21, 32, 43, 0.85)' : 'rgba(255,255,255,0.7)',
               backdropFilter: 'blur(8px)',
               WebkitBackdropFilter: 'blur(8px)',
               borderRadius: '0.75rem',
@@ -109,11 +113,11 @@ const ProjectSelector = forwardRef<any, ProjectSelectorProps>(({ userId, selecte
             option: (provided, state) => ({
               ...provided,
               background: state.isSelected
-                ? 'rgba(186,230,253,0.45)'
+                ? (theme === 'dark' ? 'rgba(34,211,238,0.2)' : 'rgba(186,230,253,0.45)')
                 : state.isFocused
-                ? 'rgba(186,230,253,0.22)'
+                ? (theme === 'dark' ? 'rgba(34,211,238,0.1)' : 'rgba(186,230,253,0.22)')
                 : 'transparent',
-              color: '#0e7490',
+              color: theme === 'dark' ? '#f0f9ff' : '#0e7490',
               fontWeight: state.isSelected ? 700 : 400,
               cursor: 'pointer',
             }),
@@ -123,11 +127,13 @@ const ProjectSelector = forwardRef<any, ProjectSelectorProps>(({ userId, selecte
             }),
             input: (provided) => ({
               ...provided,
-              color: '#0e7490',
+              color: theme === 'dark' ? '#f0f9ff' : '#0e7490',
             }),
             dropdownIndicator: (provided, state) => ({
               ...provided,
-              color: state.isFocused ? '#22d3ee' : '#0e7490',
+              color: theme === 'dark' 
+                ? (state.isFocused ? '#67e8f9' : '#7dd3fc')
+                : (state.isFocused ? '#22d3ee' : '#0e7490'),
               transition: 'color 0.2s',
             }),
             indicatorSeparator: () => ({ display: 'none' }),
