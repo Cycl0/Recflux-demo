@@ -3,13 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import InputBox from "@/components/InputBox";
 import GeneratedSection from "@/components/GeneratedSection";
-import VideoBackground from '@/components/VideoBackground';
 import NavBar from '@/components/NavBar';
 import { Button } from "flowbite-react";
 import {emptyFiles, initialFiles} from "@/utils/files-editor";
 import { throttle } from 'lodash';
 import Link from 'next/link';
-import SplineBackground from '@/components/SplineBackground';
 import Spline from '@splinetool/react-spline';
 import { useRouter } from 'next/navigation';
 import AOS from 'aos';
@@ -141,83 +139,16 @@ export default function Home() {
         fetchData();
     }, []);
 
-    const [glowPos, setGlowPos] = useState({ x: 0, y: 0, visible: false });
-    const [glowExpand, setGlowExpand] = useState(false);
     const router = useRouter();
     const heroSectionRef = useRef(null);
     const [currentPage, setCurrentPage] = useState(0);
     const [showArrow, setShowArrow] = useState(true);
     const [arrowGone, setArrowGone] = useState(false);
     const arrowRef = useRef(null);
-    const glowRef1 = useRef(null);
-    const glowRef2 = useRef(null);
-    const animationFrameRef = useRef(null);
-
-    const throttledMouseMove = useCallback(
-        throttle((x, y) => {
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-            }
-            
-            animationFrameRef.current = requestAnimationFrame(() => {
-                // Update DOM directly for better performance
-                if (glowRef1.current && glowRef2.current) {
-                    const glow1 = glowRef1.current;
-                    const glow2 = glowRef2.current;
-                    
-                    // Use transform instead of left/top for better performance
-                    glow1.style.transform = `translate(${x - (glowExpand ? 600 : 24)}px, ${y - (glowExpand ? 600 : 24)}px)`;
-                    glow2.style.transform = `translate(${x - (glowExpand ? 800 : 60)}px, ${y - (glowExpand ? 800 : 60)}px)`;
-                    glow1.style.opacity = '1';
-                    glow2.style.opacity = '1';
-                }
-                
-                // Only update state for visibility if needed
-                setGlowPos(prev => prev.visible ? prev : { x, y, visible: true });
-            });
-        }, 16), // ~60fps
-        [glowExpand]
-    );
-
-    const handleHeroMouseMove = useCallback((e) => {
-        // Capture values immediately to avoid stale event references
-        if (!e.currentTarget) return;
-        
-        const rect = e.currentTarget.getBoundingClientRect();
-        const x = e.clientX - rect.left;
-        const y = e.clientY - rect.top;
-        
-        throttledMouseMove(x, y);
-    }, [throttledMouseMove]);
-
-    const handleHeroMouseLeave = useCallback(() => {
-        if (animationFrameRef.current) {
-            cancelAnimationFrame(animationFrameRef.current);
-        }
-        
-        // Hide glow elements directly
-        if (glowRef1.current && glowRef2.current) {
-            glowRef1.current.style.opacity = '0';
-            glowRef2.current.style.opacity = '0';
-        }
-        
-        setGlowPos((g) => ({ ...g, visible: false }));
-    }, []);
 
     function handleTesteAgoraClick(e) {
         e.preventDefault();
-        // Get button center relative to hero section
-        if (heroSectionRef.current) {
-            const rect = heroSectionRef.current.getBoundingClientRect();
-            const btnRect = e.target.getBoundingClientRect();
-            const x = btnRect.left + btnRect.width / 2 - rect.left;
-            const y = btnRect.top + btnRect.height / 2 - rect.top;
-            setGlowPos({ x, y, visible: true });
-        }
-        setGlowExpand(true);
-        setTimeout(() => {
-            router.push('/pages/editor');
-        }, 600);
+        router.push('/pages/editor');
     }
 
     useEffect(() => {
@@ -225,14 +156,6 @@ export default function Home() {
     }, []);
 
     // Cleanup animation frames on unmount
-    useEffect(() => {
-        return () => {
-            if (animationFrameRef.current) {
-                cancelAnimationFrame(animationFrameRef.current);
-            }
-        };
-    }, []);
-
     useEffect(() => {
         function onScroll() {
             const hero = heroSectionRef.current;
@@ -275,59 +198,7 @@ export default function Home() {
                   <section
                     ref={heroSectionRef}
                     className="relative w-full max-w-5xl mx-auto my-12 flex flex-col md:flex-row items-center justify-center min-h-[70vh] py-10 px-4 md:px-12 z-10 gap-12 md:gap-20 bg-gradient-to-br from-[#0e7490]/60 via-[#232733]/80 to-[#15171c]/90 rounded-3xl shadow-2xl border border-cyan-700/20 backdrop-blur-xl overflow-hidden"
-                    onMouseMove={handleHeroMouseMove}
-                    onMouseLeave={handleHeroMouseLeave}
                   >
-                    {/* Glow effect */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: 0,
-                        top: 0,
-                        width: '100%',
-                        height: '100%',
-                        pointerEvents: 'none',
-                        zIndex: 1,
-                        overflow: 'hidden',
-                      }}
-                    >
-                      <div
-                        ref={glowRef1}
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          top: 0,
-                          width: glowExpand ? '1200px' : '48px',
-                          height: glowExpand ? '1200px' : '48px',
-                          pointerEvents: 'none',
-                          background: 'radial-gradient(circle, rgba(255,255,255,0.35) 0%, rgba(255,255,255,0.12) 60%, rgba(255,255,255,0.04) 80%, rgba(255,255,255,0) 100%)',
-                          filter: glowExpand ? 'blur(48px)' : 'blur(2px)',
-                          borderRadius: '50%',
-                          zIndex: 2,
-                          opacity: 0,
-                          transition: 'width 1s cubic-bezier(.4,2,.6,1), height 1s cubic-bezier(.4,2,.6,1), filter 1s cubic-bezier(.4,2,.6,1), opacity 0.3s ease-out',
-                          willChange: 'transform, opacity',
-                        }}
-                      />
-                      <div
-                        ref={glowRef2}
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          top: 0,
-                          width: glowExpand ? '1600px' : '120px',
-                          height: glowExpand ? '1600px' : '120px',
-                          pointerEvents: 'none',
-                          background: 'radial-gradient(circle, rgba(255,255,255,0.10) 0%, rgba(255,255,255,0.04) 60%, rgba(255,255,255,0) 100%)',
-                          filter: glowExpand ? 'blur(96px)' : 'blur(8px)',
-                          borderRadius: '50%',
-                          zIndex: 1,
-                          opacity: 0,
-                          transition: 'width 1s cubic-bezier(.4,2,.6,1), height 1s cubic-bezier(.4,2,.6,1), filter 1s cubic-bezier(.4,2,.6,1), opacity 0.3s ease-out',
-                          willChange: 'transform, opacity',
-                        }}
-                      />
-                    </div>
                     <div className="w-full max-w-xl md:w-1/2 flex-shrink-0 flex items-center justify-center">
                       <div className="w-full aspect-[4/5] md:aspect-[4/5] max-h-[480px] md:max-h-[600px] flex items-center justify-center rounded-2xl shadow-xl border border-cyan-700/30 bg-[#181c23]/70">
                         <Spline scene="https://prod.spline.design/NfRaXdJLo18x37Nj/scene.splinecode" />
@@ -428,7 +299,13 @@ export default function Home() {
                     </main>
                 </div>
             </ReactPageScroller>
-            <SplineBackground url="https://prod.spline.design/5HOhMSJjIIF09Xnm/scene.splinecode" />
+            <div className="fixed inset-0 w-full h-full -z-10 pointer-events-none select-none">
+                <img
+                    src="/images/wallpaper.png"
+                    alt="Wallpaper background"
+                    className="w-full h-full object-cover"
+                />
+            </div>
         </>
     );
 }

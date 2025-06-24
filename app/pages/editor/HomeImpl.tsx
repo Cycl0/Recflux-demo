@@ -1745,7 +1745,7 @@ if (userLoading) {
       <div className="flex items-center mr-4 cursor-pointer" onClick={() => {
           push('/pages/planos');
       }}>
-        <CreditsDisplay credits={credits} loading={creditsLoading} />
+      <CreditsDisplay credits={credits} loading={creditsLoading} />
         {subscriptionStatus === 'premium' && <ProTag />}
       </div>
       <NavStyledDropdown

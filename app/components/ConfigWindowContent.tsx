@@ -77,14 +77,14 @@ const ConfigWindowContent = ({ userId, selectedProjectId, setSelectedProjectId, 
         <div className="mb-4">
           <h2 className="text-lg font-semibold mb-2 text-cyan-700 dark:text-cyan-300">Criar novo projeto</h2>
           <div className="relative inline-block">
-            <button
+          <button
               className={`px-3 py-1 rounded-xl bg-cyan-600 dark:bg-cyan-700 text-white font-semibold shadow hover:bg-cyan-700 dark:hover:bg-cyan-800 focus:outline-none focus:ring-2 focus:ring-cyan-300/60 transition-colors duration-200 mb-2 ${!isPremium ? 'opacity-50 cursor-not-allowed' : ''}`}
               onClick={() => isPremium && setShowProjectModal(true)}
               disabled={!isPremium}
               title={!isPremium ? "Funcionalidade disponível no plano Premium" : "Criar um novo projeto"}
-            >
-              + Novo Projeto
-            </button>
+          >
+            + Novo Projeto
+          </button>
             {!isPremium && (
               <div className="absolute -top-8 left-1/2 -translate-x-1/2 w-max px-2 py-1 bg-gray-800 text-white text-xs rounded-md opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity"
                    style={{

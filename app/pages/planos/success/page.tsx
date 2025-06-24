@@ -100,12 +100,12 @@ function SuccessPageContent() {
         )}
 
         <div className="mt-8 flex flex-col sm:flex-row justify-center gap-4">
-          <button
+        <button
             className="w-full sm:w-auto py-3 px-6 rounded-xl bg-gradient-to-r from-blue-500/80 to-indigo-600/80 text-white font-semibold shadow-lg hover:from-blue-400 hover:to-indigo-500 transition-all duration-200 border border-blue-300/40 backdrop-blur-md focus:outline-none focus:ring-2 focus:ring-blue-300/60 focus:ring-offset-2 focus:ring-offset-blue-900"
-            onClick={() => router.push('/pages/editor')}
-          >
-            Voltar para o Editor
-          </button>
+          onClick={() => router.push('/pages/editor')}
+        >
+          Voltar para o Editor
+        </button>
           <button
             className="w-full sm:w-auto py-3 px-6 rounded-xl bg-gradient-to-r from-white/20 to-white/10 text-white font-semibold shadow-lg hover:from-white/30 hover:to-white/20 transition-all duration-200 border border-white/30 backdrop-blur-md focus:outline-none focus:ring-2 focus:ring-white/60 focus:ring-offset-2 focus:ring-offset-blue-900"
             onClick={() => router.push('/pages/planos')}
