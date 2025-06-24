@@ -86,6 +86,7 @@ const ProjectSelector = forwardRef<any, ProjectSelectorProps>(({ userId, selecte
               color: '#0e7490',
               borderRadius: '0.75rem',
               minHeight: '38px',
+              minWidth: '180px',
               transition: 'all 0.2s',
               fontSize: '1rem',
               paddingLeft: 0,
