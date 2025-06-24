@@ -28,7 +28,7 @@ const PlanCard = ({
     isSpecial = false
 }: PlanCardProps) => {
     return (
-        <div className={`flex flex-col w-full sm:w-2/3 md:w-1/3 min-w-[200px] bg-white/10 backdrop-blur-lg border rounded-2xl shadow-2xl overflow-hidden transition-all hover:scale-105 hover:shadow-3xl ${
+        <div className={`flex flex-col w-full sm:w-2/3 md:w-1/3 min-w-[200px] bg-white/20 backdrop-blur-lg border rounded-2xl shadow-2xl overflow-hidden transition-all hover:scale-105 hover:shadow-3xl ${
             isSpecial 
                 ? 'border-emerald-400/50 ring-2 ring-emerald-400/30 shadow-emerald-400/20' 
                 : 'border-white/20'

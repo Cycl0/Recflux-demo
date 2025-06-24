@@ -11,7 +11,7 @@ export async function GET(req: NextRequest) {
   }
   try {
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ['customer'],
+      expand: ['customer', 'line_items'],
     });
     let customerEmail = '';
     if (session.customer_details?.email) {
@@ -26,6 +26,7 @@ export async function GET(req: NextRequest) {
         currency: session.currency,
         customer_email: customerEmail,
         status: session.status,
+        line_items: session.line_items?.data,
       }),
       { status: 200 }
     );
