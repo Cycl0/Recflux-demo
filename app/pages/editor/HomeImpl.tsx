@@ -1007,6 +1007,19 @@ function Home({ onLayoutChange = () => {}, ...props }) {
     return 'dark';
   });
 
+  // Hide WinBox windows on unmount
+  useEffect(() => {
+    return () => {
+      if (typeof window !== 'undefined' && window.winboxWindows) {
+        Object.values(window.winboxWindows).forEach(wb => {
+          if (wb && typeof wb.hide === 'function') {
+            wb.hide();
+          }
+        });
+      }
+    };
+  }, []);
+
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
       localStorage.setItem('editorTheme', theme);

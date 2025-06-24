@@ -41,6 +41,16 @@ const WinBoxWindow: React.FC<WinBoxWindowProps> = (props) => {
   // Create WinBox only once on mount
   useEffect(() => {
     if (!mounted || !portalElementRef.current) return;
+
+    // If a window with this ID already exists, just show it and update its content
+    if (props.id && window.winboxWindows && window.winboxWindows[props.id]) {
+      winboxRef.current = window.winboxWindows[props.id];
+      if (winboxRef.current.isMin) winboxRef.current.restore();
+      winboxRef.current.show();
+      winboxRef.current.mount(portalElementRef.current); // Remount content
+      return;
+    }
+    
     winboxRef.current = new WinBox({
       title: props.title,
       id: props.id,

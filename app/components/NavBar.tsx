@@ -46,7 +46,5 @@ export default function NavBar({ extra }) {
         />
       </div>
     </Navbar>
-
-    );
-
+  );
 }
