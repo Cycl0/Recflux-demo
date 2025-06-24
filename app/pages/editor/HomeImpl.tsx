@@ -70,7 +70,8 @@ import 'prismjs/themes/prism-tomorrow.css';
 import TextareaAutosize from 'react-textarea-autosize';
 import IconSend from "@/components/IconSend";
 import ReactSelect from 'react-select';
-import LoadingSpinner, { ChatMessageSkeleton } from '@/components/LoadingSpinner';
+import LoadingSpinner from '@/components/LoadingSpinner';
+import { ChatMessageSkeleton } from '@/components/ChatMessageSkeleton';
 import ReactDiffViewer from 'react-diff-viewer';
 
 // Chat action options for the Select component
@@ -322,27 +323,76 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatP
 
       const agenticPrompt = actionPrompts[chatAction.value] || input;
 
-      // Add user message to chat for all actions
-      setMessages(prev => [...prev, { 
+      // Combine user message and skeleton into a single state update
+      const userMessage = { 
         id: Date.now().toString(), 
         role: "user" as const, 
         content: input 
-      }]);
-      
-      // Use structured API for all actions
+      };
+      const assistantMessageId = (Date.now() + 1).toString();
+      const skeletonMessage = { id: assistantMessageId, role: "assistant" as const, content: "", isLoading: true };
+
+      setMessages(prev => [...prev, userMessage, skeletonMessage]);
       setIsLoading(true);
-        fetch('/api/agentic-structured', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: agenticPrompt,
-          currentCode: chatAction.value === 'GERAR' ? '' : (selectedFile?.value || ''), // GERAR doesn't need current code context
-          fileName: selectedFile?.name || 'script.js',
-          actionType: chatAction.value
-        })
-      })
-      .then(response => response.json())
-      .then(async (data) => {
+
+      try {
+        const response = await fetch('/api/agentic-structured', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt: agenticPrompt,
+            currentCode: chatAction.value === 'GERAR' ? '' : (selectedFile?.value || ''), // GERAR doesn't need current code context
+            fileName: selectedFile?.name || 'script.js',
+            actionType: chatAction.value
+          })
+        });
+
+        if (!response.body) {
+          throw new Error('A resposta da API não contém um corpo.');
+        }
+
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let partialLine = '';
+        
+        let accumulatedJson = '';
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+
+          partialLine += decoder.decode(value, { stream: true });
+
+          let lines = partialLine.split('\n');
+          partialLine = lines.pop() || '';
+
+          for (const line of lines) {
+            if (line.startsWith('0:')) {
+              const textChunk = JSON.parse(line.substring(2));
+              accumulatedJson += textChunk;
+              // No longer updating the UI in the loop to avoid performance issues
+            }
+          }
+        }
+
+        let data;
+        try {
+          // Find the first '{' and the last '}' to extract the JSON object
+          const startIndex = accumulatedJson.indexOf('{');
+          const endIndex = accumulatedJson.lastIndexOf('}');
+          if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+            throw new Error("JSON object not found in the response");
+          }
+          const finalJsonString = accumulatedJson.substring(startIndex, endIndex + 1);
+          data = JSON.parse(finalJsonString);
+        } catch (e) {
+          console.error("Failed to parse final JSON:", accumulatedJson, e);
+          data = { error: "Resposta inválida da API", explanation: `Não foi possível analisar a resposta JSON. Resposta recebida:\n\n${accumulatedJson}` };
+        }
+
+
         const actionIcons = {
           'GERAR': '🚀',
           'EDITAR': '✏️', 
@@ -357,10 +407,11 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatP
           'CHAT': 'Resposta gerada com sucesso!'
         };
 
-        const assistantMessage = {
-          id: (Date.now() + 1).toString(),
+        const finalAssistantMessage = {
+          id: assistantMessageId,
           role: "assistant" as const,
-          content: ''
+          content: '',
+          isLoading: false // Make sure to set isLoading to false
         };
 
         if (data.changes && data.changes.length > 0) {
@@ -403,44 +454,39 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatP
             changes: data.changes
           };
           
-          assistantMessage.content = `${actionIcons[chatAction.value]} **${actionMessages[chatAction.value]}**\n\n${data.explanation}\n\n**Detalhes das mudanças:**\n${data.changes.map((change, i) => 
+          finalAssistantMessage.content = `${actionIcons[chatAction.value]} **${actionMessages[chatAction.value]}**\n\n${data.explanation}\n\n**Detalhes das mudanças:**\n${data.changes.map((change, i) => 
             `${i + 1}. **${change.type.toUpperCase()}** na linha ${change.startLine}${change.endLine && change.endLine !== change.startLine ? `-${change.endLine}` : ''}: ${change.description}`
           ).join('\n')}`;
           
           // Add diff data to message for custom rendering
-          (assistantMessage as any).diffData = diffData;
+          (finalAssistantMessage as any).diffData = diffData;
         } else if (data.error) {
-          assistantMessage.content = `❌ Erro: ${data.error}`;
+            finalAssistantMessage.content = `❌ Erro: ${data.error}\n\n${data.explanation || ''}`;
         } else {
           // For CHAT mode or when no changes are needed, just show the explanation
           if (chatAction.value === 'CHAT') {
-            assistantMessage.content = `${actionIcons[chatAction.value]} ${data.explanation || 'Resposta gerada.'}`;
+            finalAssistantMessage.content = `${actionIcons[chatAction.value]} ${data.explanation || 'Resposta gerada.'}`;
           } else {
-            assistantMessage.content = `ℹ️ ${data.explanation || 'Nenhuma mudança necessária para esta solicitação.'}`;
+            finalAssistantMessage.content = `ℹ️ ${data.explanation || 'Nenhuma mudança necessária para esta solicitação.'}`;
           }
         }
 
         // Add response to chat for all structured actions
-        setMessages(prev => [...prev, assistantMessage]);
+        setMessages(prev => prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m));
         setIsLoading(false);
-      })
-      .catch(error => {
+      } catch (error) {
         console.error('Structured API error:', error);
+        
         const errorMessage = {
           id: (Date.now() + 1).toString(),
           role: "assistant" as const,
           content: "❌ Erro ao processar solicitação. Tente novamente."
         };
 
-        setMessages(prev => [...prev, { 
-          id: (Date.now() + 2).toString(), 
-          role: "assistant" as const, 
-          content: errorMessage.content 
-        }]);
-      })
-      .finally(() => {
+        // Atomically remove skeleton and add error message
+        setMessages(prev => [...prev.filter(m => m.id !== assistantMessageId), errorMessage]);
         setIsLoading(false);
-      });
+      }
     
     } catch (error) {
       console.error('Error in handleSubmit:', error);
@@ -539,6 +585,9 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatP
       {/* Chat messages area */}
       <div className={`flex-1 space-y-4 !pb-[200px] p-4 ${theme === 'dark' ? 'bg-[#232733]' : 'bg-white'}`}>
         {allMessages.map((message) => (
+          (message as any).isLoading ? (
+            <ChatMessageSkeleton key={message.id} theme={theme} />
+          ) : (
           <div
             key={message.id}
             className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -665,18 +714,20 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatP
               )}
             </div>
           </div>
+          )
         ))}
         
         {/* Show loading animation while processing */}
-        {currentLoading && (
+        {/* We now use a per-message skeleton, so this is not needed */}
+        {/* {currentLoading && !allMessages.some(m => (m as any).isLoading) && (
           <ChatMessageSkeleton theme={theme} />
-        )}
+        )} */}
       </div>
       {/* Chat input form below messages */}
       <form onSubmit={handleSubmit} className="sticky bottom-0 left-0 w-full dark:bg-[#232733] bg-transparent p-4 z-10 flex flex-col gap-2">
         
         {/* Loading overlay for input area */}
-        {currentLoading && (
+        {(isSubmitting || isLoading) && (
           <div className="absolute inset-0 bg-black/20 backdrop-blur-sm rounded-lg flex items-center justify-center z-20">
             <LoadingSpinner 
               theme={theme} 

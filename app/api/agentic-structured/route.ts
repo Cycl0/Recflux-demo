@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { generateText } from 'ai';
+import { streamText } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 
 interface CodeChange {
@@ -306,45 +306,16 @@ Faça APENAS as mudanças exatas necessárias para esta solicitação. Retorne J
 SEMPRE responda em português brasileiro.`;
     }
 
-    const generateOptions: any = {
+    // Use streaming for all requests to prevent timeouts
+    const streamOptions: any = {
       model: openrouter('anthropic/claude-sonnet-4'),
-      prompt: userPrompt,
+      system: systemPrompt && systemPrompt.trim() ? systemPrompt : undefined,
+      messages: [{ role: 'user', content: userPrompt }],
       temperature: 0,
     };
-    
-    // Only add system prompt if it's not empty
-    if (systemPrompt && systemPrompt.trim()) {
-      generateOptions.system = systemPrompt;
-    }
 
-    const { text } = await generateText(generateOptions);
-
-    let response: StructuredResponse;
-    try {
-      response = JSON.parse(text);
-    } catch (parseError) {
-      console.error('Erro ao fazer parse do JSON:', text);
-      
-      // If JSON parsing fails, try to extract JSON from the response
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        try {
-          response = JSON.parse(jsonMatch[0]);
-        } catch (secondParseError) {
-          console.error('Erro no segundo parse:', jsonMatch[0]);
-          throw new Error(`Resposta JSON inválida da IA. Resposta original: ${text.substring(0, 500)}...`);
-        }
-      } else {
-        throw new Error(`Resposta JSON inválida da IA. Resposta original: ${text.substring(0, 500)}...`);
-      }
-    }
-
-    // Validate the response structure
-    if (!response.changes || !Array.isArray(response.changes)) {
-      throw new Error('Estrutura de resposta inválida');
-    }
-
-    return NextResponse.json(response);
+    const result = streamText(streamOptions);
+    return result.toDataStreamResponse();
   } catch (error) {
     console.error('Erro da API estruturada:', error);
     
