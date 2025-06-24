@@ -70,13 +70,14 @@ import 'prismjs/themes/prism-tomorrow.css';
 import TextareaAutosize from 'react-textarea-autosize';
 import IconSend from "@/components/IconSend";
 import ReactSelect from 'react-select';
+import LoadingSpinner, { ChatMessageSkeleton } from '@/components/LoadingSpinner';
 
 // Chat action options for the Select component
 const chatActionOptions = [
-  { value: '1', label: 'GERAR' },
-  { value: '2', label: 'EDITAR' },
-  { value: '3', label: 'FOCAR' },
-  { value: '4', label: 'CHAT' }
+  { value: 'GERAR', label: 'GERAR' },
+  { value: 'EDITAR', label: 'EDITAR' },
+  { value: 'FOCAR', label: 'FOCAR' },
+  { value: 'CHAT', label: 'CHAT' }
 ];
 
 import { useRouter } from 'next/navigation';
@@ -161,6 +162,9 @@ const EditorContext = React.createContext({
   setFilesCurrentHandler: (fileName: string, code: string, index?: number) => {}, // Will be replaced below
   throttleEditorOpen: (open: boolean) => {},
   selectedFile: undefined as undefined | { value?: string; name?: string },
+  editorSelection: null as null | { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number; selectedText: string },
+  cursorPosition: null as null | { lineNumber: number; column: number },
+  applyAgenticChanges: (changes: any[]) => {},
 });
 
 interface ChatProps {
@@ -179,33 +183,35 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatP
   useEffect(() => {
     Cookies.set('chatPrompt', input, { expires: 7 });
   }, [input]);
-  const { setFilesCurrentHandler, throttleEditorOpen, selectedFile } = useContext(EditorContext);
-  const [chatAction, setChatAction] = useState({ value: '1', label: 'GERAR' });
-  const chat = useChat({
-    api: '/api/chat',
-  });
-  const { messages, handleInputChange: baseHandleInputChange, handleSubmit: baseHandleSubmit, isLoading } = chat;
+  const { setFilesCurrentHandler, throttleEditorOpen, selectedFile, editorSelection, cursorPosition, applyAgenticChanges } = useContext(EditorContext);
+  const [chatAction, setChatAction] = useState({ value: 'EDITAR', label: 'EDITAR' });
+  
+  // Manual message management for all actions
+  const [messages, setMessages] = useState<any[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Manual message management for AGENTIC actions
+  // Use messages directly
+  const allMessages = messages;
+  const currentLoading = isLoading;
 
   // Expose append method via appendRef
   useEffect(() => {
     if (appendRef) {
       appendRef.current = (message: { role: "data" | "system" | "user" | "assistant"; content: string }) => {
-        if (typeof chat.append === 'function') {
-          chat.append(message);
-        }
+        setMessages(prev => [...prev, { ...message, id: Date.now().toString() }]);
       };
       return () => {
         appendRef.current = null;
       };
     }
-  }, [appendRef, chat]);
+  }, [appendRef]);
 
   // Custom handleInputChange to sync with cookie
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>
   ) => {
     setInput(e.target.value);
-    baseHandleInputChange(e as any);
   }
 
   const [creditError, setCreditError] = useState<string | null>(null);
@@ -214,7 +220,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatP
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
-    if (isSubmitting || isLoading) return;
+    if (isSubmitting || currentLoading) return;
     
     // Check if user is authenticated
     if (!user || !user.email) {
@@ -250,42 +256,97 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatP
         onCreditsUpdate();
       }
 
-      // Now proceed with the chat logic
-      if (chatAction.value === '2') { // EDITAR
-      // Compose a prompt referencing the code from the editor
-      const editPrompt = `Aqui está o código atual do arquivo ${selectedFile?.name || ''}: 
+      // All actions now use structured API approach
+      const actionPrompts = {
+        'GERAR': input, // Direct user input for generation
+        'EDITAR': input, // Direct user input for editing (main agentic mode)
+        'FOCAR': `Focus on and extract only the component or section related to: ${input}\n\nRemove all other code and keep only the relevant parts. Maintain the component structure.`
+      };
 
-${selectedFile?.value || ''}
+      const agenticPrompt = actionPrompts[chatAction.value] || input;
 
-Edite o código acima conforme o pedido do usuário a seguir. NÃO reescreva tudo, apenas edite o necessário, mantendo o restante igual.
+      // Add user message to chat for all actions
+      setMessages(prev => [...prev, { 
+        id: Date.now().toString(), 
+        role: "user" as const, 
+        content: input 
+      }]);
+      
+      // Use structured API for all actions
+      setIsLoading(true);
+        fetch('/api/agentic-structured', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: agenticPrompt,
+          currentCode: chatAction.value === 'GERAR' ? '' : (selectedFile?.value || ''), // GERAR doesn't need current code context
+          fileName: selectedFile?.name || 'script.js',
+          actionType: chatAction.value
+        })
+      })
+      .then(response => response.json())
+      .then(data => {
+        const actionIcons = {
+          'GERAR': '🚀',
+          'EDITAR': '✏️', 
+          'FOCAR': '🎯',
+          'CHAT': '💬'
+        };
 
-Pedido do usuário: ${input}`;
-      chat.append({ role: "user", content: editPrompt });
-    } else if (chatAction.value === '3') { // FOCAR
-      // Compose a prompt for focusing on a specific element
-      const focusPrompt = `Aqui está o código atual do arquivo ${selectedFile?.name || ''}:
+        const actionMessages = {
+          'GERAR': 'Código gerado com sucesso!',
+          'EDITAR': 'Edições aplicadas com sucesso!',
+          'FOCAR': 'Foco aplicado com sucesso!',
+          'CHAT': 'Resposta gerada com sucesso!'
+        };
 
-${selectedFile?.value || ''}
+        const assistantMessage = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant" as const,
+          content: ''
+        };
 
-Extraia do código acima apenas o(s) elemento(s) que correspondem ao pedido do usuário a seguir. NÃO reescreva tudo, apenas retorne o(s) elemento(s) relevante(s), mantendo a estrutura original com <>[...]</> se houver múltiplos. NÃO SE ESQUEÇA DE MANTER O WRAP COM A FUNÇÃO E O METODO RENDER.
+        if (data.changes && data.changes.length > 0) {
+          applyAgenticChanges(data.changes);
+          assistantMessage.content = `${actionIcons[chatAction.value]} **${actionMessages[chatAction.value]}**\n\n${data.explanation}\n\n**Detalhes das mudanças:**\n${data.changes.map((change, i) => 
+            `${i + 1}. **${change.type.toUpperCase()}** na linha ${change.startLine}${change.endLine && change.endLine !== change.startLine ? `-${change.endLine}` : ''}: ${change.description}`
+          ).join('\n')}`;
+        } else if (data.error) {
+          assistantMessage.content = `❌ Erro: ${data.error}`;
+        } else {
+          // For CHAT mode or when no changes are needed, just show the explanation
+          if (chatAction.value === 'CHAT') {
+            assistantMessage.content = `${actionIcons[chatAction.value]} ${data.explanation || 'Resposta gerada.'}`;
+          } else {
+            assistantMessage.content = `ℹ️ ${data.explanation || 'Nenhuma mudança necessária para esta solicitação.'}`;
+          }
+        }
 
-Pedido do usuário: ${input}`;
-      chat.append({ role: "user", content: focusPrompt });
-    } else if (chatAction.value === '4') { // CHAT
-      // Compose a prompt for chatting with context
-      const chatPrompt = `Aqui está o código atual do arquivo ${selectedFile?.name || ''}:
+        // Add response to chat for all structured actions
+        setMessages(prev => [...prev, { 
+          id: (Date.now() + 1).toString(), 
+          role: "assistant" as const, 
+          content: assistantMessage.content 
+        }]);
+        setIsLoading(false);
+      })
+      .catch(error => {
+        console.error('Structured API error:', error);
+        const errorMessage = {
+          id: (Date.now() + 1).toString(),
+          role: "assistant" as const,
+          content: "❌ Erro ao processar solicitação. Tente novamente."
+        };
 
-${selectedFile?.value || ''}
-
-Além disso, considere todas as seções de código já geradas nesta conversa:
-
-Considere todo esse contexto (o código atual e o código já gerado) para responder à solicitação do usuário de forma significativa. NÃO edite ou reescreva o código, apenas utilize o contexto para conversar sobre ele.
-
-Pedido do usuário: ${input}`;
-      chat.append({ role: "user", content: chatPrompt });
-    } else {
-      baseHandleSubmit(e);
-    }
+        setMessages(prev => [...prev, { 
+          id: (Date.now() + 2).toString(), 
+          role: "assistant" as const, 
+          content: errorMessage.content 
+        }]);
+      })
+      .finally(() => {
+        setIsLoading(false);
+      });
     
     } catch (error) {
       console.error('Error in handleSubmit:', error);
@@ -303,7 +364,7 @@ Pedido do usuário: ${input}`;
 
   useEffect(() => {
     // Find the last user message
-    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    const lastUserMsg = [...allMessages].reverse().find(m => m.role === 'user');
     if (lastUserMsg?.id !== lastUserMessageId.current) {
       // Only reset if a new user message is detected
       setAllCodeGenerated([]);
@@ -314,7 +375,7 @@ Pedido do usuário: ${input}`;
 
     let newCode: string[] = [];
     let updated = false;
-    for (const message of messages) {
+    for (const message of allMessages) {
       if (message.role === 'assistant' && !processedMessagesRef.current.has(message.id)) {
         const codeBlocks = message.content
           .split(/```/g)
@@ -328,42 +389,49 @@ Pedido do usuário: ${input}`;
     if (newCode.length > 0) {
       setAllCodeGenerated(prev => [...prev, ...newCode]);
     }
-  }, [messages]);
+  }, [allMessages]);
 
   // Only send code to the editor when the prompt is finished (assistant's last message is complete and not streaming)
   useEffect(() => {
-    if (chatAction.value == '4') return;
-    if (messages.length === 0) return;
-    const lastMessage = messages[messages.length - 1];
+    if (allMessages.length === 0) return;
+    const lastMessage = allMessages[allMessages.length - 1];
     if (lastMessage.role !== 'assistant') return;
     if (autoSentCodes[lastMessage.id]) return;
     // If the assistant is still streaming, don't send yet
-    if (isLoading) return;
-    // Send code to editor
-    setSendingToEditor(true);
-    // Collect all code blocks from the last assistant message
-    const codeBlocks = lastMessage.content
-      .split(/```/g)
-      .filter((_, i) => i % 2 === 1)
-      .map(code => code.replace(/^[a-zA-Z0-9]+\n/, '').trim());
-    codeBlocks.forEach((codeContent, idx) => {
-      let filteredContent = codeContent.replace(/^(jsx|tsx|js|html|css|svg|xml|json|python|typescript|javascript|do not copy this line|\/\/.*)\s*\n/i, '');
-      let langMatch = filteredContent.match(/^([a-zA-Z0-9]+)/);
-      let lang = langMatch ? langMatch[1].toLowerCase() : '';
-      let fileName = 'script.js';
-      if (lang && lang.includes('html')) fileName = 'index.html';
-      else if (lang && lang.includes('css')) fileName = 'style.css';
-      else if (lang && lang.includes('js')) fileName = 'script.js';
-      else if (lang && (lang.includes('svg') || lang.includes('xml'))) fileName = 'image.svg';
-      setFilesCurrentHandler(fileName, filteredContent, 0);
-      throttleEditorOpen(true);
-      if (onPromptSubmit) {
-        onPromptSubmit(input, fileName, filteredContent);
-      }
-    });
+    if (currentLoading) return;
+    
+    // All structured actions are handled via structured API
+    // Only process code blocks for GERAR and FOCAR (EDITAR applies changes directly, CHAT doesn't generate code)
+    if (chatAction.value === 'GERAR' || chatAction.value === 'FOCAR') {
+      setSendingToEditor(true);
+      
+      // Collect all code blocks from the last assistant message
+      const codeBlocks = lastMessage.content
+        .split(/```/g)
+        .filter((_, i) => i % 2 === 1)
+        .map(code => code.replace(/^[a-zA-Z0-9]+\n/, '').trim());
+      
+      codeBlocks.forEach((codeContent, idx) => {
+        let filteredContent = codeContent.replace(/^(jsx|tsx|js|html|css|svg|xml|json|python|typescript|javascript|do not copy this line|\/\/.*)\s*\n/i, '');
+        
+        let langMatch = filteredContent.match(/^([a-zA-Z0-9]+)/);
+        let lang = langMatch ? langMatch[1].toLowerCase() : '';
+        let fileName = 'script.js';
+        if (lang && lang.includes('html')) fileName = 'index.html';
+        else if (lang && lang.includes('css')) fileName = 'style.css';
+        else if (lang && lang.includes('js')) fileName = 'script.js';
+        else if (lang && (lang.includes('svg') || lang.includes('xml'))) fileName = 'image.svg';
+        setFilesCurrentHandler(fileName, filteredContent, 0);
+        throttleEditorOpen(true);
+        if (onPromptSubmit) {
+          onPromptSubmit(input, fileName, filteredContent);
+        }
+      });
+      setTimeout(() => setSendingToEditor(false), 1200); // show indicator for 1.2s
+    }
+    
     setAutoSentCodes(prev => ({ ...prev, [lastMessage.id]: true }));
-    setTimeout(() => setSendingToEditor(false), 1200); // show indicator for 1.2s
-  }, [messages, chatAction.value, isLoading]);
+  }, [allMessages, chatAction.value, currentLoading, selectedFile?.name]);
 
   return (
     <div className={`relative flex flex-col h-full rounded-lg shadow-lg  ${theme === 'dark' ? 'bg-[#232733]' : 'bg-white'}`}>
@@ -376,7 +444,7 @@ Pedido do usuário: ${input}`;
       
       {/* Chat messages area */}
       <div className={`flex-1 space-y-4 !pb-[200px] p-4 ${theme === 'dark' ? 'bg-[#232733]' : 'bg-white'}`}>
-        {messages.map((message) => (
+        {allMessages.map((message) => (
           <div
             key={message.id}
             className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
@@ -457,9 +525,25 @@ Pedido do usuário: ${input}`;
             </div>
           </div>
         ))}
+        
+        {/* Show loading animation while processing */}
+        {currentLoading && (
+          <ChatMessageSkeleton theme={theme} />
+        )}
       </div>
       {/* Chat input form below messages */}
       <form onSubmit={handleSubmit} className="sticky bottom-0 left-0 w-full dark:bg-[#232733] bg-transparent p-4 z-10 flex flex-col gap-2">
+        
+        {/* Loading overlay for input area */}
+        {currentLoading && (
+          <div className="absolute inset-0 bg-black/20 backdrop-blur-sm rounded-lg flex items-center justify-center z-20">
+            <LoadingSpinner 
+              theme={theme} 
+              size="sm" 
+              message={`${chatAction.label} em andamento...`} 
+            />
+          </div>
+        )}
         <ReactSelect
           className="w-32 mb-2"
           value={chatAction}
@@ -561,13 +645,15 @@ Pedido do usuário: ${input}`;
           )}
           <button
             type="submit"
-            disabled={isLoading || isSubmitting}
+            disabled={currentLoading || isSubmitting}
             className="py-3 px-4 bg-gradient-to-br from-cyan-300/80 to-blue-100/70 backdrop-blur-md text-cyan-900 rounded-xl shadow-[0_4px_32px_0_rgba(34,211,238,0.22)] hover:from-cyan-200/90 hover:to-blue-50/80 focus:bg-cyan-100/80 active:bg-cyan-400/80 transition-all duration-300 ease-in-out disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-cyan-200/40"
             aria-label="Enviar mensagem"
           >
-            <IconSend
-              className={`relative transition-transform duration-500 ease-in-out ${isLoading ? 'rotate-90' : '-rotate-90'}`}
-            />
+            {currentLoading || isSubmitting ? (
+              <div className="w-4 h-4 border-2 border-cyan-900/30 border-t-cyan-900 rounded-full animate-spin" />
+            ) : (
+              <IconSend className="relative transition-transform duration-500 ease-in-out -rotate-90" />
+            )}
           </button>
         </div>
       </form>
@@ -1060,6 +1146,10 @@ const throttledSaveEditorCode = useMemo(() => throttle(() => {
   // Track the last file sent to the editor
   const [lastUpdatedFile, setLastUpdatedFile] = useState('script.js');
 
+  // Editor state for cursor and selection
+  const [editorSelection, setEditorSelection] = useState(null);
+  const [cursorPosition, setCursorPosition] = useState(null);
+
   // Files
   const [filesRecentPrompt, setFilesRecentPrompt] = useState([]);
   const [filesGenerated, setFilesGenerated] = useState([]);
@@ -1077,6 +1167,8 @@ const throttledSaveEditorCode = useMemo(() => throttle(() => {
     setSelectedFile(filesCurrent[fileName]);
     setLastUpdatedFile(fileName);
   };
+
+
 function GoogleSignInButton() {
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
@@ -1136,6 +1228,99 @@ function GoogleSignInButton() {
   }));
   setLastUpdatedFile(fileName);
 };
+
+  // Function to apply agentic code changes
+  const applyAgenticChanges = useCallback((changes: any[]) => {
+    if (!selectedFile?.name) {
+      console.error('No selected file to apply changes to');
+      return;
+    }
+    
+    console.log('=== APPLYING AGENTIC CHANGES ===');
+    console.log('Selected file:', selectedFile.name);
+    console.log('Changes to apply:', changes);
+    
+    // Apply changes directly to the file content
+    let currentCode = selectedFile.value || '';
+    console.log('Original code length:', currentCode.length);
+    console.log('Original code preview:', currentCode.substring(0, 200) + '...');
+    
+    const lines = currentCode.split('\n');
+    console.log('Total lines:', lines.length);
+    
+    // Sort changes by line number in reverse order to maintain line positions
+    const sortedChanges = [...changes].sort((a, b) => b.startLine - a.startLine);
+    console.log('Sorted changes (reverse order):', sortedChanges);
+
+    sortedChanges.forEach((change, index) => {
+      console.log(`\n--- Processing change ${index + 1}/${sortedChanges.length} ---`);
+      console.log('Change:', change);
+      
+      const startLineIndex = change.startLine - 1; // Convert to 0-based index
+      const endLineIndex = (change.endLine || change.startLine) - 1;
+      
+      console.log(`Line range: ${change.startLine} to ${change.endLine || change.startLine} (0-based: ${startLineIndex} to ${endLineIndex})`);
+      console.log('Lines before change:', lines.length);
+      
+      if (startLineIndex >= 0 && startLineIndex < lines.length) {
+        console.log(`Line ${change.startLine} current content:`, JSON.stringify(lines[startLineIndex]));
+        if (change.endLine && change.endLine !== change.startLine) {
+          console.log(`Lines ${change.startLine}-${change.endLine} current content:`);
+          for (let i = startLineIndex; i <= endLineIndex && i < lines.length; i++) {
+            console.log(`  Line ${i + 1}:`, JSON.stringify(lines[i]));
+          }
+        }
+      } else {
+        console.error(`Invalid line number: ${change.startLine} (file has ${lines.length} lines)`);
+      }
+      
+      switch (change.type) {
+        case 'insert':
+          // Insert new lines at the specified position
+          const insertLines = change.code.split('\n');
+          console.log('Inserting lines:', insertLines);
+          lines.splice(startLineIndex, 0, ...insertLines);
+          console.log(`Inserted ${insertLines.length} lines at position ${startLineIndex}`);
+          break;
+        case 'replace':
+          // Replace lines in the specified range
+          const replaceLines = change.code.split('\n');
+          const replaceCount = endLineIndex - startLineIndex + 1;
+          console.log('New code to insert:', replaceLines);
+          console.log(`Replacing ${replaceCount} lines starting at ${startLineIndex}`);
+          console.log('Lines being replaced:');
+          for (let i = startLineIndex; i < startLineIndex + replaceCount && i < lines.length; i++) {
+            console.log(`  Removing line ${i + 1}:`, JSON.stringify(lines[i]));
+          }
+          lines.splice(startLineIndex, replaceCount, ...replaceLines);
+          console.log('Lines after replacement:');
+          for (let i = startLineIndex; i < startLineIndex + replaceLines.length && i < lines.length; i++) {
+            console.log(`  New line ${i + 1}:`, JSON.stringify(lines[i]));
+          }
+          break;
+        case 'delete':
+          // Delete lines in the specified range
+          const deleteCount = endLineIndex - startLineIndex + 1;
+          console.log(`Deleting ${deleteCount} lines starting at ${startLineIndex}`);
+          const deletedLines = lines.splice(startLineIndex, deleteCount);
+          console.log('Deleted lines:', deletedLines);
+          break;
+        default:
+          console.error('Unknown change type:', change.type);
+      }
+      
+      console.log('Lines after change:', lines.length);
+    });
+
+    const newCode = lines.join('\n');
+    console.log('New code length:', newCode.length);
+    console.log('New code preview:', newCode.substring(0, 200) + '...');
+    
+    // Apply the changes to the editor
+    setFilesCurrentHandler(selectedFile.name, newCode);
+    
+    console.log('=== CHANGES APPLIED SUCCESSFULLY ===');
+  }, [selectedFile, setFilesCurrentHandler]);
 
   // Throttle editor value updates to 200ms to avoid UI overload
 const handleEditorChange = useMemo(
@@ -1365,6 +1550,8 @@ useEffect(() => {
 const liveErrorRef = useRef<HTMLDivElement | null>(null);
 // Ref to access Chat's append method
 const chatAppendRef = useRef<any>(null);
+// Fix loading state
+const [isFixing, setIsFixing] = useState(false);
 
 const handleFixCode = async () => {
   // Check if user is authenticated and has enough credits
@@ -1374,6 +1561,7 @@ const handleFixCode = async () => {
   }
 
   try {
+    setIsFixing(true);
     // Check and deduct credits
     const creditResult = await checkAndDeductCredits(user.email);
     
@@ -1382,17 +1570,153 @@ const handleFixCode = async () => {
       return;
     }
 
-    // Proceed with fix code functionality
+    // Get error text from the preview
     let errorText = '';
     if (liveErrorRef.current) {
       const pre = liveErrorRef.current.querySelector('pre');
       if (pre) errorText = pre.textContent || '';
     }
-    const fixPrompt = `Aqui está o código atual do arquivo ${selectedFile?.name || ''}:\r\n\r\n${selectedFile?.value || ''}\r\n\r\nNÃO SE ESQUEÇA DE MANTER O WRAP COM A FUNÇÃO E O METODO RENDER.\r\n\r\nPedido do usuário: Fix the code.\r\n\r\nCode error: ${errorText}`;
-    console.log('Fix prompt:', fixPrompt);
-    if (chatAppendRef.current && typeof chatAppendRef.current === 'function') {
-      chatAppendRef.current({ role: 'user', content: fixPrompt });
+
+    // Create fix prompt - either for specific error or general code analysis
+    let fixPrompt;
+    
+    if (errorText) {
+      // Extract line number from error if available
+      const lineMatch = errorText.match(/\((\d+):(\d+)\)/);
+      const lineNumber = lineMatch ? lineMatch[1] : null;
+      
+      fixPrompt = `Corrija o seguinte erro no código:
+
+ERRO: ${errorText}
+
+${lineNumber ? `🎯 O erro está na linha ${lineNumber}. Foque nesta linha e nas linhas adjacentes (${parseInt(lineNumber) - 1}, ${lineNumber}, ${parseInt(lineNumber) + 1}).` : ''}
+
+${errorText.includes('expected ";"') ? '⚠️ Este é um erro de ponto e vírgula ausente. Procure onde adicionar um ";" na linha indicada.' : ''}
+${errorText.includes('Unexpected token') ? '⚠️ Este é um erro de token inesperado. Verifique parênteses, chaves, colchetes ou vírgulas ausentes/extras.' : ''}
+
+Faça APENAS as mudanças mínimas necessárias para corrigir este erro específico. Não reescreva o código inteiro.`;
+    } else {
+      // No explicit error - analyze code for potential issues
+      fixPrompt = `Analise o código e corrija quaisquer problemas encontrados:
+
+🔍 **ANÁLISE COMPLETA SOLICITADA:**
+
+**Erros de Sintaxe:**
+- Parênteses, chaves, colchetes não fechados
+- Ponto e vírgula ausente
+- Propriedades malformadas em objetos
+- Estruturas de código inválidas
+
+**Problemas de Lógica:**
+- Código inalcançável (unreachable code)
+- Variáveis declaradas mas não utilizadas
+- Funções declaradas mas não chamadas
+- Condições que nunca são verdadeiras/falsas
+- Loops infinitos
+- Return statements após outros returns
+
+**Problemas de React:**
+- Hooks usados incorretamente
+- Dependências ausentes em useEffect
+- Componentes não retornando JSX válido
+- Props não utilizadas
+- Sintaxe de render verbosa - simplifique render(<Component />, document.getElementById('root')) para render(<Component />)
+
+**Problemas de JavaScript:**
+- Variáveis não declaradas
+- Comparações com tipos incompatíveis
+- Funções chamadas com argumentos incorretos
+- Objetos ou arrays mal formados
+
+⚠️ **INSTRUÇÕES:**
+- Detecte e corrija TODOS os tipos de problemas listados acima
+- Se encontrar problemas, corrija-os com mudanças mínimas
+- Se o código estiver correto, retorne um array vazio de mudanças
+- Foque em correções técnicas que melhoram a funcionalidade
+- Preserve a estrutura e lógica existente do código
+- Remova código inalcançável quando encontrado`;
     }
+
+    // Add user message to chat manually (like AGENTIC mode)
+    if (chatAppendRef.current && typeof chatAppendRef.current === 'function') {
+      const userMessage = errorText 
+        ? `🔧 Corrigindo erro: ${errorText.substring(0, 100)}${errorText.length > 100 ? '...' : ''}`
+        : `🔍 Analisando código em busca de problemas...`;
+      
+      chatAppendRef.current({ 
+        role: 'user', 
+        content: userMessage
+      });
+    }
+
+    // Use structured API for precise fixes with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+
+    fetch('/api/agentic-structured', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        prompt: fixPrompt,
+        currentCode: selectedFile?.value || '',
+        fileName: selectedFile?.name || 'script.js',
+        actionType: 'FIX'
+      }),
+      signal: controller.signal
+    })
+    .then(response => {
+      clearTimeout(timeoutId);
+      return response.json();
+    })
+    .then(data => {
+      if (data.changes && data.changes.length > 0) {
+        applyAgenticChanges(data.changes);
+        // Show success message in chat
+        if (chatAppendRef.current && typeof chatAppendRef.current === 'function') {
+          chatAppendRef.current({ 
+            role: "assistant", 
+            content: `🔧 **Erro corrigido com sucesso!**\n\n${data.explanation}\n\n**Correções aplicadas:**\n${data.changes.map((change, i) => 
+              `${i + 1}. **${change.type.toUpperCase()}** na linha ${change.startLine}${change.endLine && change.endLine !== change.startLine ? `-${change.endLine}` : ''}: ${change.description}`
+            ).join('\n')}`
+          });
+        }
+      } else if (data.error) {
+        if (chatAppendRef.current && typeof chatAppendRef.current === 'function') {
+          const errorDetails = data.details ? `\n\n**Detalhes técnicos:**\n${data.details}` : '';
+          chatAppendRef.current({ 
+            role: "assistant", 
+            content: `❌ **Erro ao corrigir código:**\n\n${data.error}${errorDetails}\n\n💡 **Dica:** Tente verificar manualmente se há parênteses, chaves ou vírgulas ausentes na linha mencionada no erro.` 
+          });
+        }
+      } else {
+        // No changes needed
+        if (chatAppendRef.current && typeof chatAppendRef.current === 'function') {
+          chatAppendRef.current({ 
+            role: "assistant", 
+            content: `ℹ️ ${data.explanation || 'Nenhuma correção necessária detectada.'}` 
+          });
+        }
+      }
+    })
+    .catch(error => {
+      clearTimeout(timeoutId);
+      console.error('Fix error:', error);
+      
+      let errorMessage = "❌ Erro ao processar correção do código. Tente novamente.";
+      if (error.name === 'AbortError') {
+        errorMessage = "⏱️ Tempo limite excedido. A correção demorou muito para processar. Tente novamente.";
+      }
+      
+      if (chatAppendRef.current && typeof chatAppendRef.current === 'function') {
+        chatAppendRef.current({ 
+          role: "assistant", 
+          content: errorMessage
+        });
+      }
+    })
+    .finally(() => {
+      setIsFixing(false);
+    });
 
     // Update credits display
     refetchCredits();
@@ -1400,6 +1724,7 @@ const handleFixCode = async () => {
   } catch (error) {
     console.error('Error in handleFixCode:', error);
     alert('Erro ao processar solicitação. Tente novamente.');
+    setIsFixing(false);
   }
 };
 
@@ -1413,7 +1738,7 @@ return (
         <TriggerableGoogleOneTapHandler open={showOneTap} onClose={() => setShowOneTap(false)} />
       )}
       <div className={theme === 'dark' ? 'dark bg-blue-gradient min-h-screen w-full relative' : 'bg-blue-gradient min-h-screen w-full relative'}>
-      <EditorContext.Provider value={{ setFilesCurrentHandler, throttleEditorOpen, selectedFile }}>
+      <EditorContext.Provider value={{ setFilesCurrentHandler, throttleEditorOpen, selectedFile, editorSelection, cursorPosition, applyAgenticChanges }}>
         <NavBar extra={navExtra} />
         <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={525} height={500}>
           <div className="w-full h-full flex flex-col bg-white/70 dark:bg-[#232733] text-gray-900 dark:text-gray-100 border border-cyan-100 dark:border-cyan-700 rounded-b-md p-0">
@@ -1478,7 +1803,8 @@ return (
                 {/* Fix Button */}
                 <button
                   onClick={() => handleFixCode()}
-                  className="px-3 py-1.5 rounded-xl font-semibold transition-all duration-300 ease-in-out flex items-center justify-center
+                  disabled={isFixing}
+                  className={`px-3 py-1.5 rounded-xl font-semibold transition-all duration-300 ease-in-out flex items-center justify-center
                     min-w-[48px] min-h-[32px]
                     bg-white/30 dark:bg-white/10
                     backdrop-blur-md
@@ -1486,7 +1812,8 @@ return (
                     border border-white/40 dark:border-white/10
                     hover:bg-white/50 hover:shadow-cyan-200/60 dark:hover:bg-white/20 dark:hover:shadow-cyan-400/40
                     focus:outline-none focus:ring-2 focus:ring-cyan-300 dark:focus:ring-cyan-600
-                    text-cyan-900 dark:text-cyan-100"
+                    text-cyan-900 dark:text-cyan-100
+                    ${isFixing ? 'opacity-60 cursor-not-allowed' : ''}`}
                   style={{ minWidth: 24, minHeight: 24 }}
                   aria-label="Corrigir código automaticamente"
                 >
@@ -1515,6 +1842,31 @@ return (
               onMount={(editor) => {
                 editorRef.current = editor;
                 setTimeout(() => editor.layout(), 100);
+                
+                // Track cursor position changes
+                editor.onDidChangeCursorPosition((e) => {
+                  setCursorPosition({
+                    lineNumber: e.position.lineNumber,
+                    column: e.position.column
+                  });
+                });
+                
+                // Track selection changes
+                editor.onDidChangeCursorSelection((e) => {
+                  const model = editor.getModel();
+                  if (model && !e.selection.isEmpty()) {
+                    const selectedText = model.getValueInRange(e.selection);
+                    setEditorSelection({
+                      startLineNumber: e.selection.startLineNumber,
+                      startColumn: e.selection.startColumn,
+                      endLineNumber: e.selection.endLineNumber,
+                      endColumn: e.selection.endColumn,
+                      selectedText: selectedText
+                    });
+                  } else {
+                    setEditorSelection(null);
+                  }
+                });
               }}
               onChange={(value) => {
                 setFilesCurrentHandler(selectedFile?.name, value ?? '');
@@ -1556,6 +1908,17 @@ return (
             setSelectedProjectId={setSelectedProjectId}
             onProjectCreated={handleProjectCreate}
           />
+        </div>
+      )}
+      {isFixing && (
+        <div className="z-[2147483647] fixed top-0 left-0 w-full h-full bg-black/60 dark:bg-[#232733]/60 backdrop-blur-sm flex items-center justify-center">
+          <div className="bg-white/90 dark:bg-[#232733]/90 backdrop-blur-md rounded-2xl border border-cyan-100 dark:border-cyan-700 p-8 shadow-2xl">
+            <LoadingSpinner 
+              theme={theme} 
+              size="lg" 
+              message="Analisando e corrigindo código..."
+            />
+          </div>
         </div>
       )}
       {showDiffModal && (
