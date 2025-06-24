@@ -72,13 +72,16 @@ function parseCodeToStructuredFormat(code: string) {
 }
 
 export async function POST(req: NextRequest) {
+  console.log('[AGENTIC-STRUCTURED] API route started.');
   try {
     // Verify API key exists
     if (!process.env.OPENROUTER_API_KEY) {
+      console.error('[AGENTIC-STRUCTURED] OPENROUTER_API_KEY is not defined.');
       throw new Error('OPENROUTER_API_KEY não está definida nas variáveis de ambiente');
     }
 
     const { prompt, currentCode, fileName, actionType } = await req.json();
+    console.log(`[AGENTIC-STRUCTURED] Request body parsed. actionType: ${actionType}`);
 
     // Create OpenRouter client using OpenAI-compatible API
     const openrouter = createOpenAI({
@@ -314,10 +317,13 @@ SEMPRE responda em português brasileiro.`;
       temperature: 0,
     };
 
+    console.log(`[AGENTIC-STRUCTURED] Calling streamText with model anthropic/claude-sonnet-4`);
     const result = streamText(streamOptions);
+    console.log('[AGENTIC-STRUCTURED] streamText returned. Returning data stream response.');
+
     return result.toDataStreamResponse();
   } catch (error) {
-    console.error('Erro da API estruturada:', error);
+    console.error('[AGENTIC-STRUCTURED] Erro da API estruturada:', error);
     
     // Provide more detailed error information
     let errorMessage = 'Falha ao processar solicitação de código estruturada';
