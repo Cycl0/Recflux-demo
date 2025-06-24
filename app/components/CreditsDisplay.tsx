@@ -19,26 +19,26 @@ const CreditsDisplay: React.FC<CreditsDisplayProps> = ({ credits, loading }) => 
   const isNoCredits = (credits || 0) < 10;
 
   return (
-    <div className={`flex items-center px-3 py-1 mr-2 backdrop-blur-md rounded-full border text-sm font-medium ${
+    <div className={`flex items-center px-3 py-1 mr-2 backdrop-blur-md rounded-full border text-sm font-medium shadow-lg ${
       isNoCredits 
-        ? 'bg-red-500/20 border-red-500/40 text-red-200'
+        ? 'bg-red-500/20 border-red-500/40 text-red-200 shadow-red-500/50'
         : isLowCredits 
-          ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-200'
-          : 'bg-white/10 border-white/20 text-white'
+          ? 'bg-yellow-500/20 border-yellow-500/40 text-yellow-200 shadow-yellow-500/50'
+          : 'bg-white/10 border-white/20 text-white shadow-cyan-400/50'
     }`}
     title={
       isNoCredits 
         ? 'Sem créditos suficientes! Compre mais créditos para continuar usando.'
         : isLowCredits 
           ? 'Créditos baixos! Considere comprar mais para não interromper seu trabalho.'
-          : 'Cada prompt custa 10 créditos'
+          : 'Créditos'
     }>
-      <span className={`mr-1 ${
+      <span className={`mr-2 ${
         isNoCredits ? 'text-red-400' : isLowCredits ? 'text-yellow-400' : 'text-cyan-400'
-      }`}>💰</span>
-      <span>{credits || 0} créditos</span>
-      {isNoCredits && <span className="ml-1 text-xs">⚠️</span>}
-      {isLowCredits && !isNoCredits && <span className="ml-1 text-xs">⚡</span>}
+      }`}>💎</span>
+      <span>{credits || 0}</span>
+      {isNoCredits && <span className="ml-2 text-xs">⚠️</span>}
+      {isLowCredits && !isNoCredits && <span className="ml-2 text-xs">⚡</span>}
     </div>
   );
 };
