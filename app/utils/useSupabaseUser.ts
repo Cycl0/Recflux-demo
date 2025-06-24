@@ -6,24 +6,29 @@ export function useSupabaseUser() {
   const [loading, setLoading] = useState(true);
   const [credits, setCredits] = useState<number | null>(null);
   const [creditsLoading, setCreditsLoading] = useState(true);
+  const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
 
-  const fetchUserCredits = async (userEmail: string) => {
+  const fetchUserData = async (userEmail: string) => {
+    setCreditsLoading(true);
     try {
       const { data: userData, error } = await supabase
         .from('users')
-        .select('credits')
+        .select('credits, plan')
         .eq('email', userEmail)
         .single();
       
       if (error) {
-        console.error('Error fetching user credits:', error);
+        console.error('Error fetching user data:', error);
         setCredits(0);
+        setSubscriptionStatus(null);
       } else {
         setCredits(userData?.credits || 0);
+        setSubscriptionStatus(userData?.plan || null);
       }
     } catch (error) {
-      console.error('Error fetching user credits:', error);
+      console.error('Error fetching user data:', error);
       setCredits(0);
+      setSubscriptionStatus(null);
     } finally {
       setCreditsLoading(false);
     }
@@ -38,7 +43,7 @@ export function useSupabaseUser() {
         setLoading(false);
         
         if (authUser?.email) {
-          fetchUserCredits(authUser.email);
+          fetchUserData(authUser.email);
         } else {
           setCreditsLoading(false);
         }
@@ -51,10 +56,10 @@ export function useSupabaseUser() {
       setLoading(false);
       
       if (authUser?.email) {
-        setCreditsLoading(true);
-        fetchUserCredits(authUser.email);
+        fetchUserData(authUser.email);
       } else {
         setCredits(null);
+        setSubscriptionStatus(null);
         setCreditsLoading(false);
       }
     });
@@ -65,5 +70,5 @@ export function useSupabaseUser() {
     };
   }, []);
 
-  return { user, loading, credits, creditsLoading, refetchCredits: user?.email ? () => fetchUserCredits(user.email) : () => {} };
+  return { user, loading, credits, creditsLoading, subscriptionStatus, refetchCredits: user?.email ? () => fetchUserData(user.email) : () => {} };
 } 

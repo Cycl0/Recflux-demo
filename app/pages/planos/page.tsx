@@ -10,12 +10,13 @@ import NavStyledDropdown from '@/components/NavStyledDropdown';
 import TesteAgoraButton from '@/components/TesteAgoraButton';
 import CreditsDisplay from '@/components/CreditsDisplay';
 import SplineBackground from "@/components/SplineBackground";
+import ProTag from '@/components/ProTag';
 
 export default function PlanosPage() {
-    const router = useRouter();
+    const { push } = useRouter();
     const [stripeCustomerId, setStripeCustomerId] = useState<string | null>(null);
     const [loading, setLoading] = useState(true);
-    const { user, loading: userLoading, credits, creditsLoading } = useSupabaseUser();
+    const { user, loading: userLoading, credits, creditsLoading, subscriptionStatus } = useSupabaseUser();
     let navExtra = null;
     if (!userLoading) {
         if (user) {
@@ -28,7 +29,12 @@ export default function PlanosPage() {
             };
             navExtra = (
                 <>
-                    <CreditsDisplay credits={credits} loading={creditsLoading} />
+                    <div className="flex items-center mr-4 cursor-pointer" onClick={() => {
+                        push('/pages/planos');
+                    }}>
+                        <CreditsDisplay credits={credits} loading={creditsLoading} />
+                        {subscriptionStatus === 'premium' && <ProTag />}
+                    </div>
                     <NavStyledDropdown
                         name={name}
                         email={email}
@@ -133,7 +139,7 @@ export default function PlanosPage() {
                         
                         <PlanCard
                             title="Premium"
-                            price="$59"
+                            price="$59,99"
                             color="bg-gradient-to-r from-purple-600 to-purple-800"
                             features={[
                                 { text: "10 Projetos", available: true },
@@ -142,6 +148,8 @@ export default function PlanosPage() {
                             ]}
                             priceId="price_1RbUoL2LODbcMK9PfX6Ilsf3" // replace with your real Stripe Price ID
                             onSubscribe={() => handleSubscribe('price_1RbUoL2LODbcMK9PfX6Ilsf3')}
+                            hasButton={subscriptionStatus !== 'premium'}
+                            buttonText={subscriptionStatus === 'premium' ? 'Adquirido' : 'Assinar'}
                         />
                         
                         {/* Cool Credit Purchase Card */}

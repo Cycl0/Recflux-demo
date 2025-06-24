@@ -4,9 +4,12 @@ import { useSupabaseUser } from '@/utils/useSupabaseUser';
 import NavStyledDropdown from '@/components/NavStyledDropdown';
 import TesteAgoraButton from '@/components/TesteAgoraButton';
 import CreditsDisplay from '@/components/CreditsDisplay';
+import ProTag from '@/components/ProTag';
+import { useRouter } from 'next/navigation';
 
 export default function SobrePage() {
-  const { user, loading, credits, creditsLoading } = useSupabaseUser();
+  const { push } = useRouter();
+  const { user, loading, credits, creditsLoading, subscriptionStatus } = useSupabaseUser();
   let navExtra = null;
   if (!loading) {
     if (user) {
@@ -19,7 +22,12 @@ export default function SobrePage() {
       };
       navExtra = (
         <>
-          <CreditsDisplay credits={credits} loading={creditsLoading} />
+          <div className="flex items-center mr-4 cursor-pointer" onClick={() => {
+            push('/pages/planos');
+          }}>
+            <CreditsDisplay credits={credits} loading={creditsLoading} />
+            {subscriptionStatus === 'premium' && <ProTag />}
+          </div>
           <NavStyledDropdown
             name={name}
             email={email}

@@ -73,6 +73,7 @@ import ReactSelect from 'react-select';
 import LoadingSpinner from '@/components/LoadingSpinner';
 import { ChatMessageSkeleton } from '@/components/ChatMessageSkeleton';
 import ReactDiffViewer from 'react-diff-viewer';
+import ProTag from '@/components/ProTag';
 
 // Chat action options for the Select component
 const chatActionOptions = [
@@ -1067,7 +1068,7 @@ function Home({ onLayoutChange = () => {}, ...props }) {
   // Auth state - must be declared FIRST so it's available everywhere
   const { user, loading: userLoading } = useSupabaseGoogleRegistration();
   // Enhanced user hook for credits
-  const { credits, creditsLoading, refetchCredits } = useSupabaseUser();
+  const { credits, creditsLoading, refetchCredits, subscriptionStatus } = useSupabaseUser();
 
   // Project selection state for ConfigWindowContent
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -1728,7 +1729,12 @@ if (userLoading) {
   navExtra = (
     <>
       {themeToggleButton}
-      <CreditsDisplay credits={credits} loading={creditsLoading} />
+      <div className="flex items-center mr-4 cursor-pointer" onClick={() => {
+          push('/pages/planos');
+      }}>
+        <CreditsDisplay credits={credits} loading={creditsLoading} />
+        {subscriptionStatus === 'premium' && <ProTag />}
+      </div>
       <NavStyledDropdown
         name={name}
         email={email}
