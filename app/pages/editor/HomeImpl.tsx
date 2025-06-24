@@ -163,7 +163,7 @@ const createMuiTheme = (isDarkMode: boolean) => createTheme({
 const EditorContext = React.createContext({
   setFilesCurrentHandler: (fileName: string, code: string, index?: number) => {}, // Will be replaced below
   throttleEditorOpen: (open: boolean) => {},
-  selectedFile: undefined as undefined | { value?: string; name?: string },
+  selectedFile: undefined as undefined | { value?: string; name?: string; id?: string },
   editorSelection: null as null | { startLineNumber: number; startColumn: number; endLineNumber: number; endColumn: number; selectedText: string },
   cursorPosition: null as null | { lineNumber: number; column: number },
   applyAgenticChanges: (changes: any[]) => {},
@@ -177,6 +177,7 @@ interface ChatProps {
   appendRef?: React.MutableRefObject<any>;
   user?: any;
   onCreditsUpdate?: () => void;
+  publicUserId?: string | null;
 }
 
 // Generate diff from API changes data instead of comparing code strings
@@ -235,7 +236,7 @@ function generateDiffFromChanges(changes: any[], oldCode: string): string {
   return diffLines.join('\n');
 }
 
-function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatProps & { theme: 'dark' | 'light' }) {
+function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicUserId }: ChatProps & { theme: 'dark' | 'light' }) {
   // Restore chat prompt from cookie
   const [input, setInput] = useState(() => Cookies.get('chatPrompt') || '');
   useEffect(() => {
@@ -446,6 +447,34 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatP
           }
           
           newCode = lines.join('\n');
+          
+          // Save file version with prompt tag
+          if (selectedFile?.id && publicUserId && (chatAction.value === 'GERAR' || chatAction.value === 'EDITAR')) {
+            (async () => {
+              try {
+                const { saveFileVersion } = await import('@/utils/supabaseProjects');
+                // Fetch latest version number
+                let nextVersion = 1;
+                const { data: latestVersionRows, error: latestVersionError } = await supabase
+                  .from('file_versions')
+                  .select('version')
+                  .eq('file_id', selectedFile.id)
+                  .order('version', { ascending: false })
+                  .limit(1);
+
+                if (!latestVersionError && latestVersionRows && latestVersionRows.length > 0) {
+                  nextVersion = (latestVersionRows[0].version || 0) + 1;
+                }
+                // Create a tag from the first 5 words of the prompt
+                const promptTag = input.split(' ').slice(0, 5).join(' ');
+                await saveFileVersion(selectedFile.id, promptTag, newCode, nextVersion, publicUserId);
+                console.log(`[SAVE VERSION] Saved version ${nextVersion} for file ${selectedFile.name} with tag: ${promptTag}`);
+              } catch (e) {
+                console.error("Failed to save file version with prompt tag:", e);
+                // Don't block UI for this, just log it.
+              }
+            })();
+          }
           
           // Store diff data for ReactDiffViewer
           const diffData = {
@@ -2017,6 +2046,7 @@ return (
               appendRef={chatAppendRef} 
               user={user}
               onCreditsUpdate={refetchCredits}
+              publicUserId={publicUserId}
             />
           </div>
         </WinBoxWindow>
