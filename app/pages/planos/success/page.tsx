@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
 interface PaymentDetails {
@@ -10,7 +10,7 @@ interface PaymentDetails {
   status: string;
 }
 
-export default function SuccessPage() {
+function SuccessPageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const sessionId = searchParams.get("session_id");
@@ -61,5 +61,21 @@ export default function SuccessPage() {
         </button>
       </div>
     </div>
+  );
+}
+
+export default function SuccessPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-blue-900 via-blue-700 to-indigo-900 text-white px-4">
+        <div className="bg-white/10 backdrop-blur-2xl border border-blue-300/30 shadow-2xl rounded-3xl p-8 max-w-md w-full relative overflow-hidden">
+          <div className="absolute inset-0 pointer-events-none rounded-3xl border-2 border-blue-400/40 blur-[2px] animate-pulse" style={{boxShadow: '0 0 40px 10px rgba(59,130,246,0.15)'}} />
+          <h1 className="text-3xl font-bold mb-4 text-center drop-shadow-lg">Carregando...</h1>
+          <p className="text-center">Verificando detalhes do pagamento...</p>
+        </div>
+      </div>
+    }>
+      <SuccessPageContent />
+    </Suspense>
   );
 } 
