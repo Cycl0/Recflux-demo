@@ -71,6 +71,7 @@ import TextareaAutosize from 'react-textarea-autosize';
 import IconSend from "@/components/IconSend";
 import ReactSelect from 'react-select';
 import LoadingSpinner, { ChatMessageSkeleton } from '@/components/LoadingSpinner';
+import ReactDiffViewer from 'react-diff-viewer';
 
 // Chat action options for the Select component
 const chatActionOptions = [
@@ -175,6 +176,62 @@ interface ChatProps {
   appendRef?: React.MutableRefObject<any>;
   user?: any;
   onCreditsUpdate?: () => void;
+}
+
+// Generate diff from API changes data instead of comparing code strings
+function generateDiffFromChanges(changes: any[], oldCode: string): string {
+  const diffLines: string[] = [];
+  const oldLines = oldCode.split('\n');
+  
+  changes.forEach((change, index) => {
+    const { type, startLine, endLine, code, description } = change;
+    
+    if (type === 'replace') {
+      // Show what was replaced
+      const startIdx = startLine - 1;
+      const endIdx = endLine ? endLine - 1 : startIdx;
+      
+      for (let i = startIdx; i <= endIdx && i < oldLines.length; i++) {
+        if (oldLines[i] && oldLines[i].trim()) {
+          diffLines.push(`${i + 1}: - ${oldLines[i].trim()}`);
+        }
+      }
+      
+      // Show new code
+      const newLines = code.split('\n');
+      newLines.forEach((line, idx) => {
+        if (line.trim()) {
+          diffLines.push(`${startIdx + idx + 1}: + ${line.trim()}`);
+        }
+      });
+      
+    } else if (type === 'insert') {
+      // Show inserted code
+      const newLines = code.split('\n');
+      newLines.forEach((line, idx) => {
+        if (line.trim()) {
+          diffLines.push(`${startLine + idx}: + ${line.trim()}`);
+        }
+      });
+      
+    } else if (type === 'delete') {
+      // Show deleted lines
+      const startIdx = startLine - 1;
+      const endIdx = endLine ? endLine - 1 : startIdx;
+      
+      for (let i = startIdx; i <= endIdx && i < oldLines.length; i++) {
+        if (oldLines[i] && oldLines[i].trim()) {
+          diffLines.push(`${i + 1}: - ${oldLines[i].trim()}`);
+        }
+      }
+    }
+  });
+  
+  if (diffLines.length === 0) {
+    return 'Mudanças aplicadas (diff detalhado não disponível)';
+  }
+  
+  return diffLines.join('\n');
 }
 
 function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatProps & { theme: 'dark' | 'light' }) {
@@ -285,7 +342,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatP
         })
       })
       .then(response => response.json())
-      .then(data => {
+      .then(async (data) => {
         const actionIcons = {
           'GERAR': '🚀',
           'EDITAR': '✏️', 
@@ -307,10 +364,51 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatP
         };
 
         if (data.changes && data.changes.length > 0) {
-          applyAgenticChanges(data.changes);
+          // Capture code before changes for diff
+          const codeBeforeChanges = selectedFile?.value || '';
+          
+          // Apply changes and wait for completion
+          await applyAgenticChanges(data.changes);
+          
+          // Generate new code by applying changes to the original code
+          let newCode = codeBeforeChanges;
+          const lines = newCode.split('\n');
+          
+          // Apply changes in reverse order to maintain line numbers
+          const sortedChanges = [...data.changes].sort((a, b) => (b.startLine || 0) - (a.startLine || 0));
+          
+          for (const change of sortedChanges) {
+            if (change.type === 'replace') {
+              const startIdx = (change.startLine || 1) - 1;
+              const endIdx = change.endLine ? change.endLine - 1 : startIdx;
+              const newLines = change.code.split('\n');
+              lines.splice(startIdx, endIdx - startIdx + 1, ...newLines);
+            } else if (change.type === 'insert') {
+              const insertIdx = (change.startLine || 1) - 1;
+              const newLines = change.code.split('\n');
+              lines.splice(insertIdx, 0, ...newLines);
+            } else if (change.type === 'delete') {
+              const startIdx = (change.startLine || 1) - 1;
+              const endIdx = change.endLine ? change.endLine - 1 : startIdx;
+              lines.splice(startIdx, endIdx - startIdx + 1);
+            }
+          }
+          
+          newCode = lines.join('\n');
+          
+          // Store diff data for ReactDiffViewer
+          const diffData = {
+            oldCode: codeBeforeChanges,
+            newCode: newCode,
+            changes: data.changes
+          };
+          
           assistantMessage.content = `${actionIcons[chatAction.value]} **${actionMessages[chatAction.value]}**\n\n${data.explanation}\n\n**Detalhes das mudanças:**\n${data.changes.map((change, i) => 
             `${i + 1}. **${change.type.toUpperCase()}** na linha ${change.startLine}${change.endLine && change.endLine !== change.startLine ? `-${change.endLine}` : ''}: ${change.description}`
           ).join('\n')}`;
+          
+          // Add diff data to message for custom rendering
+          (assistantMessage as any).diffData = diffData;
         } else if (data.error) {
           assistantMessage.content = `❌ Erro: ${data.error}`;
         } else {
@@ -323,11 +421,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatP
         }
 
         // Add response to chat for all structured actions
-        setMessages(prev => [...prev, { 
-          id: (Date.now() + 1).toString(), 
-          role: "assistant" as const, 
-          content: assistantMessage.content 
-        }]);
+        setMessages(prev => [...prev, assistantMessage]);
         setIsLoading(false);
       })
       .catch(error => {
@@ -522,6 +616,53 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatP
               >
                 {message.content}
               </ReactMarkdown>
+              
+              {/* Show diff viewer if diff data is available */}
+              {(message as any).diffData && (
+                <div className="mt-4">
+                  <h4 className="text-sm font-semibold mb-2 text-gray-600 dark:text-gray-300">📊 Diferenças aplicadas:</h4>
+                  <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
+                    <ReactDiffViewer
+                      oldValue={(message as any).diffData.oldCode}
+                      newValue={(message as any).diffData.newCode}
+                      splitView={false}
+                      hideLineNumbers={false}
+                      useDarkTheme={theme === 'dark'}
+                      styles={{
+                        variables: {
+                          dark: {
+                            diffViewerBackground: '#1a1b26',
+                            addedBackground: '#2d4a2b',
+                            removedBackground: '#4a2d2d',
+                            wordAddedBackground: '#3d6a3a',
+                            wordRemovedBackground: '#6a3a3a',
+                            addedGutterBackground: '#2d4a2b',
+                            removedGutterBackground: '#4a2d2d',
+                            gutterBackground: '#232733',
+                            gutterBackgroundDark: '#1a1b26',
+                            diffViewerTitleBackground: '#232733',
+                            diffViewerTitleColor: '#e0f2f1',
+                            diffViewerTitleBorderColor: '#67e8f9',
+                          },
+                          light: {
+                            diffViewerBackground: '#ffffff',
+                            addedBackground: '#e6ffed',
+                            removedBackground: '#ffeef0',
+                            wordAddedBackground: '#acf2bd',
+                            wordRemovedBackground: '#fdb8c0',
+                            addedGutterBackground: '#cdffd8',
+                            removedGutterBackground: '#fdbdcf',
+                            gutterBackground: '#f7f7f7',
+                            diffViewerTitleBackground: '#f0f9ff',
+                            diffViewerTitleColor: '#0e7490',
+                            diffViewerTitleBorderColor: '#22d3ee',
+                          }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         ))}
@@ -1668,17 +1809,58 @@ Faça APENAS as mudanças mínimas necessárias para corrigir este erro específ
       clearTimeout(timeoutId);
       return response.json();
     })
-    .then(data => {
+    .then(async (data) => {
       if (data.changes && data.changes.length > 0) {
-        applyAgenticChanges(data.changes);
-        // Show success message in chat
+        // Capture code before changes for diff
+        const codeBeforeChanges = selectedFile?.value || '';
+        
+        await applyAgenticChanges(data.changes);
+        
+        // Generate new code by applying changes to the original code
+        let newCode = codeBeforeChanges;
+        const lines = newCode.split('\n');
+        
+        // Apply changes in reverse order to maintain line numbers
+        const sortedChanges = [...data.changes].sort((a, b) => (b.startLine || 0) - (a.startLine || 0));
+        
+        for (const change of sortedChanges) {
+          if (change.type === 'replace') {
+            const startIdx = (change.startLine || 1) - 1;
+            const endIdx = change.endLine ? change.endLine - 1 : startIdx;
+            const newLines = change.code.split('\n');
+            lines.splice(startIdx, endIdx - startIdx + 1, ...newLines);
+          } else if (change.type === 'insert') {
+            const insertIdx = (change.startLine || 1) - 1;
+            const newLines = change.code.split('\n');
+            lines.splice(insertIdx, 0, ...newLines);
+          } else if (change.type === 'delete') {
+            const startIdx = (change.startLine || 1) - 1;
+            const endIdx = change.endLine ? change.endLine - 1 : startIdx;
+            lines.splice(startIdx, endIdx - startIdx + 1);
+          }
+        }
+        
+        newCode = lines.join('\n');
+        
+        // Generate diff and show success message in chat
         if (chatAppendRef.current && typeof chatAppendRef.current === 'function') {
-          chatAppendRef.current({ 
+          const diffData = {
+            oldCode: codeBeforeChanges,
+            newCode: newCode,
+            changes: data.changes
+          };
+          
+          const fixMessage = { 
             role: "assistant", 
             content: `🔧 **Erro corrigido com sucesso!**\n\n${data.explanation}\n\n**Correções aplicadas:**\n${data.changes.map((change, i) => 
               `${i + 1}. **${change.type.toUpperCase()}** na linha ${change.startLine}${change.endLine && change.endLine !== change.startLine ? `-${change.endLine}` : ''}: ${change.description}`
             ).join('\n')}`
-          });
+          };
+          
+          // Add diff data for ReactDiffViewer
+          (fixMessage as any).diffData = diffData;
+          
+          chatAppendRef.current(fixMessage);
         }
       } else if (data.error) {
         if (chatAppendRef.current && typeof chatAppendRef.current === 'function') {
