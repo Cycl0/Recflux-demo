@@ -318,7 +318,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate }: ChatP
       const actionPrompts = {
         'GERAR': input, // Direct user input for generation
         'EDITAR': input, // Direct user input for editing (main agentic mode)
-        'FOCAR': `Focus on and extract only the component or section related to: ${input}\n\nRemove all other code and keep only the relevant parts. Maintain the component structure.`
+        'FOCAR': `Focus on and extract only the component or section related to: ${input}\n\nRemove all other code and keep only the relevant parts. Maintain the component structure. If the code does not include a render call for the component, add one at the end, like \`render(<MyComponent />);\` replacing 'MyComponent' with the actual component's name.`
       };
 
       const agenticPrompt = actionPrompts[chatAction.value] || input;
@@ -1785,6 +1785,7 @@ ${lineNumber ? `🎯 O erro está na linha ${lineNumber}. Foque nesta linha e na
 
 ${errorText.includes('expected ";"') ? '⚠️ Este é um erro de ponto e vírgula ausente. Procure onde adicionar um ";" na linha indicada.' : ''}
 ${errorText.includes('Unexpected token') ? '⚠️ Este é um erro de token inesperado. Verifique parênteses, chaves, colchetes ou vírgulas ausentes/extras.' : ''}
+${errorText.includes('is not defined') ? '⚠️ Este é um erro de referência. Uma variável ou função está sendo usada antes de ser declarada, ou há um erro de digitação no nome.' : ''}
 
 Faça APENAS as mudanças mínimas necessárias para corrigir este erro específico. Não reescreva o código inteiro.`;
     } else {
@@ -1845,22 +1846,57 @@ Faça APENAS as mudanças mínimas necessárias para corrigir este erro específ
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
 
-    fetch('/api/agentic-structured', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt: fixPrompt,
-        currentCode: selectedFile?.value || '',
-        fileName: selectedFile?.name || 'script.js',
-        actionType: 'FIX'
-      }),
-      signal: controller.signal
-    })
-    .then(response => {
+    try {
+      const response = await fetch('/api/agentic-structured', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: fixPrompt,
+          currentCode: selectedFile?.value || '',
+          fileName: selectedFile?.name || 'script.js',
+          actionType: 'FIX'
+        }),
+        signal: controller.signal
+      });
       clearTimeout(timeoutId);
-      return response.json();
-    })
-    .then(async (data) => {
+
+      if (!response.ok || !response.body) {
+        const errorText = await response.text();
+        throw new Error(`API Error (${response.status}): ${errorText || response.statusText}`);
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let partialLine = '';
+      let accumulatedJson = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        partialLine += decoder.decode(value, { stream: true });
+        let lines = partialLine.split('\n');
+        partialLine = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('0:')) {
+            accumulatedJson += JSON.parse(line.substring(2));
+          }
+        }
+      }
+
+      let data;
+      try {
+        const startIndex = accumulatedJson.indexOf('{');
+        const endIndex = accumulatedJson.lastIndexOf('}');
+        if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+          throw new Error("JSON object not found in the response");
+        }
+        const finalJsonString = accumulatedJson.substring(startIndex, endIndex + 1);
+        data = JSON.parse(finalJsonString);
+      } catch (e) {
+        throw new Error(`Falha ao analisar a resposta da API de correção. Resposta recebida:\\n\\n${accumulatedJson}`);
+      }
       if (data.changes && data.changes.length > 0) {
         // Capture code before changes for diff
         const codeBeforeChanges = selectedFile?.value || '';
@@ -1930,14 +1966,15 @@ Faça APENAS as mudanças mínimas necessárias para corrigir este erro específ
           });
         }
       }
-    })
-    .catch(error => {
-      clearTimeout(timeoutId);
+    } catch (error) {
+      clearTimeout(timeoutId); // Ensure timeout is cleared on error
       console.error('Fix error:', error);
       
       let errorMessage = "❌ Erro ao processar correção do código. Tente novamente.";
       if (error.name === 'AbortError') {
         errorMessage = "⏱️ Tempo limite excedido. A correção demorou muito para processar. Tente novamente.";
+      } else if (error.message.includes('Falha ao analisar') || error.message.includes('API Error')) {
+        errorMessage = `❌ ${error.message}`;
       }
       
       if (chatAppendRef.current && typeof chatAppendRef.current === 'function') {
@@ -1946,10 +1983,7 @@ Faça APENAS as mudanças mínimas necessárias para corrigir este erro específ
           content: errorMessage
         });
       }
-    })
-    .finally(() => {
-      setIsFixing(false);
-    });
+    }
 
     // Update credits display
     refetchCredits();
@@ -1957,6 +1991,8 @@ Faça APENAS as mudanças mínimas necessárias para corrigir este erro específ
   } catch (error) {
     console.error('Error in handleFixCode:', error);
     alert('Erro ao processar solicitação. Tente novamente.');
+    setIsFixing(false);
+  } finally {
     setIsFixing(false);
   }
 };
