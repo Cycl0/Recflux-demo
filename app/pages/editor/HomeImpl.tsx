@@ -244,7 +244,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
     Cookies.set('chatPrompt', input, { expires: 7 });
   }, [input]);
   const { setFilesCurrentHandler, throttleEditorOpen, selectedFile, editorSelection, cursorPosition, applyAgenticChanges } = useContext(EditorContext);
-  const [chatAction, setChatAction] = useState({ value: 'EDITAR', label: 'EDITAR' });
+  const [chatAction, setChatAction] = useState({ value: 'GERAR', label: 'GERAR' });
   
   // Manual message management for all actions
   const [messages, setMessages] = useState<any[]>([]);
