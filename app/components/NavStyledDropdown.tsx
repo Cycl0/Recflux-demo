@@ -35,7 +35,7 @@ const NavStyledDropdown: React.FC<NavStyledDropdownProps> = ({ name, email, avat
           />
         </div>
       }
-      className="backdrop-blur-xl bg-black/[0.1] border-none shadow-gradient"
+      className="backdrop-blur-xl bg-black/[0.1] border-none shadow-gradient z-[2147483647]"
     >
       <Dropdown.Header className="text-white border-none">
         <span className="block text-sm">{name}</span>

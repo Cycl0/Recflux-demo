@@ -1084,35 +1084,34 @@ function Home({ onLayoutChange = () => {}, ...props }) {
   // Calculate responsive window positions and sizes
   const getWindowConfig = useCallback(() => {
     const { width: screenWidth, height: screenHeight } = windowDimensions;
-    const navBarHeight = 80; // NavBar height
-    const bottomNavHeight = 80; // Bottom navigation height
-    const bottomMargin = 60; // Additional margin before screen end
-    const availableHeight = screenHeight - navBarHeight - bottomNavHeight - bottomMargin;
+    const topMargin = 92; // Top navbar margin
+    const bottomMargin = 80; // Bottom navbar margin
+    const availableHeight = screenHeight - topMargin - bottomMargin; // Full height between navbars
     const padding = 20;
 
     // For mobile/small screens (< 768px)
     if (screenWidth < 768) {
-      const windowWidth = Math.min(screenWidth - padding * 4, 400);
-      const windowHeight = Math.max(400, availableHeight - padding * 4); // Match centerWinBox logic
+      const windowWidth = screenWidth; // Full screen width
+      const windowHeight = availableHeight; // Full available height
       
       return {
         chat: {
           width: windowWidth,
           height: windowHeight,
-          x: (screenWidth - windowWidth) / 2,
-          y: navBarHeight + padding
+          x: 0, // No left margin
+          y: topMargin // Start at 92px from top
         },
         editor: {
           width: windowWidth,
           height: windowHeight,
-          x: (screenWidth - windowWidth) / 2,
-          y: navBarHeight + padding + 50
+          x: 0, // No left margin
+          y: topMargin // Start at 92px from top
         },
         preview: {
           width: windowWidth,
           height: windowHeight,
-          x: (screenWidth - windowWidth) / 2,
-          y: navBarHeight + padding + 100
+          x: 0, // No left margin
+          y: topMargin // Start at 92px from top
         }
       };
     }
@@ -1120,52 +1119,52 @@ function Home({ onLayoutChange = () => {}, ...props }) {
     // For tablet screens (768px - 1024px)
     if (screenWidth < 1024) {
       const windowWidth = Math.min((screenWidth - padding * 4) / 2, 450);
-      const windowHeight = Math.max(500, availableHeight - padding * 4); // Match centerWinBox logic
+      const windowHeight = Math.max(500, availableHeight - padding * 4);
       
       return {
         chat: {
           width: windowWidth,
           height: windowHeight,
           x: padding,
-          y: navBarHeight + padding
+          y: topMargin + padding
         },
         editor: {
           width: windowWidth,
           height: windowHeight,
           x: screenWidth - windowWidth - padding,
-          y: navBarHeight + padding
+          y: topMargin + padding
         },
         preview: {
           width: windowWidth,
           height: windowHeight,
           x: padding,
-          y: navBarHeight + padding + 50
+          y: topMargin + padding + 50
         }
       };
     }
     
     // For desktop screens (>= 1024px)
     const windowWidth = Math.min((screenWidth - padding * 6) / 3, 525);
-    const windowHeight = Math.max(600, availableHeight - padding * 4); // Match centerWinBox logic
+    const windowHeight = Math.max(600, availableHeight - padding * 4);
     
     return {
       chat: {
         width: windowWidth,
         height: windowHeight,
         x: padding,
-        y: navBarHeight + padding
+        y: topMargin + padding
       },
       editor: {
         width: windowWidth,
         height: windowHeight,
         x: padding + windowWidth + padding,
-        y: navBarHeight + padding
+        y: topMargin + padding
       },
       preview: {
         width: windowWidth,
         height: windowHeight,
         x: padding + (windowWidth + padding) * 2,
-        y: navBarHeight + padding
+        y: topMargin + padding
       }
     };
   }, [windowDimensions]);
@@ -1853,23 +1852,22 @@ const centerWinBox = (id: string) => {
       // Calculate responsive config
       const screenWidth = window.innerWidth;
       const screenHeight = window.innerHeight;
-      const navBarHeight = 80;
-      const bottomNavHeight = 80;
-      const bottomMargin = 60; // Additional margin before screen end
-      const availableHeight = screenHeight - navBarHeight - bottomNavHeight - bottomMargin;
+      const topMargin = 92; // Top navbar margin
+      const bottomMargin = 80; // Bottom navbar margin
+      const availableHeight = screenHeight - topMargin - bottomMargin; // Full height between navbars
       const padding = 20;
 
       let windowConf;
 
       // For mobile/small screens (< 768px)
       if (screenWidth < 768) {
-        const windowWidth = Math.min(screenWidth - padding * 4, 400);
-        const windowHeight = Math.max(400, availableHeight - padding * 4);
+        const windowWidth = screenWidth; // Full screen width
+        const windowHeight = availableHeight; // Full available height
         
         const configs = {
-          chat: { width: windowWidth, height: windowHeight, x: (screenWidth - windowWidth) / 2, y: navBarHeight + padding },
-          editor: { width: windowWidth, height: windowHeight, x: (screenWidth - windowWidth) / 2, y: navBarHeight + padding + 50 },
-          preview: { width: windowWidth, height: windowHeight, x: (screenWidth - windowWidth) / 2, y: navBarHeight + padding + 100 }
+          chat: { width: windowWidth, height: windowHeight, x: 0, y: topMargin },
+          editor: { width: windowWidth, height: windowHeight, x: 0, y: topMargin },
+          preview: { width: windowWidth, height: windowHeight, x: 0, y: topMargin }
         };
         windowConf = configs[id as keyof typeof configs];
       }
@@ -1879,9 +1877,9 @@ const centerWinBox = (id: string) => {
         const windowHeight = Math.max(500, availableHeight - padding * 4);
         
         const configs = {
-          chat: { width: windowWidth, height: windowHeight, x: padding, y: navBarHeight + padding },
-          editor: { width: windowWidth, height: windowHeight, x: screenWidth - windowWidth - padding, y: navBarHeight + padding },
-          preview: { width: windowWidth, height: windowHeight, x: padding, y: navBarHeight + padding + 50 }
+          chat: { width: windowWidth, height: windowHeight, x: padding, y: topMargin + padding },
+          editor: { width: windowWidth, height: windowHeight, x: screenWidth - windowWidth - padding, y: topMargin + padding },
+          preview: { width: windowWidth, height: windowHeight, x: padding, y: topMargin + padding + 50 }
         };
         windowConf = configs[id as keyof typeof configs];
       }
@@ -1891,9 +1889,9 @@ const centerWinBox = (id: string) => {
         const windowHeight = Math.max(600, availableHeight - padding * 4);
         
         const configs = {
-          chat: { width: windowWidth, height: windowHeight, x: padding, y: navBarHeight + padding },
-          editor: { width: windowWidth, height: windowHeight, x: padding + windowWidth + padding, y: navBarHeight + padding },
-          preview: { width: windowWidth, height: windowHeight, x: padding + (windowWidth + padding) * 2, y: navBarHeight + padding }
+          chat: { width: windowWidth, height: windowHeight, x: padding, y: topMargin + padding },
+          editor: { width: windowWidth, height: windowHeight, x: padding + windowWidth + padding, y: topMargin + padding },
+          preview: { width: windowWidth, height: windowHeight, x: padding + (windowWidth + padding) * 2, y: topMargin + padding }
         };
         windowConf = configs[id as keyof typeof configs];
       }
