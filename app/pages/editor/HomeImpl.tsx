@@ -1118,53 +1118,53 @@ function Home({ onLayoutChange = () => {}, ...props }) {
     
     // For tablet screens (768px - 1024px)
     if (screenWidth < 1024) {
-      const windowWidth = Math.min((screenWidth - padding * 4) / 2, 450);
-      const windowHeight = Math.max(500, availableHeight - padding * 4);
+      const windowWidth = (screenWidth - padding * 4) / 2;
+      const windowHeight = availableHeight;
       
       return {
         chat: {
           width: windowWidth,
           height: windowHeight,
           x: padding,
-          y: topMargin + padding
+          y: topMargin
         },
         editor: {
           width: windowWidth,
           height: windowHeight,
           x: screenWidth - windowWidth - padding,
-          y: topMargin + padding
+          y: topMargin
         },
         preview: {
           width: windowWidth,
           height: windowHeight,
           x: padding,
-          y: topMargin + padding + 50
+          y: topMargin
         }
       };
     }
     
     // For desktop screens (>= 1024px)
-    const windowWidth = Math.min((screenWidth - padding * 6) / 3, 525);
-    const windowHeight = Math.max(600, availableHeight - padding * 4);
+    const windowWidth = (screenWidth - padding * 6) / 3;
+    const windowHeight = availableHeight;
     
     return {
       chat: {
         width: windowWidth,
         height: windowHeight,
         x: padding,
-        y: topMargin + padding
+        y: topMargin
       },
       editor: {
         width: windowWidth,
         height: windowHeight,
         x: padding + windowWidth + padding,
-        y: topMargin + padding
+        y: topMargin
       },
       preview: {
         width: windowWidth,
         height: windowHeight,
         x: padding + (windowWidth + padding) * 2,
-        y: topMargin + padding
+        y: topMargin
       }
     };
   }, [windowDimensions]);
@@ -1873,25 +1873,25 @@ const centerWinBox = (id: string) => {
       }
       // For tablet screens (768px - 1024px)
       else if (screenWidth < 1024) {
-        const windowWidth = Math.min((screenWidth - padding * 4) / 2, 450);
-        const windowHeight = Math.max(500, availableHeight - padding * 4);
+        const windowWidth = (screenWidth - padding * 4) / 2;
+        const windowHeight = availableHeight;
         
         const configs = {
-          chat: { width: windowWidth, height: windowHeight, x: padding, y: topMargin + padding },
-          editor: { width: windowWidth, height: windowHeight, x: screenWidth - windowWidth - padding, y: topMargin + padding },
-          preview: { width: windowWidth, height: windowHeight, x: padding, y: topMargin + padding + 50 }
+          chat: { width: windowWidth, height: windowHeight, x: padding, y: topMargin },
+          editor: { width: windowWidth, height: windowHeight, x: screenWidth - windowWidth - padding, y: topMargin },
+          preview: { width: windowWidth, height: windowHeight, x: padding, y: topMargin}
         };
         windowConf = configs[id as keyof typeof configs];
       }
       // For desktop screens (>= 1024px)
       else {
-        const windowWidth = Math.min((screenWidth - padding * 6) / 3, 525);
-        const windowHeight = Math.max(600, availableHeight - padding * 4);
+        const windowWidth = (screenWidth - padding * 6) / 3;
+        const windowHeight = availableHeight;
         
         const configs = {
-          chat: { width: windowWidth, height: windowHeight, x: padding, y: topMargin + padding },
-          editor: { width: windowWidth, height: windowHeight, x: padding + windowWidth + padding, y: topMargin + padding },
-          preview: { width: windowWidth, height: windowHeight, x: padding + (windowWidth + padding) * 2, y: topMargin + padding }
+          chat: { width: windowWidth, height: windowHeight, x: padding, y: topMargin },
+          editor: { width: windowWidth, height: windowHeight, x: padding + windowWidth + padding, y: topMargin },
+          preview: { width: windowWidth, height: windowHeight, x: padding + (windowWidth + padding) * 2, y: topMargin }
         };
         windowConf = configs[id as keyof typeof configs];
       }
