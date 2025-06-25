@@ -990,8 +990,29 @@ function useSupabaseGoogleRegistration() {
       }
       setLoading(false);
     });
+
+    // Listen for messages from popup window
+    const handleMessage = async (event) => {
+      if (event.origin !== window.location.origin) return;
+      
+      if (event.data.type === 'SUPABASE_AUTH_SUCCESS') {
+        console.log('Received auth success from popup');
+        // Refresh the session in the main window
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (session?.user) {
+          registerUserIfNeeded(session.user);
+        }
+      } else if (event.data.type === 'SUPABASE_AUTH_ERROR') {
+        console.error('Auth error from popup:', event.data.error);
+        setLoading(false);
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+
     return () => {
       authListener?.subscription.unsubscribe();
+      window.removeEventListener('message', handleMessage);
     };
   }, []);
 
@@ -1405,13 +1426,8 @@ const throttledSaveEditorCode = useMemo(() => throttle(() => {
 
 
 function GoogleSignInButton() {
-  const handleGoogleLogin = async () => {
-    await supabase.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-        redirectTo: `${window.location.origin}/pages/editor`
-      }
-    });
+  const handleGoogleLogin = () => {
+    window.open('/login', 'supabase-login', 'width=500,height=600');
   };
   return (
     <Button
