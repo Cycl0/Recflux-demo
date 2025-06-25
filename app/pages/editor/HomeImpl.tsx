@@ -237,6 +237,147 @@ function generateDiffFromChanges(changes: any[], oldCode: string): string {
   return diffLines.join('\n');
 }
 
+// PERFORMANCE: Memoized message component to prevent unnecessary re-renders
+const MessageComponent = React.memo(({ message, theme, setFilesCurrentHandler, throttleEditorOpen }: {
+  message: any;
+  theme: 'dark' | 'light';
+  setFilesCurrentHandler: (fileName: string, content: string, index?: number) => void;
+  throttleEditorOpen: (open: boolean) => void;
+}) => {
+  if ((message as any).isLoading) {
+    return <ChatMessageSkeleton key={message.id} theme={theme} />;
+  }
+
+  return (
+    <div
+      key={message.id}
+      className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+    >
+      <div className="relative mb-2">
+        {message.role === 'user' ? (
+          <span className="float-left mr-2">
+            <User className="w-6 h-6 text-blue-600" />
+          </span>
+        ) : (
+          <span className="float-right mr-2">
+            <Bot className="w-6 h-6 text-gray-400" />
+          </span>
+        )}
+      </div>
+      <div className={`inline-block max-w-[80%] px-4 py-2 rounded-lg shadow-md break-words whitespace-pre-wrap
+          ${message.role === 'user'
+            ? theme === 'dark'
+              ? 'bg-cyan-400/20 text-cyan-100 border border-cyan-400/40 backdrop-blur-md'
+              : 'bg-cyan-100 text-cyan-900 border border-cyan-200'
+            : theme === 'dark'
+              ? 'bg-white/10 text-cyan-100 border border-cyan-700/70 backdrop-blur-lg'
+              : 'bg-white text-gray-900 border border-cyan-100'}
+        `}
+        style={theme === 'dark' ? { boxShadow: '0 4px 32px 0 rgba(34,211,238,0.10)', backgroundClip: 'padding-box' } : {}}>
+
+        <ReactMarkdown
+          remarkPlugins={[remarkGfm]}
+          rehypePlugins={[rehypePrism]}
+          components={{
+            code({node, inline, className, children, ...props}: any) {
+              const match = /language-(\w+)/.exec(className || '')
+              // For buttons, extract raw text
+              function extractTextFromChildren(children: React.ReactNode): string {
+                if (typeof children === 'string' || typeof children === 'number') return String(children);
+                if (Array.isArray(children)) return children.map(extractTextFromChildren).join('');
+                if (React.isValidElement(children) && children.props && children.props.children) {
+                  return extractTextFromChildren(children.props.children);
+                }
+                return '';
+              }
+              let codeContent = extractTextFromChildren(children);
+              codeContent = codeContent.replace(/\n$/, '');
+              return !inline ? (
+                <div className="relative my-4 bg-white/10 rounded-xl shadow-md p-2 overflow-x-auto glassmorphism-border">
+                  <div className="flex gap-2 mb-1 justify-end">
+                    <CopyButton text={codeContent} />
+                    <button
+                      className="ml-1 px-2 py-1 bg-blue-200 text-blue-900 rounded shadow-gradient hover:bg-blue-300 transition-all duration-300 ease-in-out"
+                      title="Enviar para o Editor"
+                      onClick={() => {
+                        // Guess file extension from language
+                        let lang = match ? match[1].toLowerCase() : '';
+                        let fileName = 'script.js';
+                        if (lang && lang.includes('html')) fileName = 'index.html';
+                        else if (lang && lang.includes('css')) fileName = 'style.css';
+                        else if (lang && lang.includes('js')) fileName = 'script.js';
+                        else if (lang && (lang.includes('svg') || lang.includes('xml'))) fileName = 'image.svg';
+                        setFilesCurrentHandler(fileName, codeContent, 0);
+                        throttleEditorOpen(true);
+                      }}
+                    >
+                      Enviar para o Editor
+                    </button>
+                  </div>
+                  <pre className={`${className} !min-h-10`} {...props}>
+                    <code className={className}>{children}</code>
+                  </pre>
+                </div>
+              ) : (
+                <code className={className} {...props}>{children}</code>
+              );
+            }
+          }}
+        >
+          {message.content}
+        </ReactMarkdown>
+        
+        {/* Show diff viewer if diff data is available */}
+        {(message as any).diffData && (
+          <div className="mt-4">
+            <h4 className="text-sm font-semibold mb-2 text-gray-600 dark:text-gray-300">📊 Diferenças aplicadas:</h4>
+            <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
+              <ReactDiffViewer
+                oldValue={(message as any).diffData.oldCode}
+                newValue={(message as any).diffData.newCode}
+                splitView={false}
+                hideLineNumbers={false}
+                useDarkTheme={theme === 'dark'}
+                styles={{
+                  variables: {
+                    dark: {
+                      diffViewerBackground: '#1a1b26',
+                      addedBackground: '#2d4a2b',
+                      removedBackground: '#4a2d2d',
+                      wordAddedBackground: '#3d6a3a',
+                      wordRemovedBackground: '#6a3a3a',
+                      addedGutterBackground: '#2d4a2b',
+                      removedGutterBackground: '#4a2d2d',
+                      gutterBackground: '#232733',
+                      gutterBackgroundDark: '#1a1b26',
+                      diffViewerTitleBackground: '#232733',
+                      diffViewerTitleColor: '#e0f2f1',
+                      diffViewerTitleBorderColor: '#67e8f9',
+                    },
+                    light: {
+                      diffViewerBackground: '#ffffff',
+                      addedBackground: '#e6ffed',
+                      removedBackground: '#ffeef0',
+                      wordAddedBackground: '#acf2bd',
+                      wordRemovedBackground: '#fdb8c0',
+                      addedGutterBackground: '#cdffd8',
+                      removedGutterBackground: '#fdbdcf',
+                      gutterBackground: '#f7f7f7',
+                      diffViewerTitleBackground: '#f0f9ff',
+                      diffViewerTitleColor: '#0e7490',
+                      diffViewerTitleBorderColor: '#22d3ee',
+                    }
+                  }
+                }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+});
+
 function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicUserId }: ChatProps & { theme: 'dark' | 'light' }) {
   // Restore chat prompt from cookie
   const [input, setInput] = useState(() => Cookies.get('chatPrompt') || '');
@@ -246,9 +387,23 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
   const { setFilesCurrentHandler, throttleEditorOpen, selectedFile, editorSelection, cursorPosition, applyAgenticChanges } = useContext(EditorContext);
   const [chatAction, setChatAction] = useState({ value: 'GERAR', label: 'GERAR' });
   
-  // Manual message management for all actions
+  // Manual message management for all actions - OPTIMIZED WITH CLEANUP
   const [messages, setMessages] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  
+  // PERFORMANCE: Limit message history to prevent infinite growth
+  const MAX_MESSAGES = 50; // Keep last 50 messages max
+  
+  // Clean up old messages when limit exceeded
+  useEffect(() => {
+    if (messages.length > MAX_MESSAGES) {
+      setMessages(prev => {
+        const cleaned = prev.slice(-MAX_MESSAGES);
+        console.log(`[PERFORMANCE] Cleaned message history: ${prev.length} -> ${cleaned.length}`);
+        return cleaned;
+      });
+    }
+  }, [messages.length]);
   
   // Manual message management for AGENTIC actions
   // Use messages directly
@@ -548,6 +703,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
   const lastUserMessageId = useRef<string | null>(null);
   const processedMessagesRef = useRef<Set<string>>(new Set());
 
+  // PERFORMANCE: Clean up memory leaks and limit processing scope
   useEffect(() => {
     // Find the last user message
     const lastUserMsg = [...allMessages].reverse().find(m => m.role === 'user');
@@ -556,12 +712,19 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
       setAllCodeGenerated([]);
       processedMessagesRef.current = new Set();
       lastUserMessageId.current = lastUserMsg?.id || null;
+      
+      // PERFORMANCE: Clean up old autoSentCodes to prevent memory leaks
+      setAutoSentCodes({});
+      console.log('[PERFORMANCE] Cleaned up autoSentCodes and processedMessages');
       return;
     }
 
+    // PERFORMANCE: Only process recent messages (last 10) instead of all messages
+    const recentMessages = allMessages.slice(-10);
     let newCode: string[] = [];
     let updated = false;
-    for (const message of allMessages) {
+    
+    for (const message of recentMessages) {
       if (message.role === 'assistant' && !processedMessagesRef.current.has(message.id)) {
         const codeBlocks = message.content
           .split(/```/g)
@@ -572,8 +735,27 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
         updated = true;
       }
     }
+    
     if (newCode.length > 0) {
-      setAllCodeGenerated(prev => [...prev, ...newCode]);
+      // PERFORMANCE: Limit allCodeGenerated to prevent infinite growth
+      setAllCodeGenerated(prev => {
+        const combined = [...prev, ...newCode];
+        // Keep only last 20 code blocks
+        return combined.slice(-20);
+      });
+    }
+    
+    // PERFORMANCE: Clean up old processed messages periodically
+    if (processedMessagesRef.current.size > 100) {
+      const recentMessageIds = new Set(recentMessages.map(m => m.id));
+      const newProcessedSet = new Set<string>();
+      for (const id of Array.from(processedMessagesRef.current)) {
+        if (recentMessageIds.has(id)) {
+          newProcessedSet.add(id);
+        }
+      }
+      processedMessagesRef.current = newProcessedSet;
+      console.log('[PERFORMANCE] Cleaned up processedMessagesRef');
     }
   }, [allMessages]);
 
@@ -616,7 +798,18 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
       setTimeout(() => setSendingToEditor(false), 1200); // show indicator for 1.2s
     }
     
-    setAutoSentCodes(prev => ({ ...prev, [lastMessage.id]: true }));
+    // PERFORMANCE: Clean up old autoSentCodes periodically
+    setAutoSentCodes(prev => {
+      const entries = Object.entries(prev);
+      if (entries.length > 50) {
+        // Keep only the last 25 entries
+        const recentEntries = entries.slice(-25);
+        const cleaned = Object.fromEntries(recentEntries);
+        console.log('[PERFORMANCE] Cleaned up autoSentCodes');
+        return { ...cleaned, [lastMessage.id]: true };
+      }
+      return { ...prev, [lastMessage.id]: true };
+    });
   }, [allMessages, chatAction.value, currentLoading, selectedFile?.name]);
 
   return (
@@ -635,143 +828,8 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
       {/* Chat messages area */}
       <div className={`flex-1 space-y-4 !pb-[200px] p-4 ${theme === 'dark' ? 'bg-[#232733]' : 'bg-white'}`}>
         {allMessages.map((message) => (
-          (message as any).isLoading ? (
-            <ChatMessageSkeleton key={message.id} theme={theme} />
-          ) : (
-          <div
-            key={message.id}
-            className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
-          >
-            <div className="relative mb-2">
-              {message.role === 'user' ? (
-                <span className="float-left mr-2">
-                  <User className="w-6 h-6 text-blue-600" />
-                </span>
-              ) : (
-                <span className="float-right mr-2">
-                  <Bot className="w-6 h-6 text-gray-400" />
-                </span>
-              )}
-            </div>
-            <div className={`inline-block max-w-[80%] px-4 py-2 rounded-lg shadow-md break-words whitespace-pre-wrap
-                ${message.role === 'user'
-                  ? theme === 'dark'
-                    ? 'bg-cyan-400/20 text-cyan-100 border border-cyan-400/40 backdrop-blur-md'
-                    : 'bg-cyan-100 text-cyan-900 border border-cyan-200'
-                  : theme === 'dark'
-                    ? 'bg-white/10 text-cyan-100 border border-cyan-700/70 backdrop-blur-lg'
-                    : 'bg-white text-gray-900 border border-cyan-100'}
-              `}
-              style={theme === 'dark' ? { boxShadow: '0 4px 32px 0 rgba(34,211,238,0.10)', backgroundClip: 'padding-box' } : {}}>
-
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypePrism]}
-                components={{
-                  code({node, inline, className, children, ...props}: any) {
-                    const match = /language-(\w+)/.exec(className || '')
-                    // For buttons, extract raw text
-                    function extractTextFromChildren(children: React.ReactNode): string {
-                      if (typeof children === 'string' || typeof children === 'number') return String(children);
-                      if (Array.isArray(children)) return children.map(extractTextFromChildren).join('');
-                      if (React.isValidElement(children) && children.props && children.props.children) {
-                        return extractTextFromChildren(children.props.children);
-                      }
-                      return '';
-                    }
-                    let codeContent = extractTextFromChildren(children);
-                    codeContent = codeContent.replace(/\n$/, '');
-                    return !inline ? (
-                      <div className="relative my-4 bg-white/10 rounded-xl shadow-md p-2 overflow-x-auto glassmorphism-border">
-                        <div className="flex gap-2 mb-1 justify-end">
-                          <CopyButton text={codeContent} />
-                          <button
-                            className="ml-1 px-2 py-1 bg-blue-200 text-blue-900 rounded shadow-gradient hover:bg-blue-300 transition-all duration-300 ease-in-out"
-                            title="Enviar para o Editor"
-                            onClick={() => {
-                              // Guess file extension from language
-                              let lang = match ? match[1].toLowerCase() : '';
-                              let fileName = 'script.js';
-                              if (lang && lang.includes('html')) fileName = 'index.html';
-                              else if (lang && lang.includes('css')) fileName = 'style.css';
-                              else if (lang && lang.includes('js')) fileName = 'script.js';
-                              else if (lang && (lang.includes('svg') || lang.includes('xml'))) fileName = 'image.svg';
-                              setFilesCurrentHandler(fileName, codeContent, 0);
-                              throttleEditorOpen(true);
-                            }}
-                          >
-                            Enviar para o Editor
-                          </button>
-                        </div>
-                        <pre className={`${className} !min-h-10`} {...props}>
-                          <code className={className}>{children}</code>
-                        </pre>
-                      </div>
-                    ) : (
-                      <code className={className} {...props}>{children}</code>
-                    );
-                  }
-                }}
-              >
-                {message.content}
-              </ReactMarkdown>
-              
-              {/* Show diff viewer if diff data is available */}
-              {(message as any).diffData && (
-                <div className="mt-4">
-                  <h4 className="text-sm font-semibold mb-2 text-gray-600 dark:text-gray-300">📊 Diferenças aplicadas:</h4>
-                  <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
-                    <ReactDiffViewer
-                      oldValue={(message as any).diffData.oldCode}
-                      newValue={(message as any).diffData.newCode}
-                      splitView={false}
-                      hideLineNumbers={false}
-                      useDarkTheme={theme === 'dark'}
-                      styles={{
-                        variables: {
-                          dark: {
-                            diffViewerBackground: '#1a1b26',
-                            addedBackground: '#2d4a2b',
-                            removedBackground: '#4a2d2d',
-                            wordAddedBackground: '#3d6a3a',
-                            wordRemovedBackground: '#6a3a3a',
-                            addedGutterBackground: '#2d4a2b',
-                            removedGutterBackground: '#4a2d2d',
-                            gutterBackground: '#232733',
-                            gutterBackgroundDark: '#1a1b26',
-                            diffViewerTitleBackground: '#232733',
-                            diffViewerTitleColor: '#e0f2f1',
-                            diffViewerTitleBorderColor: '#67e8f9',
-                          },
-                          light: {
-                            diffViewerBackground: '#ffffff',
-                            addedBackground: '#e6ffed',
-                            removedBackground: '#ffeef0',
-                            wordAddedBackground: '#acf2bd',
-                            wordRemovedBackground: '#fdb8c0',
-                            addedGutterBackground: '#cdffd8',
-                            removedGutterBackground: '#fdbdcf',
-                            gutterBackground: '#f7f7f7',
-                            diffViewerTitleBackground: '#f0f9ff',
-                            diffViewerTitleColor: '#0e7490',
-                            diffViewerTitleBorderColor: '#22d3ee',
-                          }
-                        }
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-          )
+          <MessageComponent key={message.id} message={message} theme={theme} setFilesCurrentHandler={setFilesCurrentHandler} throttleEditorOpen={throttleEditorOpen} />
         ))}
-        
-        {/* Show loading animation while processing */}
-        {/* We now use a per-message skeleton, so this is not needed */}
-        {/* {currentLoading && !allMessages.some(m => (m as any).isLoading) && (
-          <ChatMessageSkeleton theme={theme} />
-        )} */}
       </div>
       {/* Chat input form below messages */}
       <form onSubmit={handleSubmit} className="sticky bottom-0 left-0 w-full dark:bg-[#232733] bg-transparent p-4 z-10 flex flex-col gap-2">
