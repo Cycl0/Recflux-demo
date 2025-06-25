@@ -1061,6 +1061,117 @@ function Home({ onLayoutChange = () => {}, ...props }) {
     return 'dark';
   });
 
+  // Responsive window dimensions and positions
+  const [windowDimensions, setWindowDimensions] = useState({
+    width: typeof window !== 'undefined' ? window.innerWidth : 1200,
+    height: typeof window !== 'undefined' ? window.innerHeight : 800
+  });
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    
+    const handleResize = () => {
+      setWindowDimensions({
+        width: window.innerWidth,
+        height: window.innerHeight
+      });
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  // Calculate responsive window positions and sizes
+  const getWindowConfig = useCallback(() => {
+    const { width: screenWidth, height: screenHeight } = windowDimensions;
+    const navBarHeight = 80; // NavBar height
+    const bottomNavHeight = 80; // Bottom navigation height
+    const bottomMargin = 60; // Additional margin before screen end
+    const availableHeight = screenHeight - navBarHeight - bottomNavHeight - bottomMargin;
+    const padding = 20;
+
+    // For mobile/small screens (< 768px)
+    if (screenWidth < 768) {
+      const windowWidth = Math.min(screenWidth - padding * 4, 400);
+      const windowHeight = Math.max(400, availableHeight - padding * 4); // Match centerWinBox logic
+      
+      return {
+        chat: {
+          width: windowWidth,
+          height: windowHeight,
+          x: (screenWidth - windowWidth) / 2,
+          y: navBarHeight + padding
+        },
+        editor: {
+          width: windowWidth,
+          height: windowHeight,
+          x: (screenWidth - windowWidth) / 2,
+          y: navBarHeight + padding + 50
+        },
+        preview: {
+          width: windowWidth,
+          height: windowHeight,
+          x: (screenWidth - windowWidth) / 2,
+          y: navBarHeight + padding + 100
+        }
+      };
+    }
+    
+    // For tablet screens (768px - 1024px)
+    if (screenWidth < 1024) {
+      const windowWidth = Math.min((screenWidth - padding * 4) / 2, 450);
+      const windowHeight = Math.max(500, availableHeight - padding * 4); // Match centerWinBox logic
+      
+      return {
+        chat: {
+          width: windowWidth,
+          height: windowHeight,
+          x: padding,
+          y: navBarHeight + padding
+        },
+        editor: {
+          width: windowWidth,
+          height: windowHeight,
+          x: screenWidth - windowWidth - padding,
+          y: navBarHeight + padding
+        },
+        preview: {
+          width: windowWidth,
+          height: windowHeight,
+          x: padding,
+          y: navBarHeight + padding + 50
+        }
+      };
+    }
+    
+    // For desktop screens (>= 1024px)
+    const windowWidth = Math.min((screenWidth - padding * 6) / 3, 525);
+    const windowHeight = Math.max(600, availableHeight - padding * 4); // Match centerWinBox logic
+    
+    return {
+      chat: {
+        width: windowWidth,
+        height: windowHeight,
+        x: padding,
+        y: navBarHeight + padding
+      },
+      editor: {
+        width: windowWidth,
+        height: windowHeight,
+        x: padding + windowWidth + padding,
+        y: navBarHeight + padding
+      },
+      preview: {
+        width: windowWidth,
+        height: windowHeight,
+        x: padding + (windowWidth + padding) * 2,
+        y: navBarHeight + padding
+      }
+    };
+  }, [windowDimensions]);
+
+  const windowConfig = getWindowConfig();
+
   // Hide WinBox windows on unmount
   useEffect(() => {
     return () => {
@@ -1734,15 +1845,63 @@ const handleEditorChange = useMemo(
     }
 }, []);
 
+// Function to center/reposition WinBox windows responsively
 const centerWinBox = (id: string) => {
   if (typeof window !== 'undefined') {
     const winbox = window.winboxWindows?.[id];
     if (winbox) {
-      const width = winbox.width;
-      const height = winbox.height;
-      const x = Math.max(0, (window.innerWidth - width) / 2);
-      const y = Math.max(0, (window.innerHeight - height) / 2);
-      winbox.move(x, y);
+      // Calculate responsive config
+      const screenWidth = window.innerWidth;
+      const screenHeight = window.innerHeight;
+      const navBarHeight = 80;
+      const bottomNavHeight = 80;
+      const bottomMargin = 60; // Additional margin before screen end
+      const availableHeight = screenHeight - navBarHeight - bottomNavHeight - bottomMargin;
+      const padding = 20;
+
+      let windowConf;
+
+      // For mobile/small screens (< 768px)
+      if (screenWidth < 768) {
+        const windowWidth = Math.min(screenWidth - padding * 4, 400);
+        const windowHeight = Math.max(400, availableHeight - padding * 4);
+        
+        const configs = {
+          chat: { width: windowWidth, height: windowHeight, x: (screenWidth - windowWidth) / 2, y: navBarHeight + padding },
+          editor: { width: windowWidth, height: windowHeight, x: (screenWidth - windowWidth) / 2, y: navBarHeight + padding + 50 },
+          preview: { width: windowWidth, height: windowHeight, x: (screenWidth - windowWidth) / 2, y: navBarHeight + padding + 100 }
+        };
+        windowConf = configs[id as keyof typeof configs];
+      }
+      // For tablet screens (768px - 1024px)
+      else if (screenWidth < 1024) {
+        const windowWidth = Math.min((screenWidth - padding * 4) / 2, 450);
+        const windowHeight = Math.max(500, availableHeight - padding * 4);
+        
+        const configs = {
+          chat: { width: windowWidth, height: windowHeight, x: padding, y: navBarHeight + padding },
+          editor: { width: windowWidth, height: windowHeight, x: screenWidth - windowWidth - padding, y: navBarHeight + padding },
+          preview: { width: windowWidth, height: windowHeight, x: padding, y: navBarHeight + padding + 50 }
+        };
+        windowConf = configs[id as keyof typeof configs];
+      }
+      // For desktop screens (>= 1024px)
+      else {
+        const windowWidth = Math.min((screenWidth - padding * 6) / 3, 525);
+        const windowHeight = Math.max(600, availableHeight - padding * 4);
+        
+        const configs = {
+          chat: { width: windowWidth, height: windowHeight, x: padding, y: navBarHeight + padding },
+          editor: { width: windowWidth, height: windowHeight, x: padding + windowWidth + padding, y: navBarHeight + padding },
+          preview: { width: windowWidth, height: windowHeight, x: padding + (windowWidth + padding) * 2, y: navBarHeight + padding }
+        };
+        windowConf = configs[id as keyof typeof configs];
+      }
+      
+      if (windowConf) {
+        winbox.resize(windowConf.width, windowConf.height);
+        winbox.move(windowConf.x, windowConf.y);
+      }
       winbox.focus();
     }
   }
@@ -2108,7 +2267,14 @@ return (
       <div className={theme === 'dark' ? 'dark bg-blue-gradient min-h-screen w-full relative' : 'bg-blue-gradient min-h-screen w-full relative'}>
       <EditorContext.Provider value={{ setFilesCurrentHandler, throttleEditorOpen, selectedFile, editorSelection, cursorPosition, applyAgenticChanges }}>
         <NavBar extra={navExtra} />
-        <WinBoxWindow id="chat" title="Chat" x={50} y={100} width={525} height={500}>
+        <WinBoxWindow 
+          id="chat" 
+          title="Chat" 
+          x={windowConfig.chat.x} 
+          y={windowConfig.chat.y} 
+          width={windowConfig.chat.width} 
+          height={windowConfig.chat.height}
+        >
           <div className="w-full h-full flex flex-col bg-white/70 dark:bg-[#232733] text-gray-900 dark:text-gray-100 border border-cyan-100 dark:border-cyan-700 rounded-b-md p-0">
             <Chat 
               onPromptSubmit={handlePromptSubmit} 
@@ -2120,7 +2286,14 @@ return (
             />
           </div>
         </WinBoxWindow>
-        <WinBoxWindow id="editor" title="Editor" x={610} y={100} width={525} height={500}>
+        <WinBoxWindow 
+          id="editor" 
+          title="Editor" 
+          x={windowConfig.editor.x} 
+          y={windowConfig.editor.y} 
+          width={windowConfig.editor.width} 
+          height={windowConfig.editor.height}
+        >
           <div className="w-full h-full flex flex-col min-h-0 min-w-0 bg-white/70 dark:bg-[#232733] text-gray-900 dark:text-gray-100 border border-cyan-100 dark:border-cyan-700 rounded-b-md p-0">
             <div className={`flex items-center justify-between gap-4 p-2 border-b ${theme === 'dark' ? 'bg-[#232733] border-cyan-400' : 'bg-white/70 border-cyan-100'}`}>
               <div className="flex items-center gap-4">
@@ -2249,7 +2422,14 @@ return (
           </div>
         </WinBoxWindow>
 
-        <WinBoxWindow id="preview" title="Preview" x={1175} y={100} width={525} height={500}>
+        <WinBoxWindow 
+          id="preview" 
+          title="Preview" 
+          x={windowConfig.preview.x} 
+          y={windowConfig.preview.y} 
+          width={windowConfig.preview.width} 
+          height={windowConfig.preview.height}
+        >
           <div className="w-full h-full flex flex-col bg-white/70 dark:bg-[#232733] text-gray-900 dark:text-gray-100 border border-cyan-100 dark:border-cyan-700 rounded-b-md p-0">
             <LiveProvider
               code={selectedFile?.value}
@@ -2354,23 +2534,11 @@ return (
               <div className="flex w-full justify-center space-x-2">
                 <button
                   className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
-                  title="Centralizar e focar Chat"
+                  title="Centralizar Chat"
                   onClick={() => { centerWinBox('chat'); push('#chat'); }}
                 >
                   <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
                   <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
-                </button>
-                <button
-                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
-                  title="Focar Chat"
-                  onClick={() => { 
-                    if (typeof window !== 'undefined') {
-                      window.winboxWindows?.['chat']?.focus(); push('#chat'); 
-                    }
-                  }}
-                >
-                  <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
-                  <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
                 </button>
               </div>
             </div>
@@ -2380,23 +2548,11 @@ return (
               <div className="flex w-full justify-center space-x-2">
                 <button
                   className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
-                  title="Centralizar e focar Editor"
+                  title="Centralizar Editor"
                   onClick={() => { centerWinBox('editor'); push('#editor'); }}
                 >
                   <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
                   <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
-                </button>
-                <button
-                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
-                  title="Focar Editor"
-                  onClick={() => { 
-                    if (typeof window !== 'undefined') {
-                      window.winboxWindows?.['editor']?.focus(); push('#editor'); 
-                    }
-                  }}
-                >
-                  <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
-                  <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
                 </button>
               </div>
             </div>
@@ -2406,23 +2562,11 @@ return (
               <div className="flex w-full justify-center space-x-2">
                 <button
                   className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
-                  title="Centralizar e focar Preview"
+                  title="Centralizar Preview"
                   onClick={() => { centerWinBox('preview'); push('#preview'); }}
                 >
                   <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
                   <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
-                </button>
-                <button
-                  className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
-                  title="Focar Preview"
-                  onClick={() => { 
-                    if (typeof window !== 'undefined') {
-                      window.winboxWindows?.['preview']?.focus(); push('#preview'); 
-                    }
-                  }}
-                >
-                  <span className=""><svg width="20" height="20" fill="currentColor"><circle cx="10" cy="10" r="6" stroke="currentColor" strokeWidth="2" fill="none"/><circle cx="10" cy="10" r="2" fill="currentColor"/></svg></span>
-                  <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
                 </button>
               </div>
             </div>
