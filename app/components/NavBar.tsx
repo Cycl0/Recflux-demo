@@ -3,8 +3,19 @@
 import NavStyledCollapse from '@/components/NavStyledCollapse';
 import { Navbar } from 'flowbite-react';
 import Image from 'next/image';
+import { usePathname } from 'next/navigation';
 
 export default function NavBar({ extra }) {
+  const pathname = usePathname();
+  
+  // Map routes to their corresponding index in the navigation list
+  const getActiveIndex = () => {
+    if (pathname === '/') return 0; // Início
+    if (pathname === '/pages/sobre') return 1; // Sobre
+    if (pathname === '/pages/planos') return 2; // Planos
+    if (pathname === '/pages/contato') return 3; // Contato
+    return -1; // No match (no highlighting)
+  };
 
   return (
     <Navbar
@@ -42,7 +53,7 @@ export default function NavBar({ extra }) {
             "Planos", "/pages/planos",
             "Contato", "/pages/contato"
           ]}
-          activeIndex={0}
+          activeIndex={getActiveIndex()}
         />
       </div>
     </Navbar>
