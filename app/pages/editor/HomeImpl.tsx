@@ -2534,39 +2534,39 @@ return (
               <div className="flex w-full justify-center space-x-2">
                 <button
                   className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
-                  title="Centralizar Chat"
+                  title="Focar Chat"
                   onClick={() => { centerWinBox('chat'); push('#chat'); }}
                 >
                   <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
-                  <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
+                  <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
                 </button>
               </div>
             </div>
             {/* Editor Controls */}
             <div className="w-full flex flex-col items-center space-y-1">
-              <span className="text-xs text-blue-100 mb-1">Editor</span>
+              <span className="text-xs text-blue-100 dark:text-cyan-200 mb-1 font-semibold tracking-wide">Editor</span>
               <div className="flex w-full justify-center space-x-2">
                 <button
                   className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
-                  title="Centralizar Editor"
+                  title="Focar Editor"
                   onClick={() => { centerWinBox('editor'); push('#editor'); }}
                 >
                   <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
-                  <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
+                  <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
                 </button>
               </div>
             </div>
             {/* Preview Controls */}
             <div className="w-full flex flex-col items-center space-y-1">
-              <span className="text-xs text-blue-100 mb-1">Preview</span>
+              <span className="text-xs text-blue-100 dark:text-cyan-200 mb-1 font-semibold tracking-wide">Preview</span>
               <div className="flex w-full justify-center space-x-2">
                 <button
                   className="flex flex-col items-center px-3 py-2 rounded bg-blue-900/60 text-blue-100 shadow hover:bg-blue-800/80 transition dark:rounded-lg dark:bg-cyan-800/60 dark:text-cyan-100 dark:shadow-md dark:border dark:border-cyan-700 dark:hover:bg-cyan-700/90 dark:hover:text-cyan-50 dark:focus:outline-none dark:focus:ring-2 dark:focus:ring-cyan-400"
-                  title="Centralizar Preview"
+                  title="Focar Preview"
                   onClick={() => { centerWinBox('preview'); push('#preview'); }}
                 >
                   <span className=""><svg width="20" height="20" fill="currentColor"><path d="M12 7V4h-1v3H8l4 4 4-4h-3zm0 6v3h1v-3h3l-4-4-4 4h3z"/></svg></span>
-                  <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Centralizar</span>
+                  <span className="text-[10px] font-bold text-blue-200 leading-none mt-0.5">Focar</span>
                 </button>
               </div>
             </div>
