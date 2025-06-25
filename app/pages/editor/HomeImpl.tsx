@@ -280,10 +280,16 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
-    if (isSubmitting || currentLoading) return;
+    console.log('[SUBMIT] Starting handleSubmit', { isSubmitting, currentLoading, input });
+    
+    if (isSubmitting || currentLoading) {
+      console.log('[SUBMIT] Blocked by loading state', { isSubmitting, currentLoading });
+      return;
+    }
     
     // Check if user is authenticated
     if (!user || !user.email) {
+      console.log('[SUBMIT] User not authenticated');
       setCreditError('Você precisa estar logado para enviar prompts.');
       return;
     }
@@ -291,14 +297,17 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
     // Clear previous errors
     setCreditError(null);
     setIsSubmitting(true);
+    console.log('[SUBMIT] Set isSubmitting to true');
 
     try {
       // Check and deduct credits before sending prompt
       const creditResult = await checkAndDeductCredits(user.email);
       
       if (!creditResult.hasEnoughCredits) {
+        console.log('[SUBMIT] Insufficient credits');
         setCreditError(creditResult.message);
         setIsSubmitting(false);
+        console.log('[SUBMIT] Set isSubmitting to false (insufficient credits)');
         return;
       }
 
@@ -336,6 +345,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
 
       setMessages(prev => [...prev, userMessage, skeletonMessage]);
       setIsLoading(true);
+      console.log('[SUBMIT] Set isLoading to true, starting API call');
 
       try {
         const response = await fetch('/api/agentic-structured', {
@@ -504,25 +514,31 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
         // Add response to chat for all structured actions
         setMessages(prev => prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m));
         setIsLoading(false);
+        console.log('[SUBMIT] Set isLoading to false (success)');
       } catch (error) {
         console.error('Structured API error:', error);
         
         const errorMessage = {
-          id: (Date.now() + 1).toString(),
+          id: assistantMessageId,
           role: "assistant" as const,
-          content: "❌ Erro ao processar solicitação. Tente novamente."
+          content: "❌ Erro ao processar solicitação. Tente novamente.",
+          isLoading: false
         };
 
-        // Atomically remove skeleton and add error message
-        setMessages(prev => [...prev.filter(m => m.id !== assistantMessageId), errorMessage]);
+        // Replace the skeleton message with error message
+        setMessages(prev => prev.map(m => m.id === assistantMessageId ? errorMessage : m));
         setIsLoading(false);
+        console.log('[SUBMIT] Set isLoading to false (API error)');
       }
     
     } catch (error) {
       console.error('Error in handleSubmit:', error);
       setCreditError('Erro ao processar prompt. Tente novamente.');
+      setIsLoading(false); // CRITICAL: Reset loading state on error
+      console.log('[SUBMIT] Set isLoading to false (general error)');
     } finally {
       setIsSubmitting(false);
+      console.log('[SUBMIT] Set isSubmitting to false (finally block)');
     }
   };
   

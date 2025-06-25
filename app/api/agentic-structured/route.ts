@@ -110,6 +110,12 @@ Formato JSON obrigatório:
   "explanation": "breve explicação das mudanças feitas"
 }
 
+🚫 **NUNCA USE SINTAXE VERBOSE DE REACT 18:**
+- NUNCA use: const container = document.getElementById('root');
+- NUNCA use: const root = ReactDOM.createRoot(container);
+- NUNCA use: root.render(<App />);
+- SEMPRE use APENAS: render(<App />)
+
 Regras:
 - Números de linha começam em 1
 - "insert": adiciona código ANTES da linha especificada
@@ -159,7 +165,11 @@ Responda APENAS com JSON válido:
   "explanation": "Componente criado com sucesso"
 }
 
-⚡ DIRETRIZES PARA SITES PROFISSIONAIS:
+🚫 **NUNCA USE SINTAXE VERBOSE DE REACT 18:**
+- NUNCA use: const container = document.getElementById('root');
+- NUNCA use: const root = ReactDOM.createRoot(container);
+- NUNCA use: root.render(<App />);
+- SEMPRE use APENAS: render(<App />)
 
 🎨 **VISUAIS ESPLÊNDIDOS:**
 - Use gradientes modernos (ex: bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500)
@@ -168,6 +178,7 @@ Responda APENAS com JSON válido:
 - Tipografia moderna e hierárquica
 - Layout responsivo com grid/flexbox
 - Espaçamento generoso e equilibrado
+🚨 **MANDATORY REQUIREMENTS:**
 
 ✨ **ANIMAÇÕES E INTERATIVIDADE:**
 - Hover effects suaves (ex: hover:scale-105, hover:shadow-2xl)
@@ -176,13 +187,15 @@ Responda APENAS com JSON válido:
 - Animações CSS ou keyframes quando apropriado
 - Estados visuais claros para botões e links
 
-🚀 **FUNCIONALIDADES PRONTAS:**
-- Navegação funcional entre seções
-- Formulários com validação visual
-- Botões com estados (loading, success, error)
-- Cards informativos bem estruturados
-- Seções organizadas (header, hero, features, footer)
-- Componentes reutilizáveis e modulares
+🖼️ **IMAGES ARE REQUIRED - NEVER SKIP IMAGES:**
+- EVERY component MUST include at least 2-3 relevant images
+- Use ONLY these working image sources:
+  * Hero images: https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1200&h=600&fit=crop
+  * Business: https://images.unsplash.com/photo-1486312338219-ce68e2c6b33d?w=800&h=400&fit=crop
+  * Technology: https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=600&h=400&fit=crop
+  * People: https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face
+  * Products: https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&h=300&fit=crop
+  * Random: https://picsum.photos/400/300?random=1 (change number for variety)
 
 💼 **PADRÕES PROFISSIONAIS:**
 - Estrutura semântica HTML5
@@ -191,6 +204,14 @@ Responda APENAS com JSON válido:
 - Estados gerenciados adequadamente
 - Comentários explicativos quando necessário
 - Performance otimizada
+📝 **IMAGE IMPLEMENTATION RULES:**
+- ALWAYS add <img> tags with src, alt, className
+- Example: <img src="https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&h=400&fit=crop" alt="Professional workspace" className="w-full h-64 object-cover rounded-lg" />
+- For hero sections: Use 1200x600 or 800x400 images
+- For cards/features: Use 400x300 or 300x200 images  
+- For avatars/profiles: Use 200x200 with crop=face
+- ALWAYS include meaningful alt text for accessibility
+
 
 🎯 **EXEMPLOS DE ELEMENTOS:**
 - Hero sections impactantes
@@ -199,6 +220,14 @@ Responda APENAS com JSON válido:
 - Testimonials/depoimentos
 - Pricing tables elegantes
 - Contact forms funcionais
+⚡ **COMPONENT REQUIREMENTS:**
+- DO NOT include any imports (no "import React from 'react';" or any other imports)
+- DO NOT add import statements at the top
+- Start directly with the component function
+- End with render(<ComponentName />)
+- Make elaborated, professional code
+- Answer in portuguese
+- MUST include working images - this is not optional
 
 Regras técnicas:
 - Crie um componente React funcional completo
@@ -207,7 +236,18 @@ Regras técnicas:
 - Código limpo, comentado e profissional
 - Responda apenas com JSON válido
 
-Regras: Componente funcional completo + render(<Component />) no final + apenas JSON válido.`;
+🎨 **VISUAL REQUIREMENTS:**
+- Use Tailwind CSS classes for styling
+- Include gradients, shadows, and modern design
+- Add hover effects and transitions
+- Make it responsive and professional
+- Use proper spacing and typography
+
+Return JSON format:
+{
+  "changes": [{"type": "replace", "startLine": 1, "endLine": 999, "code": "your React code here", "description": "Generated component"}],
+  "explanation": "Component created"
+}`;
 
         case 'FIX':
           return `${basePrompt}
@@ -300,13 +340,47 @@ Você deve responder com JSON válido neste formato exato:
       systemPrompt = '';
       userPrompt = `Create a React component: ${prompt}
 
-IMPORTANT RULES:
+🚨 **MANDATORY REQUIREMENTS:**
+
+🚫 **NEVER USE VERBOSE REACT 18 SYNTAX:**
+- NEVER use: const container = document.getElementById('root');
+- NEVER use: const root = ReactDOM.createRoot(container);
+- NEVER use: root.render(<App />);
+- ALWAYS use ONLY: render(<App />)
+
+🖼️ **IMAGES ARE REQUIRED - NEVER SKIP IMAGES:**
+- EVERY component MUST include at least 2-3 relevant images
+- Use ONLY these working image sources:
+  * Hero images: https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1200&h=600&fit=crop
+  * Business: https://images.unsplash.com/photo-1486312338219-ce68e2c6b33d?w=800&h=400&fit=crop
+  * Technology: https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=600&h=400&fit=crop
+  * People: https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face
+  * Products: https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&h=300&fit=crop
+  * Random: https://picsum.photos/400/300?random=1 (change number for variety)
+
+📝 **IMAGE IMPLEMENTATION RULES:**
+- ALWAYS add <img> tags with src, alt, className
+- Example: <img src="https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&h=400&fit=crop" alt="Professional workspace" className="w-full h-64 object-cover rounded-lg" />
+- For hero sections: Use 1200x600 or 800x400 images
+- For cards/features: Use 400x300 or 300x200 images  
+- For avatars/profiles: Use 200x200 with crop=face
+- ALWAYS include meaningful alt text for accessibility
+
+⚡ **COMPONENT REQUIREMENTS:**
 - DO NOT include any imports (no "import React from 'react';" or any other imports)
 - DO NOT add import statements at the top
 - Start directly with the component function
 - End with render(<ComponentName />)
-- Make elaborated code
+- Make elaborated, professional code
 - Answer in portuguese
+- MUST include working images - this is not optional
+
+🎨 **VISUAL REQUIREMENTS:**
+- Use Tailwind CSS classes for styling
+- Include gradients, shadows, and modern design
+- Add hover effects and transitions
+- Make it responsive and professional
+- Use proper spacing and typography
 
 Return JSON format:
 {
@@ -362,10 +436,79 @@ SEMPRE responda em português brasileiro.`;
     };
 
     console.log(`[AGENTIC-STRUCTURED] Calling streamText with model anthropic/claude-sonnet-4`);
-    const result = streamText(streamOptions);
-    console.log('[AGENTIC-STRUCTURED] streamText returned. Returning data stream response.');
+    console.log(`[AGENTIC-STRUCTURED] Stream options:`, {
+      model: 'anthropic/claude-sonnet-4',
+      hasSystemPrompt: !!(systemPrompt && systemPrompt.trim()),
+      userPromptLength: userPrompt.length,
+      temperature: 0.7
+    });
 
-    return result.toDataStreamResponse();
+    const result = streamText(streamOptions);
+    console.log('[AGENTIC-STRUCTURED] streamText returned. Setting up stream logging...');
+
+    // Create a custom stream with optimized logging
+    let chunkCount = 0;
+    let totalLength = 0;
+    const startTime = Date.now();
+
+    const stream = new ReadableStream({
+      async start(controller) {
+        console.log('[AGENTIC-STRUCTURED] Stream started');
+        
+        try {
+          // Get the original response
+          const response = await result.toDataStreamResponse();
+          const reader = response.body?.getReader();
+          
+          if (!reader) {
+            console.error('[AGENTIC-STRUCTURED] No reader available from response');
+            controller.close();
+            return;
+          }
+
+          console.log('[AGENTIC-STRUCTURED] Starting to read stream chunks...');
+          
+          while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) {
+              const endTime = Date.now();
+              const duration = endTime - startTime;
+              console.log(`[AGENTIC-STRUCTURED] Stream completed: ${chunkCount} chunks, ${totalLength} bytes, ${duration}ms`);
+              controller.close();
+              break;
+            }
+
+            chunkCount++;
+            totalLength += value.length;
+            
+            // Log only every 20th chunk to reduce performance impact
+            if (chunkCount % 20 === 0) {
+              console.log(`[AGENTIC-STRUCTURED] Progress: ${chunkCount} chunks processed, ${totalLength} bytes total`);
+            }
+            
+            // Forward the chunk
+            controller.enqueue(value);
+          }
+        } catch (error) {
+          console.error('[AGENTIC-STRUCTURED] Stream error:', error);
+          console.error('[AGENTIC-STRUCTURED] Error context:', {
+            message: error.message,
+            chunkCount,
+            totalLength
+          });
+          controller.error(error);
+        }
+      }
+    });
+
+    console.log('[AGENTIC-STRUCTURED] Returning custom logged stream response');
+    return new Response(stream, {
+      headers: {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'X-Vercel-AI-Data-Stream': 'v1'
+      }
+    });
   } catch (error) {
     console.error('[AGENTIC-STRUCTURED] Erro da API estruturada:', error);
     
