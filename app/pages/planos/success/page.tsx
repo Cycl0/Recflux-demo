@@ -71,9 +71,9 @@ function SuccessPageContent() {
                 price="Adquirido"
                 priceSubtext=""
                 features={[
-                    { text: "10 Projetos", available: true },
-                    { text: "50 Modificações", available: true },
-                    { text: "Suporte 24h", available: true },
+                  { text: "10 Projetos", available: true },
+                  { text: "500 Créditos por mês", available: true },
+                  { text: "Suporte 24h", available: true },
                 ]}
                 color=""
                 hasButton={false}

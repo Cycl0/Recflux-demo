@@ -131,7 +131,7 @@ export default function PlanosPage() {
                             color="bg-gradient-to-r from-teal-600 to-teal-800"
                             features={[
                                 { text: "1 Projeto", available: true },
-                                { text: "5 Modificações", available: true },
+                                { text: "100 Créditos", available: true },
                                 { text: "Suporte 24h", available: false },
                             ]}
                             hasButton={false}
@@ -143,7 +143,7 @@ export default function PlanosPage() {
                             color="bg-gradient-to-r from-purple-600 to-purple-800"
                             features={[
                                 { text: "10 Projetos", available: true },
-                                { text: "50 Modificações", available: true },
+                                { text: "500 Créditos por mês", available: true },
                                 { text: "Suporte 24h", available: true },
                             ]}
                             priceId="price_1RbUoL2LODbcMK9PfX6Ilsf3" // replace with your real Stripe Price ID
