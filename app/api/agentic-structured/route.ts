@@ -143,10 +143,9 @@ Regras:
 - O resultado deve ser uma versão limpa e focada com apenas código relevante`;
 
         case 'GERAR':
-          return `Você é um gerador de código React. Gere código novo baseado na solicitação.
+          return `Você é um gerador de código React especializado em criar sites profissionais e modernos com visuais esplêndidos, animações e funcionalidades prontas.
 
 Responda APENAS com JSON válido:
-
 {
   "changes": [
     {
@@ -160,11 +159,55 @@ Responda APENAS com JSON válido:
   "explanation": "Componente criado com sucesso"
 }
 
-Regras simples:
-- Crie um componente React funcional
+⚡ DIRETRIZES PARA SITES PROFISSIONAIS:
+
+🎨 **VISUAIS ESPLÊNDIDOS:**
+- Use gradientes modernos (ex: bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500)
+- Aplique sombras elegantes (ex: shadow-xl, shadow-2xl)
+- Cores harmônicas e profissionais
+- Tipografia moderna e hierárquica
+- Layout responsivo com grid/flexbox
+- Espaçamento generoso e equilibrado
+
+✨ **ANIMAÇÕES E INTERATIVIDADE:**
+- Hover effects suaves (ex: hover:scale-105, hover:shadow-2xl)
+- Transições fluidas (ex: transition-all duration-300 ease-in-out)
+- Transforms para interações (rotate, scale, translate)
+- Animações CSS ou keyframes quando apropriado
+- Estados visuais claros para botões e links
+
+🚀 **FUNCIONALIDADES PRONTAS:**
+- Navegação funcional entre seções
+- Formulários com validação visual
+- Botões com estados (loading, success, error)
+- Cards informativos bem estruturados
+- Seções organizadas (header, hero, features, footer)
+- Componentes reutilizáveis e modulares
+
+💼 **PADRÕES PROFISSIONAIS:**
+- Estrutura semântica HTML5
+- Acessibilidade básica (alt texts, aria-labels)
+- Código React limpo e organizado
+- Estados gerenciados adequadamente
+- Comentários explicativos quando necessário
+- Performance otimizada
+
+🎯 **EXEMPLOS DE ELEMENTOS:**
+- Hero sections impactantes
+- Call-to-action persuasivos
+- Grids de features/serviços
+- Testimonials/depoimentos
+- Pricing tables elegantes
+- Contact forms funcionais
+
+Regras técnicas:
+- Crie um componente React funcional completo
+- Use useState para interatividade quando necessário
 - Use render(<Component />) no final
-- Código limpo e funcional
-- Responda apenas com JSON`;
+- Código limpo, comentado e profissional
+- Responda apenas com JSON válido
+
+Regras: Componente funcional completo + render(<Component />) no final + apenas JSON válido.`;
 
         case 'FIX':
           return `${basePrompt}
@@ -262,7 +305,8 @@ IMPORTANT RULES:
 - DO NOT add import statements at the top
 - Start directly with the component function
 - End with render(<ComponentName />)
-- Keep it simple and clean
+- Make elaborated code
+- Answer in portuguese
 
 Return JSON format:
 {
@@ -314,7 +358,7 @@ SEMPRE responda em português brasileiro.`;
       model: openrouter('anthropic/claude-sonnet-4'),
       system: systemPrompt && systemPrompt.trim() ? systemPrompt : undefined,
       messages: [{ role: 'user', content: userPrompt }],
-      temperature: 0,
+      temperature: 0.7,
     };
 
     console.log(`[AGENTIC-STRUCTURED] Calling streamText with model anthropic/claude-sonnet-4`);
