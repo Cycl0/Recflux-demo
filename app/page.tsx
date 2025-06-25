@@ -13,7 +13,6 @@ import { useRouter } from 'next/navigation';
 import AOS from 'aos';
 import 'aos/dist/aos.css';
 import React from "react";
-import ReactPageScroller from 'react-page-scroller';
 
 export default function Home() {
 
@@ -141,7 +140,6 @@ export default function Home() {
 
     const router = useRouter();
     const heroSectionRef = useRef(null);
-    const [currentPage, setCurrentPage] = useState(0);
     const [showArrow, setShowArrow] = useState(true);
     const [arrowGone, setArrowGone] = useState(false);
     const arrowRef = useRef(null);
@@ -187,13 +185,8 @@ export default function Home() {
                     </Button>
                 </Link>
             } />
-            <ReactPageScroller
-                pageOnChange={setCurrentPage}
-                customPageNumber={currentPage}
-                animationTimer={800}
-                renderAllPagesOnFirstRender={true}
-            >
-                {/* Slide 1: Hero Section */}
+            <div>
+                {/* Section 1: Hero Section */}
                 <div className="min-h-screen flex flex-col items-center justify-center relative">
                   <section
                     ref={heroSectionRef}
@@ -246,7 +239,7 @@ export default function Home() {
                     </div>
                   )}
                 </div>
-                {/* Slide 2: Features Section */}
+                {/* Section 2: Features Section */}
                 <div className="min-h-screen flex items-center justify-center">
                     <section
                         className="relative w-full max-w-5xl mx-auto px-4 md:px-0 z-10 flex items-center justify-center min-h-screen"
@@ -274,7 +267,7 @@ export default function Home() {
                         </div>
                     </section>
                 </div>
-                {/* Slide 3: Editor & Generated Section */}
+                {/* Section 3: Editor & Generated Section */}
                 <div className="min-h-screen flex items-center justify-center">
                     <main className="xl:!p-36 lg:!p-12 md:!p-8 sm:!p-4 w-full">
                         <div id="content" className={`min-h-screen items-center justify-between py-40 md:py-20 md:px-12 xs:px-4 px-2 rounded-md`}>
@@ -298,7 +291,7 @@ export default function Home() {
                         </div>
                     </main>
                 </div>
-            </ReactPageScroller>
+            </div>
             <div className="fixed inset-0 w-full h-full -z-10 pointer-events-none select-none">
                 <img
                     src="/images/wallpaper.png"
