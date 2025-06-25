@@ -928,33 +928,38 @@ function useSupabaseGoogleRegistration() {
   const registerUserIfNeeded = async (sessionUser) => {
     if (!sessionUser) {
       console.log('[registerUserIfNeeded] No sessionUser');
-      return;
+      return { isNewUser: false };
     }
     setUser(sessionUser);
     const userEmail = sessionUser.email;
-    if (!userEmail) return;
+    if (!userEmail) return { isNewUser: false };
+    
+    let isNewUser = false;
+    
     // Check if user exists in your users table
     let { data: customUser, error: customUserError } = await supabase
       .from('users')
       .select('id, stripe_customer_id')
       .eq('email', userEmail)
       .single();
-    // If not found, insert the user
+    // If not found, insert the user with default credits
     if (customUserError && customUserError.code === 'PGRST116') {
+      isNewUser = true;
       const username = userEmail.split('@')[0];
       const { data: newUser, error: insertError } = await supabase
         .from('users')
-        .insert([{ email: userEmail, username, plan: 'free' }])
+        .insert([{ email: userEmail, username, plan: 'free', credits: 10 }])
         .select('id, stripe_customer_id')
         .single();
       if (insertError) {
         console.error('Failed to insert user:', insertError.message);
-        return;
+        return { isNewUser: false };
       }
       customUser = newUser;
+      console.log('New user created with 10 credits:', newUser);
     } else if (customUserError) {
       console.error('Error fetching user:', customUserError.message);
-      return;
+      return { isNewUser: false };
     }
     // If user exists and has no stripe_customer_id, create one
     if (customUser && !customUser.stripe_customer_id) {
@@ -965,6 +970,8 @@ function useSupabaseGoogleRegistration() {
         body: JSON.stringify({ userId: customUser.id, email: userEmail })
       });
     }
+    
+    return { isNewUser };
   };
 
   useEffect(() => {
@@ -983,7 +990,13 @@ function useSupabaseGoogleRegistration() {
     const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
       // console.log('[onAuthStateChange]', event, session);
       if (event === 'SIGNED_IN' && session?.user) {
-        registerUserIfNeeded(session.user);
+        const result = await registerUserIfNeeded(session.user);
+        // If this is a new user, trigger credit refresh after a short delay
+        if (result?.isNewUser) {
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('refreshCredits'));
+          }, 1500);
+        }
       }
       if (event === 'SIGNED_OUT') {
         setUser(null);
@@ -998,12 +1011,24 @@ function useSupabaseGoogleRegistration() {
         console.log('Received auth success from popup');
         // Use the session from the popup message or refresh the session in the main window
         if (event.data.session?.user) {
-          registerUserIfNeeded(event.data.session.user);
+          const result = await registerUserIfNeeded(event.data.session.user);
+          // If this is a new user, trigger credit refresh after a short delay
+          if (result?.isNewUser) {
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('refreshCredits'));
+            }, 1500);
+          }
         } else {
           // Fallback: refresh the session in the main window
           const { data: { session }, error } = await supabase.auth.getSession();
           if (session?.user) {
-            registerUserIfNeeded(session.user);
+            const result = await registerUserIfNeeded(session.user);
+            // If this is a new user, trigger credit refresh after a short delay
+            if (result?.isNewUser) {
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('refreshCredits'));
+              }, 1500);
+            }
           }
         }
       } else if (event.data.type === 'SUPABASE_AUTH_ERROR') {
