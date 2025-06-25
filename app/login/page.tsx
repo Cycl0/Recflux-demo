@@ -7,10 +7,31 @@ import LoadingSpinner from '@/components/LoadingSpinner';
 export default function LoginPage() {
   useEffect(() => {
     const signIn = async () => {
+      // Get the correct origin - use current window's origin
+      const currentOrigin = window.location.origin;
+      
+      // Build the redirect URL based on current environment
+      let redirectUrl = `${currentOrigin}/auth/callback`;
+      
+      // Determine if we're in development or production
+      const isLocalhost = currentOrigin.includes('localhost');
+      const isProduction = currentOrigin.includes('recflux-demo.vercel.app') || currentOrigin.includes('vercel.app');
+      
+      if (isLocalhost) {
+        redirectUrl = 'http://localhost:3000/auth/callback';
+      } else if (isProduction) {
+        redirectUrl = 'https://recflux-demo.vercel.app/auth/callback';
+      }
+      
+      console.log('Current origin:', currentOrigin);
+      console.log('Is localhost:', isLocalhost);
+      console.log('Is production:', isProduction);
+      console.log('Final redirect URL:', redirectUrl);
+      
       await supabase.auth.signInWithOAuth({
         provider: 'google',
         options: {
-          redirectTo: `${window.location.origin}/auth/callback`,
+          redirectTo: redirectUrl,
         },
       });
     };

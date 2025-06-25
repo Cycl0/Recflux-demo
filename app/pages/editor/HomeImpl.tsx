@@ -993,14 +993,18 @@ function useSupabaseGoogleRegistration() {
 
     // Listen for messages from popup window
     const handleMessage = async (event) => {
-      if (event.origin !== window.location.origin) return;
-      
+      // Accept messages from any origin for popup auth
       if (event.data.type === 'SUPABASE_AUTH_SUCCESS') {
         console.log('Received auth success from popup');
-        // Refresh the session in the main window
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (session?.user) {
-          registerUserIfNeeded(session.user);
+        // Use the session from the popup message or refresh the session in the main window
+        if (event.data.session?.user) {
+          registerUserIfNeeded(event.data.session.user);
+        } else {
+          // Fallback: refresh the session in the main window
+          const { data: { session }, error } = await supabase.auth.getSession();
+          if (session?.user) {
+            registerUserIfNeeded(session.user);
+          }
         }
       } else if (event.data.type === 'SUPABASE_AUTH_ERROR') {
         console.error('Auth error from popup:', event.data.error);
@@ -1427,7 +1431,9 @@ const throttledSaveEditorCode = useMemo(() => throttle(() => {
 
 function GoogleSignInButton() {
   const handleGoogleLogin = () => {
-    window.open('/login', 'supabase-login', 'width=500,height=600');
+    console.log('Opening login popup from origin:', window.location.origin);
+    const popup = window.open('/login', 'supabase-login', 'width=500,height=600');
+    console.log('Popup opened:', popup);
   };
   return (
     <Button
