@@ -607,7 +607,11 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
     <div className={`relative flex flex-col h-full rounded-lg shadow-lg  ${theme === 'dark' ? 'bg-[#232733]' : 'bg-white'}`}>
       {/* Credit error display */}
       {creditError && (
-        <div className="p-3 mx-4 mt-2 bg-red-500/20 border border-red-500/40 rounded-lg text-red-200 text-sm">
+        <div className={`p-3 mx-4 mt-2 rounded-lg text-sm border ${
+          theme === 'dark' 
+            ? 'bg-red-500/20 border-red-500/40 text-red-200' 
+            : 'bg-red-50 border-red-300 text-red-800'
+        }`}>
           {creditError}
         </div>
       )}
