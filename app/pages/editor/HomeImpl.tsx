@@ -1718,13 +1718,31 @@ function GoogleSignInButton() {
     console.log('=== CHANGES APPLIED SUCCESSFULLY ===');
   }, [selectedFile, setFilesCurrentHandler]);
 
-  // Throttle editor value updates to 200ms to avoid UI overload
-const handleEditorChange = useMemo(
-  () => throttle((value, event) => {
-    setFilesCurrentHandler(selectedFile?.name, value);
-  }, 200),
-  [selectedFile?.name, setFilesCurrentHandler]
-);
+  // State for throttled preview code
+  const [previewCode, setPreviewCode] = useState(selectedFile?.value || '');
+
+  // Throttle editor value updates to 500ms to avoid UI overload and improve preview performance
+  const handleEditorChange = useMemo(
+    () => throttle((value) => {
+      setFilesCurrentHandler(selectedFile?.name, value ?? '');
+    }, 500), // Increased from 200ms to 500ms for better performance
+    [selectedFile?.name, setFilesCurrentHandler]
+  );
+
+  // Throttle preview updates to 1000ms (1 second) for better performance
+  const updatePreview = useMemo(
+    () => throttle((code) => {
+      setPreviewCode(code);
+    }, 1000), // Update preview every 1 second maximum
+    []
+  );
+
+  // Update preview code when selected file changes
+  useEffect(() => {
+    if (selectedFile?.value) {
+      updatePreview(selectedFile.value);
+    }
+  }, [selectedFile?.value, updatePreview]);
 
 
     function indexHandler(index) {
@@ -2408,9 +2426,7 @@ return (
                   }
                 });
               }}
-              onChange={(value) => {
-                setFilesCurrentHandler(selectedFile?.name, value ?? '');
-              }}
+              onChange={handleEditorChange}
               options={{
                 minimap: { enabled: true },
                 fontSize: 14,
@@ -2430,7 +2446,7 @@ return (
         >
           <div className="w-full h-full flex flex-col bg-white/70 dark:bg-[#232733] text-gray-900 dark:text-gray-100 border border-cyan-100 dark:border-cyan-700 rounded-b-md p-0">
             <LiveProvider
-              code={selectedFile?.value}
+              code={previewCode}
               scope={reactScope}
               noInline
             >
