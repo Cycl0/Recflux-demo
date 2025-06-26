@@ -172,17 +172,17 @@ Responda APENAS com JSON válido:
 - SEMPRE use APENAS: render(<App />)
 
 🎨 **VISUAIS ESPLÊNDIDOS:**
-- Use gradientes modernos (ex: bg-gradient-to-br from-blue-500 via-purple-500 to-pink-500)
-- Aplique sombras elegantes (ex: shadow-xl, shadow-2xl)
+- Use gradientes modernos com CSS-in-JS (ex: background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)')
+- Aplique sombras elegantes (ex: boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)')
 - Cores harmônicas e profissionais
 - Tipografia moderna e hierárquica
-- Layout responsivo com grid/flexbox
+- Layout responsivo com flexbox/grid CSS
 - Espaçamento generoso e equilibrado
 🚨 **MANDATORY REQUIREMENTS:**
 
 ✨ **ANIMAÇÕES E INTERATIVIDADE:**
-- Hover effects suaves (ex: hover:scale-105, hover:shadow-2xl)
-- Transições fluidas (ex: transition-all duration-300 ease-in-out)
+- Hover effects suaves com CSS-in-JS (ex: ':hover': { transform: 'scale(1.05)' })
+- Transições fluidas (ex: transition: 'all 0.3s ease-in-out')
 - Transforms para interações (rotate, scale, translate)
 - Animações CSS ou keyframes quando apropriado
 - Estados visuais claros para botões e links
@@ -205,8 +205,8 @@ Responda APENAS com JSON válido:
 - Comentários explicativos quando necessário
 - Performance otimizada
 📝 **IMAGE IMPLEMENTATION RULES:**
-- ALWAYS add <img> tags with src, alt, className
-- Example: <img src="https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&h=400&fit=crop" alt="Professional workspace" className="w-full h-64 object-cover rounded-lg" />
+- ALWAYS add <img> tags with src, alt, and style props
+- Example: <img src="https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&h=400&fit=crop" alt="Professional workspace" style={{width: '100%', height: '256px', objectFit: 'cover', borderRadius: '8px'}} />
 - For hero sections: Use 1200x600 or 800x400 images
 - For cards/features: Use 400x300 or 300x200 images  
 - For avatars/profiles: Use 200x200 with crop=face
@@ -236,12 +236,21 @@ Regras técnicas:
 - Código limpo, comentado e profissional
 - Responda apenas com JSON válido
 
-🎨 **VISUAL REQUIREMENTS:**
-- Use Tailwind CSS classes for styling
-- Include gradients, shadows, and modern design
-- Add hover effects and transitions
-- Make it responsive and professional
-- Use proper spacing and typography
+🎨 **VISUAL REQUIREMENTS - CSS-IN-JS ONLY:**
+- Use CSS-in-JS with style props for styling (NO Tailwind CSS)
+- Include gradients, shadows, and modern design with inline styles
+- Add hover effects and transitions using CSS-in-JS
+- Make it responsive and professional using CSS media queries
+- Use proper spacing and typography with CSS properties
+
+💡 **CSS-IN-JS EXAMPLES:**
+- Gradients: background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+- Shadows: boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+- Flexbox: display: 'flex', justifyContent: 'center', alignItems: 'center'
+- Spacing: padding: '2rem', margin: '1rem 0'
+- Typography: fontSize: '1.5rem', fontWeight: 'bold', color: '#1f2937'
+- Borders: borderRadius: '12px', border: '1px solid #e5e7eb'
+- Hover effects: Use onMouseEnter/onMouseLeave with state for hover styles
 
 Return JSON format:
 {
@@ -359,8 +368,8 @@ Você deve responder com JSON válido neste formato exato:
   * Random: https://picsum.photos/400/300?random=1 (change number for variety)
 
 📝 **IMAGE IMPLEMENTATION RULES:**
-- ALWAYS add <img> tags with src, alt, className
-- Example: <img src="https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&h=400&fit=crop" alt="Professional workspace" className="w-full h-64 object-cover rounded-lg" />
+- ALWAYS add <img> tags with src, alt, and style props
+- Example: <img src="https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&h=400&fit=crop" alt="Professional workspace" style={{width: '100%', height: '256px', objectFit: 'cover', borderRadius: '8px'}} />
 - For hero sections: Use 1200x600 or 800x400 images
 - For cards/features: Use 400x300 or 300x200 images  
 - For avatars/profiles: Use 200x200 with crop=face
@@ -375,12 +384,21 @@ Você deve responder com JSON válido neste formato exato:
 - Answer in portuguese
 - MUST include working images - this is not optional
 
-🎨 **VISUAL REQUIREMENTS:**
-- Use Tailwind CSS classes for styling
-- Include gradients, shadows, and modern design
-- Add hover effects and transitions
-- Make it responsive and professional
-- Use proper spacing and typography
+🎨 **VISUAL REQUIREMENTS - CSS-IN-JS ONLY:**
+- Use CSS-in-JS with style props for styling (NO Tailwind CSS)
+- Include gradients, shadows, and modern design with inline styles
+- Add hover effects and transitions using CSS-in-JS
+- Make it responsive and professional using CSS media queries
+- Use proper spacing and typography with CSS properties
+
+💡 **CSS-IN-JS EXAMPLES:**
+- Gradients: background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)'
+- Shadows: boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)'
+- Flexbox: display: 'flex', justifyContent: 'center', alignItems: 'center'
+- Spacing: padding: '2rem', margin: '1rem 0'
+- Typography: fontSize: '1.5rem', fontWeight: 'bold', color: '#1f2937'
+- Borders: borderRadius: '12px', border: '1px solid #e5e7eb'
+- Hover effects: Use onMouseEnter/onMouseLeave with state for hover styles
 
 Return JSON format:
 {
