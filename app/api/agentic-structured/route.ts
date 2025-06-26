@@ -110,11 +110,17 @@ Formato JSON obrigatório:
   "explanation": "breve explicação das mudanças feitas"
 }
 
-🚫 **NUNCA USE SINTAXE VERBOSE DE REACT 18:**
+🚫 **SINTAXE PROIBIDA - NUNCA USE:**
 - NUNCA use: const container = document.getElementById('root');
 - NUNCA use: const root = ReactDOM.createRoot(container);
 - NUNCA use: root.render(<App />);
+- NUNCA use: ReactDOM.render(<Component/>, document.getElementById('root'));
+- NUNCA use: const { useState } = React;
+- NUNCA use: const { useEffect, useState } = React;
+- NUNCA destructure React: const { qualquerCoisa } = React;
+- NUNCA use React.qualquerCoisa ou ReactDOM.qualquerCoisa
 - SEMPRE use APENAS: render(<App />)
+- SEMPRE use hooks diretamente: useState, useEffect, etc.
 
 Regras:
 - Números de linha começam em 1
@@ -165,11 +171,17 @@ Responda APENAS com JSON válido:
   "explanation": "Componente criado com sucesso"
 }
 
-🚫 **NUNCA USE SINTAXE VERBOSE DE REACT 18:**
+🚫 **SINTAXE PROIBIDA - NUNCA USE:**
 - NUNCA use: const container = document.getElementById('root');
 - NUNCA use: const root = ReactDOM.createRoot(container);
 - NUNCA use: root.render(<App />);
+- NUNCA use: ReactDOM.render(<Component/>, document.getElementById('root'));
+- NUNCA use: const { useState } = React;
+- NUNCA use: const { useEffect, useState } = React;
+- NUNCA destructure React: const { qualquerCoisa } = React;
+- NUNCA use React.qualquerCoisa ou ReactDOM.qualquerCoisa
 - SEMPRE use APENAS: render(<App />)
+- SEMPRE use hooks diretamente: useState, useEffect, etc.
 
 🎨 **VISUAIS ESPLÊNDIDOS:**
 - Use gradientes modernos com CSS-in-JS (ex: background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)')
@@ -351,11 +363,19 @@ Você deve responder com JSON válido neste formato exato:
 
 🚨 **MANDATORY REQUIREMENTS:**
 
-🚫 **NEVER USE VERBOSE REACT 18 SYNTAX:**
-- NEVER use: const container = document.getElementById('root');
-- NEVER use: const root = ReactDOM.createRoot(container);
-- NEVER use: root.render(<App />);
-- ALWAYS use ONLY: render(<App />)
+🚫 **SINTAXE PROIBIDA - NUNCA USE:**
+- NUNCA use: const container = document.getElementById('root');
+- NUNCA use: const root = ReactDOM.createRoot(container);
+- NUNCA use: root.render(<App />);
+- NUNCA use: ReactDOM.render(<Component/>, document.getElementById('root'));
+- NUNCA use: const { useState } = React;
+- NUNCA use: const { useEffect, useState } = React;
+- NUNCA use: const { render } = ReactDOM;
+- NUNCA destructure React: const { qualquerCoisa } = React;
+- NUNCA destructure ReactDOM: const { qualquerCoisa } = ReactDOM;
+- NUNCA use React.qualquerCoisa ou ReactDOM.qualquerCoisa
+- SEMPRE use APENAS: render(<App />)
+- SEMPRE use hooks diretamente: useState, useEffect, etc.
 
 🖼️ **IMAGES ARE REQUIRED - NEVER SKIP IMAGES:**
 - EVERY component MUST include at least 2-3 relevant images
