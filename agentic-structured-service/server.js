@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const { streamText } = require('ai');
 const { createOpenAI } = require('@ai-sdk/openai');
+const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
 app.use(express.json({ limit: '50mb' }));
@@ -10,11 +11,18 @@ app.use(cors());
 
 const PORT = process.env.PORT || 3001;
 
-// Verify API key exists on startup
+// Verify API keys exist on startup
 if (!process.env.OPENROUTER_API_KEY) {
-  console.error('[AGENTIC-STRUCTURED] FATAL: OPENROUTER_API_KEY is not defined in the environment variables.');
-  process.exit(1); // Exit if the key is not found
+  console.error('[AGENTIC-STRUCTURED] FATAL: OPENROUTER_API_KEY is not defined.');
+  process.exit(1);
 }
+if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    console.error('[AGENTIC-STRUCTURED] FATAL: NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY are not defined.');
+    process.exit(1);
+}
+
+// Initialize Supabase client
+const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY);
 
 // Create OpenRouter client using OpenAI-compatible API
 const openrouter = createOpenAI({
@@ -68,6 +76,63 @@ function parseCodeToStructuredFormat(code) {
   });
   return structure;
 }
+
+// Middleware to check and deduct credits
+const creditCheckMiddleware = async (req, res, next) => {
+    const { userEmail } = req.body;
+    if (!userEmail) {
+        return res.status(400).json({ error: 'userEmail is required' });
+    }
+
+    console.log(`[CREDIT_MIDDLEWARE] Checking credits for user: ${userEmail}`);
+
+    try {
+        // Fetch the user by email
+        const { data: user, error: userError } = await supabase
+            .from('users')
+            .select('id, credits, plan')
+            .eq('email', userEmail)
+            .single();
+
+        if (userError) {
+            console.error('[CREDIT_MIDDLEWARE] Error fetching user:', userError);
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        if (!user) {
+            console.error('[CREDIT_MIDDLEWARE] User not found for email:', userEmail);
+            return res.status(404).json({ error: 'User not found' });
+        }
+
+        console.log(`[CREDIT_MIDDLEWARE] User found: ID=${user.id}, Credits=${user.credits}, Plan=${user.plan}`);
+
+        // Check if user has enough credits - applies to all users
+        if (user.credits < 10) {
+            console.log(`[CREDIT_MIDDLEWARE] Insufficient credits: ${user.credits} (needed: 10)`);
+            return res.status(402).json({ 
+                error: 'Insufficient credits',
+                explanation: 'Você não tem créditos suficientes. Por favor, recarregue para continuar usando o serviço.' 
+            });
+        }
+
+        // Deduct ten credits for all users
+        const { error: updateError } = await supabase
+            .from('users')
+            .update({ credits: user.credits - 10 })
+            .eq('id', user.id);
+
+        if (updateError) {
+            console.error('[CREDIT_MIDDLEWARE] Error updating credits:', updateError);
+            return res.status(500).json({ error: 'Failed to update user credits' });
+        }
+        
+        console.log(`[CREDIT_MIDDLEWARE] Credit deduction successful for ${userEmail}. Credits before: ${user.credits}, After: ${user.credits - 10}`);
+        next(); // Proceed to the main handler
+    } catch (error) {
+        console.error('[CREDIT_MIDDLEWARE] Unexpected error:', error);
+        return res.status(500).json({ error: 'Internal server error during credit check' });
+    }
+};
 
 const getSystemPrompt = (actionType) => {
     const basePrompt = `Você é um editor de código cirúrgico que retorna mudanças precisas e estruturadas.
@@ -169,7 +234,6 @@ Responda APENAS com JSON válido:
 - Tipografia moderna e hierárquica
 - Layout responsivo com flexbox/grid CSS
 - Espaçamento generoso e equilibrado
-🚨 **MANDATORY REQUIREMENTS:**
 
 ✨ **ANIMAÇÕES E INTERATIVIDADE:**
 - Hover effects suaves com CSS-in-JS (ex: ':hover': { transform: 'scale(1.05)' })
@@ -178,15 +242,15 @@ Responda APENAS com JSON válido:
 - Animações CSS ou keyframes quando apropriado
 - Estados visuais claros para botões e links
 
-🖼️ **IMAGES ARE REQUIRED - NEVER SKIP IMAGES:**
-- EVERY component MUST include at least 2-3 relevant images
-- Use ONLY these working image sources:
-  * Hero images: https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1200&h=600&fit=crop
-  * Business: https://images.unsplash.com/photo-1486312338219-ce68e2c6b33d?w=800&h=400&fit=crop
-  * Technology: https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=600&h=400&fit=crop
-  * People: https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face
-  * Products: https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&h=300&fit=crop
-  * Random: https://picsum.photos/400/300?random=1 (change number for variety)
+🖼️ **IMAGENS SÃO OBRIGATÓRIAS - NUNCA PULE IMAGENS:**
+- TODO componente DEVE incluir pelo menos 2-3 imagens relevantes
+- Use APENAS estas fontes de imagens funcionais:
+  * Imagens de destaque: https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1200&h=600&fit=crop
+  * Negócios: https://images.unsplash.com/photo-1486312338219-ce68e2c6b33d?w=800&h=400&fit=crop
+  * Tecnologia: https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=600&h=400&fit=crop
+  * Pessoas: https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face
+  * Produtos: https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&h=300&fit=crop
+  * Aleatórias: https://picsum.photos/400/300?random=1 (mude o número para variedade)
 
 💼 **PADRÕES PROFISSIONAIS:**
 - Estrutura semântica HTML5
@@ -195,14 +259,14 @@ Responda APENAS com JSON válido:
 - Estados gerenciados adequadamente
 - Comentários explicativos quando necessário
 - Performance otimizada
-📝 **IMAGE IMPLEMENTATION RULES:**
-- ALWAYS add <img> tags with src, alt, and style props
-- Example: <img src="https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&h=400&fit=crop" alt="Professional workspace" style={{width: '100%', height: '256px', objectFit: 'cover', borderRadius: '8px'}} />
-- For hero sections: Use 1200x600 or 800x400 images
-- For cards/features: Use 400x300 or 300x200 images  
-- For avatars/profiles: Use 200x200 with crop=face
-- ALWAYS include meaningful alt text for accessibility
 
+📝 **REGRAS DE IMPLEMENTAÇÃO DE IMAGENS:**
+- SEMPRE adicione tags <img> com props src, alt e style
+- Exemplo: <img src="https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&h=400&fit=crop" alt="Espaço de trabalho profissional" style={{width: '100%', height: '256px', objectFit: 'cover', borderRadius: '8px'}} />
+- Para seções de destaque: Use imagens de 1200x600 ou 800x400
+- Para cards/recursos: Use imagens de 400x300 ou 300x200
+- Para avatares/perfis: Use 200x200 com crop=face
+- SEMPRE inclua texto alt significativo para acessibilidade
 
 🎯 **EXEMPLOS DE ELEMENTOS:**
 - Hero sections impactantes
@@ -211,14 +275,15 @@ Responda APENAS com JSON válido:
 - Testimonials/depoimentos
 - Pricing tables elegantes
 - Contact forms funcionais
-⚡ **COMPONENT REQUIREMENTS:**
-- DO NOT include any imports (no "import React from 'react';" or any other imports)
-- DO NOT add import statements at the top
-- Start directly with the component function
-- End with render(<ComponentName />)
-- Make elaborated, professional code
-- Answer in portuguese
-- MUST include working images - this is not optional
+
+⚡ **REQUISITOS DO COMPONENTE:**
+- NÃO inclua nenhum import (sem "import React from 'react';" ou qualquer outro import)
+- NÃO adicione declarações de import no topo
+- Comece diretamente com a função do componente
+- Termine com render(<NomeDoComponente />)
+- Faça código elaborado e profissional
+- Responda em português
+- DEVE incluir imagens funcionais - isso não é opcional
 
 Regras técnicas:
 - Crie um componente React funcional completo
@@ -231,8 +296,8 @@ Regras técnicas:
       }
 };
 
-app.post('/api/agentic', async (req, res) => {
-  console.log('[AGENTIC-STRUCTURED] Microservice endpoint hit.');
+app.post('/api/agentic', creditCheckMiddleware, async (req, res) => {
+  console.log('[AGENTIC-STRUCTURED] Microservice endpoint hit after credit check.');
   try {
     const { prompt, currentCode, fileName, actionType } = req.body;
     console.log(`[AGENTIC-STRUCTURED] Request body parsed. actionType: ${actionType}`);
@@ -247,61 +312,12 @@ app.post('/api/agentic', async (req, res) => {
         return res.status(400).json({ error: `Missing required fields for actionType ${actionType}: currentCode, fileName` });
     }
 
-    let systemPrompt;
+    let systemPrompt = getSystemPrompt(actionType || 'EDITAR');
     let userPrompt;
 
     if (actionType === 'GERAR') {
-      systemPrompt = '';
-      userPrompt = `Create a React component: ${prompt}
-
-🚨 **MANDATORY REQUIREMENTS:**
-
-🚫 **SINTAXE PROIBIDA - NUNCA USE:**
-- NUNCA use: const container = document.getElementById('root');
-- NUNCA use: const root = ReactDOM.createRoot(container);
-- NUNCA use: root.render(<App />);
-- NUNCA use: ReactDOM.render(<Component/>, document.getElementById('root'));
-- NUNCA use: const { useState } = React;
-- NUNCA use: const { useEffect, useState } = React;
-- NUNCA destructure React: const { qualquerCoisa } = React;
-- NUNCA use React.qualquerCoisa ou ReactDOM.qualquerCoisa
-- SEMPRE use APENAS: render(<App />)
-- SEMPRE use hooks diretamente: useState, useEffect, etc.
-
-🖼️ **IMAGES ARE REQUIRED - NEVER SKIP IMAGES:**
-- EVERY component MUST include at least 2-3 relevant images
-- Use ONLY these working image sources:
-  * Hero images: https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1200&h=600&fit=crop
-  * Business: https://images.unsplash.com/photo-1486312338219-ce68e2c6b33d?w=800&h=400&fit=crop
-  * Technology: https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=600&h=400&fit=crop
-  * People: https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face
-  * Products: https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&h=300&fit=crop
-  * Random: https://picsum.photos/400/300?random=1 (change number for variety)
-
-📝 **IMAGE IMPLEMENTATION RULES:**
-- ALWAYS add <img> tags with src, alt, and style props
-- Example: <img src="https://images.unsplash.com/photo-1557804506-669a67965ba0?w=800&h=400&fit=crop" alt="Professional workspace" style={{width: '100%', height: '256px', objectFit: 'cover', borderRadius: '8px'}} />
-- For hero sections: Use 1200x600 or 800x400 images
-- For cards/features: Use 400x300 or 300x200 images  
-- For avatars/profiles: Use 200x200 with crop=face
-- ALWAYS include meaningful alt text for accessibility
-
-⚡ **COMPONENT REQUIREMENTS:**
-- DO NOT include any imports (no "import React from 'react';" or any other imports)
-- DO NOT add import statements at the top
-- Start directly with the component function
-- End with render(<ComponentName />)
-- Make elaborated, professional code
-- Answer in portuguese
-- MUST include working images - this is not optional
-
-Return JSON format:
-{
-  "changes": [{"type": "replace", "startLine": 1, "endLine": 999, "code": "your React code here", "description": "Generated component"}],
-  "explanation": "Component created"
-}`;
+      userPrompt = `Crie um componente react: ${prompt}`;
     } else {
-      systemPrompt = getSystemPrompt(actionType || 'EDITAR');
       const codeStructure = parseCodeToStructuredFormat(currentCode);
       const structuredCodeDisplay = JSON.stringify(codeStructure, null, 2);
       userPrompt = `ARQUIVO: ${fileName}

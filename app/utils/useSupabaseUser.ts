@@ -12,6 +12,7 @@ export function useSupabaseUser() {
     // Check if component is still mounted before starting
     if (!mountedRef.current) return;
     
+    console.log(`[CREDITS] fetchUserData called for email: ${userEmail}, retry: ${retryCount}`);
     setCreditsLoading(true);
     
     // Fallback timeout  to prevent infinite loading (10 seconds max)
@@ -22,6 +23,7 @@ export function useSupabaseUser() {
       }
     }, 10000);
     try {
+      console.log(`[CREDITS] Querying supabase for user data: ${userEmail}`);
       const { data: userData, error } = await supabase
         .from('users')
         .select('credits, plan')
@@ -55,7 +57,8 @@ export function useSupabaseUser() {
         setCreditsLoading(false);
         clearTimeout(fallbackTimeout);
       } else {
-        console.log('User data fetched successfully:', userData);
+        console.log('[CREDITS] User data fetched successfully:', userData);
+        console.log(`[CREDITS] Setting credits to: ${userData?.credits || 0} (was: ${credits})`);
         setCredits(userData?.credits || 0);
         setSubscriptionStatus(userData?.plan || null);
         setCreditsLoading(false);
@@ -139,8 +142,12 @@ export function useSupabaseUser() {
     creditsLoading, 
     subscriptionStatus, 
     refetchCredits: user?.email ? () => {
+      console.log('[CREDITS] refetchCredits called for user:', user.email);
       const mountedRef = { current: true };
       fetchUserData(user.email, 0, mountedRef);
-    } : () => {} 
+      console.log('[CREDITS] fetchUserData triggered in refetchCredits');
+    } : () => {
+      console.log('[CREDITS] refetchCredits called but no user email available');
+    } 
   };
 } 

@@ -11,28 +11,48 @@ const MICROSERVICE_URL = process.env.AGENTIC_STRUCTURED_URL || 'http://localhost
  */
 export async function POST(req: NextRequest) {
   console.log('[BFF] /api/agentic-structured hit. Forwarding to microservice...');
-
+  
   try {
+    // Parse the request body
     const body = await req.json();
+    
+    // Check for user email in the request body
+    const userEmail = body.userEmail;
+    
+    if (!userEmail) {
+      console.error('[BFF] No user email found in request');
+      return new NextResponse(JSON.stringify({ 
+        error: 'Authentication required',
+        explanation: 'User email is required. Please make sure you are logged in.'
+      }), { 
+        status: 401,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    }
+    
+    console.log('[BFF] Using client-provided email:', userEmail);
 
-    // 1. Get the full response from the microservice.
-    // This is necessary because we need the complete text to parse it.
+    // Forward request to microservice, including the user's email
     const microserviceResponse = await fetch(MICROSERVICE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
+      body: JSON.stringify(body), // The email is already included in the body
     });
 
     if (!microserviceResponse.ok) {
       const errorBody = await microserviceResponse.text();
       console.error(`[BFF] Microservice error: ${errorBody}`);
-      return new NextResponse(errorBody, { status: microserviceResponse.status });
+      // Forward the exact error and status from the microservice
+      return new NextResponse(errorBody, { 
+        status: microserviceResponse.status,
+        headers: { 'Content-Type': 'application/json' }
+      });
     }
 
     const responseText = await microserviceResponse.text();
     console.log('[BFF] Received full response from microservice. Now extracting clean JSON...');
 
-    // 2. The AI response is wrapped in a markdown code block. Extract the raw JSON.
+    // The AI response is wrapped in a markdown code block. Extract the raw JSON.
     const jsonMatch = responseText.match(/```json\s*([\s\S]*?)\s*```/);
 
     if (!jsonMatch || !jsonMatch[1]) {
@@ -52,7 +72,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // 3. Send the clean, extracted JSON string to the client.
+    // Send the clean, extracted JSON string to the client.
     const cleanJsonString = jsonMatch[1];
     console.log('[BFF] Sending extracted and cleaned JSON to client.');
     return new NextResponse(cleanJsonString, {
@@ -62,6 +82,9 @@ export async function POST(req: NextRequest) {
 
   } catch (error) {
     console.error('[BFF] Error in BFF:', error);
-    return new NextResponse('An internal error occurred in the BFF.', { status: 503 });
+    return new NextResponse(JSON.stringify({ error: 'An internal error occurred in the BFF.' }), { 
+      status: 503,
+      headers: { 'Content-Type': 'application/json' }
+    });
   }
 } 
