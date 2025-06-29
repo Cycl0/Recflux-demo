@@ -514,51 +514,15 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
           })
         });
 
-        if (!response.body) {
-          throw new Error('A resposta da API não contém um corpo.');
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({
+            error: "Erro de comunicação com a API",
+            explanation: `A API retornou um status ${response.status} mas não foi possível ler o corpo do erro.`
+          }));
+          throw errorData;
         }
-
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let partialLine = '';
         
-        let accumulatedJson = '';
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) {
-            break;
-          }
-
-          partialLine += decoder.decode(value, { stream: true });
-
-          let lines = partialLine.split('\n');
-          partialLine = lines.pop() || '';
-
-          for (const line of lines) {
-            if (line.startsWith('0:')) {
-              const textChunk = JSON.parse(line.substring(2));
-              accumulatedJson += textChunk;
-              // No longer updating the UI in the loop to avoid performance issues
-            }
-          }
-        }
-
-        let data;
-        try {
-          // Find the first '{' and the last '}' to extract the JSON object
-          const startIndex = accumulatedJson.indexOf('{');
-          const endIndex = accumulatedJson.lastIndexOf('}');
-          if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
-            throw new Error("JSON object not found in the response");
-          }
-          const finalJsonString = accumulatedJson.substring(startIndex, endIndex + 1);
-          data = JSON.parse(finalJsonString);
-        } catch (e) {
-          console.error("Failed to parse final JSON:", accumulatedJson, e);
-          data = { error: "Resposta inválida da API", explanation: `Não foi possível analisar a resposta JSON. Resposta recebida:\n\n${accumulatedJson}` };
-        }
-
+        const data = await response.json();
 
         const actionIcons = {
           'GERAR': '🚀',
@@ -673,15 +637,15 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
       } catch (error) {
         console.error('Structured API error:', error);
         
-        const errorMessage = {
+        const finalAssistantMessage = {
           id: assistantMessageId,
           role: "assistant" as const,
-          content: "❌ Erro ao processar solicitação. Tente novamente.",
+          content: `❌ Erro: ${error.error || 'Erro desconhecido'}\n\n${error.explanation || 'Não foi possível processar sua solicitação.'}`,
           isLoading: false
         };
 
         // Replace the skeleton message with error message
-        setMessages(prev => prev.map(m => m.id === assistantMessageId ? errorMessage : m));
+        setMessages(prev => prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m));
         setIsLoading(false);
         console.log('[SUBMIT] Set isLoading to false (API error)');
       }
@@ -2212,39 +2176,9 @@ Faça APENAS as mudanças mínimas necessárias para corrigir este erro específ
         const errorText = await response.text();
         throw new Error(`API Error (${response.status}): ${errorText || response.statusText}`);
       }
+      
+      const data = await response.json();
 
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let partialLine = '';
-      let accumulatedJson = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        partialLine += decoder.decode(value, { stream: true });
-        let lines = partialLine.split('\n');
-        partialLine = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('0:')) {
-            accumulatedJson += JSON.parse(line.substring(2));
-          }
-        }
-      }
-
-      let data;
-      try {
-        const startIndex = accumulatedJson.indexOf('{');
-        const endIndex = accumulatedJson.lastIndexOf('}');
-        if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
-          throw new Error("JSON object not found in the response");
-        }
-        const finalJsonString = accumulatedJson.substring(startIndex, endIndex + 1);
-        data = JSON.parse(finalJsonString);
-      } catch (e) {
-        throw new Error(`Falha ao analisar a resposta da API de correção. Resposta recebida:\\n\\n${accumulatedJson}`);
-      }
       if (data.changes && data.changes.length > 0) {
         // Capture code before changes for diff
         const codeBeforeChanges = selectedFile?.value || '';
