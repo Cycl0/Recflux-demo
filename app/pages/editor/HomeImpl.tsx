@@ -1796,12 +1796,12 @@ function GoogleSignInButton() {
   const [previewCode, setPreviewCode] = useState(selectedFile?.value || '');
 
   // Throttle editor value updates to 500ms to avoid UI overload and improve preview performance
-  const handleEditorChange = useMemo(
+const handleEditorChange = useMemo(
     () => throttle((value) => {
       setFilesCurrentHandler(selectedFile?.name, value ?? '');
     }, 500), // Increased from 200ms to 500ms for better performance
-    [selectedFile?.name, setFilesCurrentHandler]
-  );
+  [selectedFile?.name, setFilesCurrentHandler]
+);
 
   // Throttle preview updates to 1000ms (1 second) for better performance
   const updatePreview = useMemo(

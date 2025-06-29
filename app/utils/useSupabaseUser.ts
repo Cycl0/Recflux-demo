@@ -92,16 +92,16 @@ export function useSupabaseUser() {
     
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (mountedRef.current) {
-        const authUser = session?.user || null;
-        setUser(authUser);
-        setLoading(false);
-        
-        if (authUser?.email) {
+      const authUser = session?.user || null;
+      setUser(authUser);
+      setLoading(false);
+      
+      if (authUser?.email) {
           fetchUserData(authUser.email, 0, mountedRef);
-        } else {
-          setCredits(null);
-          setSubscriptionStatus(null);
-          setCreditsLoading(false);
+      } else {
+        setCredits(null);
+        setSubscriptionStatus(null);
+        setCreditsLoading(false);
         }
       }
     });
