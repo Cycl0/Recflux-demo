@@ -244,6 +244,7 @@ const MessageComponent = React.memo(({ message, theme, setFilesCurrentHandler, t
   setFilesCurrentHandler: (fileName: string, content: string, index?: number) => void;
   throttleEditorOpen: (open: boolean) => void;
 }) => {
+  const [showDiff, setShowDiff] = useState(false);
   if ((message as any).isLoading) {
     return <ChatMessageSkeleton key={message.id} theme={theme} />;
   }
@@ -330,47 +331,55 @@ const MessageComponent = React.memo(({ message, theme, setFilesCurrentHandler, t
         {/* Show diff viewer if diff data is available */}
         {(message as any).diffData && (
           <div className="mt-4">
-            <h4 className="text-sm font-semibold mb-2 text-gray-600 dark:text-gray-300">📊 Diferenças aplicadas:</h4>
-            <div className="rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
-              <ReactDiffViewer
-                oldValue={(message as any).diffData.oldCode}
-                newValue={(message as any).diffData.newCode}
-                splitView={false}
-                hideLineNumbers={false}
-                useDarkTheme={theme === 'dark'}
-                styles={{
-                  variables: {
-                    dark: {
-                      diffViewerBackground: '#1a1b26',
-                      addedBackground: '#2d4a2b',
-                      removedBackground: '#4a2d2d',
-                      wordAddedBackground: '#3d6a3a',
-                      wordRemovedBackground: '#6a3a3a',
-                      addedGutterBackground: '#2d4a2b',
-                      removedGutterBackground: '#4a2d2d',
-                      gutterBackground: '#232733',
-                      gutterBackgroundDark: '#1a1b26',
-                      diffViewerTitleBackground: '#232733',
-                      diffViewerTitleColor: '#e0f2f1',
-                      diffViewerTitleBorderColor: '#67e8f9',
-                    },
-                    light: {
-                      diffViewerBackground: '#ffffff',
-                      addedBackground: '#e6ffed',
-                      removedBackground: '#ffeef0',
-                      wordAddedBackground: '#acf2bd',
-                      wordRemovedBackground: '#fdb8c0',
-                      addedGutterBackground: '#cdffd8',
-                      removedGutterBackground: '#fdbdcf',
-                      gutterBackground: '#f7f7f7',
-                      diffViewerTitleBackground: '#f0f9ff',
-                      diffViewerTitleColor: '#0e7490',
-                      diffViewerTitleBorderColor: '#22d3ee',
+            <button 
+              onClick={() => setShowDiff(prev => !prev)}
+              className="w-full text-left flex items-center justify-between p-2 rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            >
+              <h4 className="text-sm font-semibold text-gray-600 dark:text-gray-300">📊 Diferenças aplicadas:</h4>
+              <svg xmlns="http://www.w3.org/2000/svg" className={`w-5 h-5 transform transition-transform ${showDiff ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+            </button>
+            {showDiff && (
+              <div className="mt-2 rounded-lg overflow-hidden border border-gray-200 dark:border-gray-600">
+                <ReactDiffViewer
+                  oldValue={(message as any).diffData.oldCode}
+                  newValue={(message as any).diffData.newCode}
+                  splitView={false}
+                  hideLineNumbers={false}
+                  useDarkTheme={theme === 'dark'}
+                  styles={{
+                    variables: {
+                      dark: {
+                        diffViewerBackground: '#1a1b26',
+                        addedBackground: '#2d4a2b',
+                        removedBackground: '#4a2d2d',
+                        wordAddedBackground: '#3d6a3a',
+                        wordRemovedBackground: '#6a3a3a',
+                        addedGutterBackground: '#2d4a2b',
+                        removedGutterBackground: '#4a2d2d',
+                        gutterBackground: '#232733',
+                        gutterBackgroundDark: '#1a1b26',
+                        diffViewerTitleBackground: '#232733',
+                        diffViewerTitleColor: '#e0f2f1',
+                        diffViewerTitleBorderColor: '#67e8f9',
+                      },
+                      light: {
+                        diffViewerBackground: '#ffffff',
+                        addedBackground: '#e6ffed',
+                        removedBackground: '#ffeef0',
+                        wordAddedBackground: '#acf2bd',
+                        wordRemovedBackground: '#fdb8c0',
+                        addedGutterBackground: '#cdffd8',
+                        removedGutterBackground: '#fdbdcf',
+                        gutterBackground: '#f7f7f7',
+                        diffViewerTitleBackground: '#f0f9ff',
+                        diffViewerTitleColor: '#0e7490',
+                        diffViewerTitleBorderColor: '#22d3ee',
+                      }
                     }
-                  }
-                }}
-              />
-            </div>
+                  }}
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -546,37 +555,8 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
         };
 
         if (data.changes && data.changes.length > 0) {
-          // Capture code before changes for diff
-          const codeBeforeChanges = selectedFile?.value || '';
-          
-          // Apply changes and wait for completion
-          await applyAgenticChanges(data.changes);
-          
-          // Generate new code by applying changes to the original code
-          let newCode = codeBeforeChanges;
-          const lines = newCode.split('\n');
-          
-          // Apply changes in reverse order to maintain line numbers
-          const sortedChanges = [...data.changes].sort((a, b) => (b.startLine || 0) - (a.startLine || 0));
-          
-          for (const change of sortedChanges) {
-            if (change.type === 'replace') {
-              const startIdx = (change.startLine || 1) - 1;
-              const endIdx = change.endLine ? change.endLine - 1 : startIdx;
-              const newLines = change.code.split('\n');
-              lines.splice(startIdx, endIdx - startIdx + 1, ...newLines);
-            } else if (change.type === 'insert') {
-              const insertIdx = (change.startLine || 1) - 1;
-              const newLines = change.code.split('\n');
-              lines.splice(insertIdx, 0, ...newLines);
-            } else if (change.type === 'delete') {
-              const startIdx = (change.startLine || 1) - 1;
-              const endIdx = change.endLine ? change.endLine - 1 : startIdx;
-              lines.splice(startIdx, endIdx - startIdx + 1);
-            }
-          }
-          
-          newCode = lines.join('\n');
+          // Apply changes and get old/new code for diff
+          const { oldCode, newCode } = applyAgenticChanges(data.changes);
           
           // Save file version with prompt tag
           if (selectedFile?.id && publicUserId && (chatAction.value === 'GERAR' || chatAction.value === 'EDITAR')) {
@@ -608,7 +588,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
           
           // Store diff data for ReactDiffViewer
           const diffData = {
-            oldCode: codeBeforeChanges,
+            oldCode: oldCode,
             newCode: newCode,
             changes: data.changes
           };
@@ -1667,93 +1647,45 @@ function GoogleSignInButton() {
   const applyAgenticChanges = useCallback((changes: any[]) => {
     if (!selectedFile?.name) {
       console.error('No selected file to apply changes to');
-      return;
+      return { oldCode: '', newCode: '' };
     }
     
-    console.log('=== APPLYING AGENTIC CHANGES ===');
-    console.log('Selected file:', selectedFile.name);
-    console.log('Changes to apply:', changes);
+    const oldCode = selectedFile.value || '';
     
-    // Apply changes directly to the file content
-    let currentCode = selectedFile.value || '';
-    console.log('Original code length:', currentCode.length);
-    console.log('Original code preview:', currentCode.substring(0, 200) + '...');
-    
-    const lines = currentCode.split('\n');
-    console.log('Total lines:', lines.length);
+    const lines = oldCode.split('\n');
     
     // Sort changes by line number in reverse order to maintain line positions
-    const sortedChanges = [...changes].sort((a, b) => b.startLine - a.startLine);
-    console.log('Sorted changes (reverse order):', sortedChanges);
+    const sortedChanges = [...changes].sort((a, b) => (b.startLine || 0) - (a.startLine || 0));
 
-    sortedChanges.forEach((change, index) => {
-      console.log(`\n--- Processing change ${index + 1}/${sortedChanges.length} ---`);
-      console.log('Change:', change);
-      
+    sortedChanges.forEach((change) => {
       const startLineIndex = change.startLine - 1; // Convert to 0-based index
       const endLineIndex = (change.endLine || change.startLine) - 1;
       
-      console.log(`Line range: ${change.startLine} to ${change.endLine || change.startLine} (0-based: ${startLineIndex} to ${endLineIndex})`);
-      console.log('Lines before change:', lines.length);
-      
-      if (startLineIndex >= 0 && startLineIndex < lines.length) {
-        console.log(`Line ${change.startLine} current content:`, JSON.stringify(lines[startLineIndex]));
-        if (change.endLine && change.endLine !== change.startLine) {
-          console.log(`Lines ${change.startLine}-${change.endLine} current content:`);
-          for (let i = startLineIndex; i <= endLineIndex && i < lines.length; i++) {
-            console.log(`  Line ${i + 1}:`, JSON.stringify(lines[i]));
-          }
-        }
-      } else {
-        console.error(`Invalid line number: ${change.startLine} (file has ${lines.length} lines)`);
-      }
-      
       switch (change.type) {
         case 'insert':
-          // Insert new lines at the specified position
           const insertLines = change.code.split('\n');
-          console.log('Inserting lines:', insertLines);
           lines.splice(startLineIndex, 0, ...insertLines);
-          console.log(`Inserted ${insertLines.length} lines at position ${startLineIndex}`);
           break;
         case 'replace':
-          // Replace lines in the specified range
           const replaceLines = change.code.split('\n');
           const replaceCount = endLineIndex - startLineIndex + 1;
-          console.log('New code to insert:', replaceLines);
-          console.log(`Replacing ${replaceCount} lines starting at ${startLineIndex}`);
-          console.log('Lines being replaced:');
-          for (let i = startLineIndex; i < startLineIndex + replaceCount && i < lines.length; i++) {
-            console.log(`  Removing line ${i + 1}:`, JSON.stringify(lines[i]));
-          }
           lines.splice(startLineIndex, replaceCount, ...replaceLines);
-          console.log('Lines after replacement:');
-          for (let i = startLineIndex; i < startLineIndex + replaceLines.length && i < lines.length; i++) {
-            console.log(`  New line ${i + 1}:`, JSON.stringify(lines[i]));
-          }
           break;
         case 'delete':
-          // Delete lines in the specified range
           const deleteCount = endLineIndex - startLineIndex + 1;
-          console.log(`Deleting ${deleteCount} lines starting at ${startLineIndex}`);
-          const deletedLines = lines.splice(startLineIndex, deleteCount);
-          console.log('Deleted lines:', deletedLines);
+          lines.splice(startLineIndex, deleteCount);
           break;
         default:
           console.error('Unknown change type:', change.type);
       }
-      
-      console.log('Lines after change:', lines.length);
     });
 
     const newCode = lines.join('\n');
-    console.log('New code length:', newCode.length);
-    console.log('New code preview:', newCode.substring(0, 200) + '...');
     
     // Apply the changes to the editor
     setFilesCurrentHandler(selectedFile.name, newCode);
     
-    console.log('=== CHANGES APPLIED SUCCESSFULLY ===');
+    return { oldCode, newCode };
   }, [selectedFile, setFilesCurrentHandler]);
 
   // State for throttled preview code
@@ -2180,41 +2112,13 @@ Faça APENAS as mudanças mínimas necessárias para corrigir este erro específ
       const data = await response.json();
 
       if (data.changes && data.changes.length > 0) {
-        // Capture code before changes for diff
-        const codeBeforeChanges = selectedFile?.value || '';
-        
-        await applyAgenticChanges(data.changes);
-        
-        // Generate new code by applying changes to the original code
-        let newCode = codeBeforeChanges;
-        const lines = newCode.split('\n');
-        
-        // Apply changes in reverse order to maintain line numbers
-        const sortedChanges = [...data.changes].sort((a, b) => (b.startLine || 0) - (a.startLine || 0));
-        
-        for (const change of sortedChanges) {
-          if (change.type === 'replace') {
-            const startIdx = (change.startLine || 1) - 1;
-            const endIdx = change.endLine ? change.endLine - 1 : startIdx;
-            const newLines = change.code.split('\n');
-            lines.splice(startIdx, endIdx - startIdx + 1, ...newLines);
-          } else if (change.type === 'insert') {
-            const insertIdx = (change.startLine || 1) - 1;
-            const newLines = change.code.split('\n');
-            lines.splice(insertIdx, 0, ...newLines);
-          } else if (change.type === 'delete') {
-            const startIdx = (change.startLine || 1) - 1;
-            const endIdx = change.endLine ? change.endLine - 1 : startIdx;
-            lines.splice(startIdx, endIdx - startIdx + 1);
-          }
-        }
-        
-        newCode = lines.join('\n');
+        // Apply changes and get new/old code for diff
+        const { oldCode, newCode } = applyAgenticChanges(data.changes);
         
         // Generate diff and show success message in chat
         if (chatAppendRef.current && typeof chatAppendRef.current === 'function') {
           const diffData = {
-            oldCode: codeBeforeChanges,
+            oldCode: oldCode,
             newCode: newCode,
             changes: data.changes
           };
