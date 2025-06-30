@@ -1,10 +1,14 @@
 # Use the official Puppeteer image which comes with Chromium and all necessary dependencies.
 FROM ghcr.io/puppeteer/puppeteer:22.12.1
 
-# As root, install vercel and create a directory for the app, setting ownership.
+# Switch to root user to install global dependencies
 USER root
-RUN npm install -g vercel && \
-    mkdir -p /home/pptruser/app && \
+
+# Install Vercel CLI globally
+RUN npm install -g vercel
+
+# Create a non-root user and app directory
+RUN mkdir -p /home/pptruser/app && \
     chown -R pptruser:pptruser /home/pptruser/app
 
 # Switch to the non-root user
@@ -13,11 +17,13 @@ USER pptruser
 # Set the working directory
 WORKDIR /home/pptruser/app
 
-# Copy local code to the container image, ensuring correct ownership.
-# This includes the 'template' directory needed for deployments.
-COPY --chown=pptruser:pptruser . .
+# Copy application dependency manifests and install dependencies
+# This leverages Docker's layer caching to speed up builds
+COPY --chown=pptruser:pptruser package*.json ./
+RUN npm install --omit=dev
 
-RUN npm install --omit=dev && npm install -g vercel
+# Copy the rest of the application code
+COPY --chown=pptruser:pptruser . .
 
 # Set the environment variable for the port
 ENV PORT=3003

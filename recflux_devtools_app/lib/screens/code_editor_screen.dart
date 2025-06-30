@@ -1,230 +1,389 @@
+import 'dart:convert';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_code_editor/flutter_code_editor.dart';
 import 'package:flutter_highlight/themes/monokai-sublime.dart';
-import 'package:highlight/languages/dart.dart';
 import 'package:highlight/languages/javascript.dart';
+import 'package:highlight/languages/dart.dart';
 import 'package:highlight/languages/python.dart';
+import 'package:highlight/languages/go.dart';
+import 'package:highlight/languages/java.dart';
+import 'package:highlight/languages/cpp.dart';
+import 'package:highlight/languages/htmlbars.dart';
 import 'package:highlight/languages/css.dart';
-import 'package:highlight/languages/xml.dart';
+import 'package:flutter_syntax_view/flutter_syntax_view.dart' as syntax_view;
 import '../models/code_editor.dart';
+import '../utils/language_utils.dart';
 
 class CodeEditorScreen extends StatefulWidget {
-  const CodeEditorScreen({super.key});
+  const CodeEditorScreen({Key? key}) : super(key: key);
 
   @override
-  State<CodeEditorScreen> createState() => _CodeEditorScreenState();
+  _CodeEditorScreenState createState() => _CodeEditorScreenState();
 }
 
 class _CodeEditorScreenState extends State<CodeEditorScreen> {
   final Map<String, CodeController> _controllers = {};
   final TextEditingController _newFileNameController = TextEditingController();
   String _newFileLanguage = 'javascript';
+  CodeEditorProvider? _codeEditorProvider;
 
-  final Map<String, dynamic> _languageOptions = {
-    'javascript': {'language': javascript, 'extension': '.js'},
-    'dart': {'language': dart, 'extension': '.dart'},
-    'python': {'language': python, 'extension': '.py'},
-    'html': {'language': xml, 'extension': '.html'},
-    'css': {'language': css, 'extension': '.css'},
-  };
+  @override
+  void initState() {
+    super.initState();
+    // Use a post-frame callback to ensure the provider is available.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _codeEditorProvider = Provider.of<CodeEditorProvider>(
+        context,
+        listen: false,
+      );
+      _codeEditorProvider?.addListener(_onProviderChange);
+    });
+  }
+
+  void _onProviderChange() {
+    if (!mounted) return;
+
+    final provider = _codeEditorProvider;
+    if (provider == null) return;
+
+    // Update the text in the active controller if the file content changes externally
+    if (provider.currentFile != null &&
+        _controllers.containsKey(provider.currentFile!.name)) {
+      final controller = _controllers[provider.currentFile!.name]!;
+      if (controller.text != provider.currentFile!.content) {
+        controller.text = provider.currentFile!.content;
+      }
+    }
+
+    final shouldShowDialog =
+        provider.isDeploying ||
+        provider.deploymentUrl != null ||
+        provider.error != null;
+
+    // This logic ensures the dialog doesn't get built multiple times.
+    final isDialogRoute = ModalRoute.of(context)?.isCurrent == false;
+    if (shouldShowDialog && !isDialogRoute) {
+      _showDeploymentDialog();
+    }
+  }
 
   @override
   void dispose() {
-    _controllers.forEach((_, controller) => controller.dispose());
+    _codeEditorProvider?.removeListener(_onProviderChange);
+    _controllers.values.forEach((controller) => controller.dispose());
     _newFileNameController.dispose();
     super.dispose();
   }
 
-  CodeController _getOrCreateController(CodeFile file) {
+  CodeController _getControllerForFile(CodeFile file) {
     if (!_controllers.containsKey(file.name)) {
       _controllers[file.name] = CodeController(
         text: file.content,
-        language: _languageOptions[file.language]?['language'],
+        language: javascript, // Defaulting to javascript
       );
     }
     return _controllers[file.name]!;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Consumer<CodeEditorProvider>(
-      builder: (context, codeProvider, child) {
-        final currentFile = codeProvider.currentFile;
+  Future<void> _launchUrl(String url) async {
+    final uri = Uri.parse(url);
+    if (!await launchUrl(uri)) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not launch $url')));
+    }
+  }
 
-        return Scaffold(
-          drawer: Drawer(
-            child: Column(
-              children: [
-                DrawerHeader(
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).primaryColor,
+  void _showDeploymentDialog() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return Consumer<CodeEditorProvider>(
+          builder: (context, provider, child) {
+            Widget content;
+            if (provider.isDeploying) {
+              content = const Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  CircularProgressIndicator(),
+                  SizedBox(height: 20),
+                  Text(
+                    'Deploying your code...',
+                    style: TextStyle(color: Colors.white),
                   ),
-                  child: const Center(
-                    child: Text(
-                      'Files',
-                      style: TextStyle(color: Colors.white, fontSize: 24),
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: ListView.builder(
-                    itemCount: codeProvider.files.length,
-                    itemBuilder: (context, index) {
-                      final file = codeProvider.files[index];
-                      return ListTile(
-                        title: Text(file.name),
-                        subtitle: Text(
-                          '${file.language} • ${_formatDate(file.lastModified)}',
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                        selected: codeProvider.currentFileIndex == index,
-                        onTap: () {
-                          codeProvider.setCurrentFileIndex(index);
-                          Navigator.pop(context); // Close drawer
-                        },
-                        trailing: IconButton(
-                          icon: const Icon(Icons.delete),
-                          onPressed: () => _showDeleteConfirmation(
-                            context,
-                            index,
-                            file.name,
-                          ),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-          ),
-          body: Column(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8.0),
-                color: Theme.of(context).primaryColor.withOpacity(0.1),
-                child: Row(
+                ],
+              );
+            } else if (provider.deploymentUrl != null &&
+                provider.screenshot != null) {
+              final screenshotBytes = base64Decode(provider.screenshot!);
+              content = SingleChildScrollView(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    IconButton(
-                      icon: const Icon(Icons.menu),
-                      tooltip: 'File Explorer',
+                    const Text(
+                      'Deployment Successful!',
+                      style: TextStyle(fontSize: 18, color: Colors.white),
+                    ),
+                    const SizedBox(height: 16),
+                    GestureDetector(
+                      onTap: () => _launchUrl(provider.deploymentUrl!),
+                      child: Image.memory(screenshotBytes),
+                    ),
+                    const SizedBox(height: 16),
+                    InkWell(
+                      onTap: () => _launchUrl(provider.deploymentUrl!),
+                      child: Text(
+                        provider.deploymentUrl!,
+                        style: const TextStyle(
+                          color: Colors.blue,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+                    ElevatedButton(
                       onPressed: () {
-                        Scaffold.of(context).openDrawer();
+                        provider.clearDeploymentData();
+                        Navigator.of(context).pop();
                       },
+                      child: const Text('Close'),
                     ),
-                    Text(
-                      currentFile?.name ?? 'No file selected',
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      icon: const Icon(Icons.add),
-                      tooltip: 'Create New File',
-                      onPressed: () => _showNewFileDialog(context),
-                    ),
-                    if (currentFile != null)
-                      IconButton(
-                        icon: const Icon(Icons.save),
-                        tooltip: 'Save',
-                        onPressed: () {
-                          final controller = _controllers[currentFile.name];
-                          if (controller != null) {
-                            codeProvider.updateCurrentFile(controller.text);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('File saved')),
-                            );
-                          }
-                        },
-                      ),
                   ],
                 ),
+              );
+            } else {
+              content = Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.error, color: Colors.red, size: 48),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Deployment Failed',
+                    style: TextStyle(fontSize: 18, color: Colors.white),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    provider.error ?? 'An unknown error occurred.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: Colors.white70),
+                  ),
+                  const SizedBox(height: 20),
+                  ElevatedButton(
+                    onPressed: () {
+                      provider.clearDeploymentData();
+                      Navigator.of(context).pop();
+                    },
+                    child: const Text('Close'),
+                  ),
+                ],
+              );
+            }
+
+            return BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 5, sigmaY: 5),
+              child: Dialog(
+                backgroundColor: Colors.black.withOpacity(0.5),
+                child: Padding(
+                  padding: const EdgeInsets.all(20.0),
+                  child: content,
+                ),
               ),
-              Expanded(
-                child: currentFile == null
-                    ? const Center(child: Text('No file selected'))
-                    : CodeTheme(
-                        data: CodeThemeData(styles: monokaiSublimeTheme),
-                        child: SingleChildScrollView(
-                          child: CodeField(
-                            controller: _getOrCreateController(currentFile),
-                          ),
-                        ),
-                      ),
-              ),
-            ],
-          ),
+            );
+          },
         );
       },
     );
   }
 
-  String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year} ${date.hour}:${date.minute}';
+  @override
+  Widget build(BuildContext context) {
+    return Consumer<CodeEditorProvider>(
+      builder: (context, codeEditor, child) {
+        final currentFile = codeEditor.currentFile;
+        return Scaffold(
+          appBar: AppBar(
+            title: Text(currentFile?.name ?? 'Code Editor'),
+            actions: [
+              IconButton(
+                icon: const Icon(Icons.cloud_upload),
+                onPressed: codeEditor.currentFile == null
+                    ? null
+                    : () {
+                        // Save the latest code to the provider before deploying
+                        final controller = _getControllerForFile(
+                          codeEditor.currentFile!,
+                        );
+                        codeEditor.updateCurrentFile(controller.text);
+                        codeEditor.deployCode();
+                      },
+                tooltip: 'Deploy Code',
+              ),
+              IconButton(
+                icon: const Icon(Icons.play_arrow),
+                onPressed: () {
+                  if (currentFile != null) {
+                    final code = _getControllerForFile(currentFile).text;
+                    _runCode(context, code, currentFile.language);
+                  }
+                },
+              ),
+              IconButton(
+                icon: const Icon(Icons.save),
+                onPressed: () {
+                  if (currentFile != null) {
+                    final controller = _getControllerForFile(currentFile);
+                    codeEditor.updateCurrentFile(controller.text);
+                  }
+                  codeEditor.saveFiles();
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(const SnackBar(content: Text('File saved!')));
+                },
+              ),
+            ],
+          ),
+          drawer: _buildDrawer(codeEditor),
+          body: codeEditor.isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : (currentFile != null
+                    ? _buildEditorView(currentFile, codeEditor)
+                    : const Center(
+                        child: Text(
+                          'Select a file or create a new one to start.',
+                        ),
+                      )),
+        );
+      },
+    );
   }
 
-  void _showNewFileDialog(BuildContext context) {
+  Drawer _buildDrawer(CodeEditorProvider codeEditor) {
+    return Drawer(
+      child: Column(
+        children: [
+          const DrawerHeader(
+            decoration: BoxDecoration(color: Colors.blue),
+            child: Text(
+              'Files',
+              style: TextStyle(color: Colors.white, fontSize: 24),
+            ),
+          ),
+          Expanded(
+            child: ListView.builder(
+              itemCount: codeEditor.files.length,
+              itemBuilder: (context, index) {
+                final file = codeEditor.files[index];
+                return ListTile(
+                  title: Text(file.name),
+                  selected: codeEditor.currentFileIndex == index,
+                  onTap: () {
+                    codeEditor.setCurrentFileIndex(index);
+                    Navigator.pop(context); // Close drawer
+                  },
+                  trailing: IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => _showDeleteFileDialog(index, file.name),
+                  ),
+                );
+              },
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.add),
+            title: const Text('Add New File'),
+            onTap: _showAddFileDialog,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditorView(CodeFile currentFile, CodeEditorProvider codeEditor) {
+    final controller = _getControllerForFile(currentFile);
+    return CodeTheme(
+      data: CodeThemeData(styles: monokaiSublimeTheme),
+      child: SingleChildScrollView(
+        child: CodeField(
+          controller: controller,
+          onChanged: (text) {
+            codeEditor.updateCurrentFile(text);
+          },
+        ),
+      ),
+    );
+  }
+
+  void _runCode(BuildContext context, String code, String language) {
+    final theme = Theme.of(context).brightness == Brightness.dark
+        ? syntax_view.SyntaxTheme.vscodeDark()
+        : syntax_view.SyntaxTheme.vscodeLight();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => Scaffold(
+          appBar: AppBar(title: const Text('Execution Result')),
+          body: syntax_view.SyntaxView(
+            code: code,
+            syntax: LanguageUtils.getSyntaxFor(language),
+            syntaxTheme: theme,
+            expanded: true,
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showAddFileDialog() {
+    _newFileLanguage = 'javascript';
+    _newFileNameController.clear();
+
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: const Text('Create New File'),
+          title: const Text('Add New File'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               TextField(
                 controller: _newFileNameController,
-                decoration: InputDecoration(
-                  labelText: 'File Name',
-                  hintText:
-                      'example${_languageOptions[_newFileLanguage]?['extension'] ?? '.js'}',
+                decoration: const InputDecoration(
+                  labelText: 'File Name (e.g., app.js)',
                 ),
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _newFileLanguage,
-                decoration: const InputDecoration(labelText: 'Language'),
-                items: _languageOptions.keys.map((String language) {
-                  return DropdownMenuItem<String>(
-                    value: language,
-                    child: Text(language),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  if (newValue != null) {
-                    setState(() {
-                      _newFileLanguage = newValue;
-                    });
-                  }
-                },
               ),
             ],
           ),
           actions: [
             TextButton(
               child: const Text('Cancel'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+              onPressed: () => Navigator.of(context).pop(),
             ),
             TextButton(
-              child: const Text('Create'),
+              child: const Text('Add'),
               onPressed: () {
-                final fileName = _newFileNameController.text.trim();
+                final fileName = _newFileNameController.text;
                 if (fileName.isNotEmpty) {
                   final extension =
-                      _languageOptions[_newFileLanguage]?['extension'] ?? '.js';
+                      LanguageUtils
+                          .supportedLanguages[_newFileLanguage]?['extension'] ??
+                      '.js';
                   final fullFileName = fileName.endsWith(extension)
                       ? fileName
                       : '$fileName$extension';
 
-                  final codeProvider = Provider.of<CodeEditorProvider>(
+                  final codeEditor = Provider.of<CodeEditorProvider>(
                     context,
                     listen: false,
                   );
-                  codeProvider.addFile(fullFileName, '', _newFileLanguage);
+                  codeEditor.addFile(fullFileName, '', _newFileLanguage);
                   _newFileNameController.clear();
                   Navigator.of(context).pop();
                 }
@@ -236,11 +395,7 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
     );
   }
 
-  void _showDeleteConfirmation(
-    BuildContext context,
-    int index,
-    String fileName,
-  ) {
+  void _showDeleteFileDialog(int index, String fileName) {
     showDialog(
       context: context,
       builder: (context) {
@@ -250,18 +405,16 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
           actions: [
             TextButton(
               child: const Text('Cancel'),
-              onPressed: () {
-                Navigator.of(context).pop();
-              },
+              onPressed: () => Navigator.of(context).pop(),
             ),
             TextButton(
               child: const Text('Delete'),
               onPressed: () {
-                final codeProvider = Provider.of<CodeEditorProvider>(
+                final codeEditor = Provider.of<CodeEditorProvider>(
                   context,
                   listen: false,
                 );
-                codeProvider.deleteFile(index);
+                codeEditor.deleteFile(index);
                 _controllers.remove(fileName);
                 Navigator.of(context).pop();
               },

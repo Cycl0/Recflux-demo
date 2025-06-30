@@ -32,8 +32,14 @@ app.post('/deploy', async (req, res) => {
     await fs.copy(templateDir, tempDir);
 
     // 3. Process the incoming React code
+    // Ensure React is imported for CSSProperties assertion
     const imports = "import React, { useState, useEffect, useReducer, useRef, useCallback, useMemo, useContext, Component } from 'react';\n\n";
     let processedCode = reactCode;
+
+    // This regex finds style props with object literals and adds the type assertion.
+    // It looks for style={{ and finds the matching }}
+    processedCode = processedCode.replace(/style={({[^}]*})}/g, 'style={$1 as React.CSSProperties}');
+
     let exportStatement = '';
     
     const renderRegex = /render\s*\(\s*<([A-Z][A-Za-z0-9_]+)\s*\/>\s*\);?/;
@@ -53,7 +59,7 @@ app.post('/deploy', async (req, res) => {
     const finalCode = imports + processedCode + exportStatement;
 
     // 4. Overwrite the App.tsx in the template with the processed code
-    const appFilePath = path.join(tempDir, 'src', 'App.tsx');
+    const appFilePath = path.join(tempDir, 'src', 'App.jsx');
     await fs.writeFile(appFilePath, finalCode);
 
     // 5. Install dependencies in the temporary directory
@@ -61,10 +67,10 @@ app.post('/deploy', async (req, res) => {
     await execa('npm', ['install'], { cwd: tempDir });
 
     // 6. Run the Vercel deployment command
-    console.log('Starting Vercel deployment...');
+    console.log('Starting Vercel deployment (public)...');
     const { stdout } = await execa(
       'vercel',
-      ['--prod', '--yes', '--token', process.env.VERCEL_TOKEN],
+      ['--prod', '--public', '--yes', '--token', process.env.VERCEL_TOKEN],
       {
         cwd: tempDir,
         // Pass parent environment variables to the child process

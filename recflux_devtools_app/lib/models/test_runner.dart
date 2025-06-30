@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb, ChangeNotifier;
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../utils/config_utils.dart';
 
 class TestAction {
   String type; // 'click', 'wait', 'type', or 'scroll'
@@ -124,6 +125,13 @@ class TestRunner with ChangeNotifier {
     notifyListeners();
   }
 
+  int _port = ConfigUtils.defaultTestPort;
+  int get port => _port;
+  set port(int value) {
+    _port = value;
+    notifyListeners();
+  }
+
   final List<TestAction> _actions = [];
   List<TestAction> get actions => _actions;
 
@@ -166,10 +174,10 @@ class TestRunner with ChangeNotifier {
         'actions': _actions.map((a) => a.toJson()).toList(),
       });
 
-      final String host = kIsWeb ? 'localhost' : '10.0.2.2';
-      print('<<<<<< [DEBUG] Using host: "$host" >>>>>>');
+      final String host = ConfigUtils.getApiHost();
+      print('<<<<<< [DEBUG] Using host: "$host" on port: $_port >>>>>>');
       final response = await http.post(
-        Uri.parse('http://$host:3000/test'),
+        Uri.parse('http://$host:$_port/test'),
         headers: {'Content-Type': 'application/json'},
         body: requestBody,
       );

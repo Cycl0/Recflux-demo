@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/test_runner.dart';
+import '../utils/config_utils.dart';
 
 class TestScreen extends StatelessWidget {
   const TestScreen({super.key});
@@ -44,6 +45,9 @@ class TestScreen extends StatelessWidget {
 class ConfigSection extends StatelessWidget {
   const ConfigSection({super.key});
   static final _urlController = TextEditingController();
+  static final _portController = TextEditingController(
+    text: ConfigUtils.defaultTestPort.toString(),
+  );
   static final List<Resolution> _resolutions = [
     Resolution(width: 1920, height: 1080),
     Resolution(width: 1366, height: 768),
@@ -62,6 +66,21 @@ class ConfigSection extends StatelessWidget {
           controller: _urlController,
           decoration: const InputDecoration(hintText: 'https://example.com'),
           onChanged: (value) => runner.url = value,
+        ),
+        const SizedBox(height: 16),
+        Text('Server Port', style: Theme.of(context).textTheme.titleLarge),
+        TextField(
+          controller: _portController,
+          keyboardType: TextInputType.number,
+          decoration: InputDecoration(
+            hintText: ConfigUtils.defaultTestPort.toString(),
+          ),
+          onChanged: (value) {
+            final port = int.tryParse(value);
+            if (port != null) {
+              runner.port = port;
+            }
+          },
         ),
         const SizedBox(height: 16),
         Text('Resolution', style: Theme.of(context).textTheme.titleLarge),

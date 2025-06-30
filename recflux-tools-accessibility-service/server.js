@@ -4,9 +4,10 @@ const { AxePuppeteer } = require('@axe-core/puppeteer');
 const cors = require('cors');
 
 const app = express();
-app.use(express.json());
+const port = process.env.PORT || 3002;
+
 app.use(cors()); // Enable CORS for all routes
-const PORT = 3002;
+app.use(express.json());
 
 /**
  * Analyzes the current page state with Axe and captures screenshots.
@@ -234,6 +235,6 @@ app.post('/test', async (req, res) => {
     }
 });
 
-app.listen(PORT, () => {
-    console.log(`Microservice listening on port ${PORT}`);
+app.listen(port, () => {
+    console.log(`Microservice listening on port ${port}`);
 }); 

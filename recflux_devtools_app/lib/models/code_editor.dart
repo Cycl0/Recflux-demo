@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:http/http.dart' as http;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class CodeFile {
   String name;
@@ -13,14 +15,7 @@ class CodeFile {
     required this.content,
     required this.language,
     DateTime? lastModified,
-  }) : lastModified = lastModified ?? DateTime.now();
-
-  Map<String, dynamic> toJson() => {
-    'name': name,
-    'content': content,
-    'language': language,
-    'lastModified': lastModified.toIso8601String(),
-  };
+  }) : this.lastModified = lastModified ?? DateTime.now();
 
   factory CodeFile.fromJson(Map<String, dynamic> json) {
     return CodeFile(
@@ -30,13 +25,29 @@ class CodeFile {
       lastModified: DateTime.parse(json['lastModified']),
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'name': name,
+      'content': content,
+      'language': language,
+      'lastModified': lastModified.toIso8601String(),
+    };
+  }
 }
 
 class CodeEditorProvider with ChangeNotifier {
+  String _code = '';
   List<CodeFile> _files = [];
   int _currentFileIndex = -1;
   bool _isLoading = false;
   String? _error;
+  bool _isSaving = false;
+
+  // Deployment state
+  bool _isDeploying = false;
+  String? _deploymentUrl;
+  String? _screenshot;
 
   List<CodeFile> get files => _files;
   CodeFile? get currentFile =>
@@ -46,6 +57,12 @@ class CodeEditorProvider with ChangeNotifier {
   int get currentFileIndex => _currentFileIndex;
   bool get isLoading => _isLoading;
   String? get error => _error;
+  bool get isSaving => _isSaving;
+
+  // Getters for deployment state
+  bool get isDeploying => _isDeploying;
+  String? get deploymentUrl => _deploymentUrl;
+  String? get screenshot => _screenshot;
 
   CodeEditorProvider() {
     _loadFiles();
@@ -138,6 +155,53 @@ class CodeEditorProvider with ChangeNotifier {
       }
       notifyListeners();
       saveFiles();
+    }
+  }
+
+  void clearDeploymentData() {
+    _deploymentUrl = null;
+    _screenshot = null;
+    notifyListeners();
+  }
+
+  Future<void> deployCode() async {
+    if (currentFile == null) return;
+
+    _isDeploying = true;
+    _deploymentUrl = null;
+    _screenshot = null;
+    _error = null;
+    notifyListeners();
+
+    try {
+      final urlString =
+          dotenv.env['DEPLOY_SERVICE_URL'] ?? 'http://localhost:3003/deploy';
+      final url = Uri.parse(urlString);
+      final response = await http.post(
+        url,
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'reactCode': currentFile!.content}),
+      );
+
+      if (response.statusCode == 200) {
+        final responseData = json.decode(response.body);
+        _deploymentUrl = responseData['deploymentUrl'];
+        _screenshot = responseData['screenshot'];
+      } else {
+        _error = 'Deployment failed: ${response.body}';
+      }
+    } catch (e) {
+      _error = 'An error occurred during deployment: $e';
+    } finally {
+      _isDeploying = false;
+      notifyListeners();
+    }
+  }
+
+  void setCode(String newCode) {
+    if (_code != newCode) {
+      _code = newCode;
+      notifyListeners();
     }
   }
 }

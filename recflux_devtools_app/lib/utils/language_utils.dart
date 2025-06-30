@@ -1,3 +1,21 @@
+import 'package:flutter_syntax_view/flutter_syntax_view.dart';
+import 'package:highlight/languages/javascript.dart';
+
+class LanguageUtils {
+  static final Map<String, Map<String, dynamic>> supportedLanguages = {
+    'javascript': {
+      'language': javascript,
+      'extension': '.js',
+      'syntax': Syntax.JAVASCRIPT,
+    },
+  };
+
+  static Syntax getSyntaxFor(String language) {
+    return supportedLanguages[language.toLowerCase()]?['syntax'] ??
+        Syntax.JAVASCRIPT;
+  }
+}
+
 String getExtensionFromLanguage(String language) {
   switch (language.toLowerCase()) {
     case 'javascript':
