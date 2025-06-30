@@ -124,6 +124,7 @@ class _MainNavigatorState extends State<MainNavigator> {
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context);
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     return Scaffold(
       appBar: AppBar(
@@ -163,7 +164,12 @@ class _MainNavigatorState extends State<MainNavigator> {
           BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
         ],
         currentIndex: _selectedIndex,
-        selectedItemColor: Theme.of(context).primaryColor,
+        selectedItemColor: isDarkMode
+            ? Colors.lightBlue[300]
+            : Theme.of(context).primaryColor,
+        unselectedItemColor: isDarkMode ? Colors.white70 : Colors.grey[700],
+        backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
+        type: BottomNavigationBarType.fixed,
         onTap: _onItemTapped,
       ),
     );

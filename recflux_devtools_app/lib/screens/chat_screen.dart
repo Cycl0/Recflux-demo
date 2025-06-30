@@ -291,6 +291,7 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget _buildDiffView(Map<String, dynamic> diffData) {
     final oldCode = diffData['oldCode'] as String;
     final newCode = diffData['newCode'] as String;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
 
     // Simplified diff view since diff_match_patch has API issues
     return SingleChildScrollView(
@@ -308,7 +309,7 @@ class _ChatScreenState extends State<ChatScreen> {
             syntax: getSyntax(
               getLanguageFromExtension(diffData['fileExtension'] ?? '.js'),
             ),
-            syntaxTheme: SyntaxTheme.dracula(),
+            syntaxTheme: SyntaxTheme.dracula(), // Always dark theme for code
             withZoom: false,
             withLinesCount: true,
           ),
@@ -324,7 +325,7 @@ class _ChatScreenState extends State<ChatScreen> {
             syntax: getSyntax(
               getLanguageFromExtension(diffData['fileExtension'] ?? '.js'),
             ),
-            syntaxTheme: SyntaxTheme.dracula(),
+            syntaxTheme: SyntaxTheme.dracula(), // Always dark theme for code
             withZoom: false,
             withLinesCount: true,
           ),
@@ -486,16 +487,20 @@ class _MessageBubbleState extends State<MessageBubble>
                   .copyWith(
                     p: TextStyle(color: textColor, fontSize: 15),
                     code: TextStyle(
-                      backgroundColor: Colors.black.withOpacity(0.2),
+                      backgroundColor: isDarkMode
+                          ? Colors.black.withOpacity(0.2)
+                          : Colors.black.withOpacity(0.1),
                       color: textColor,
                       fontFamily: 'monospace',
                     ),
                     codeblockDecoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.2),
+                      color: isDarkMode
+                          ? Colors.black.withOpacity(0.2)
+                          : Colors.black.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(8.0),
                     ),
                   ),
-              builders: {'pre': CodeBlockBuilder()},
+              builders: {'pre': CodeBlockBuilder(isDarkMode: isDarkMode)},
             ),
             if (widget.message.diffData != null)
               Padding(
@@ -508,6 +513,13 @@ class _MessageBubbleState extends State<MessageBubble>
                       constraints: const BoxConstraints(
                         maxHeight: 300,
                       ), // Max height for the code preview
+                      padding: const EdgeInsets.all(8.0),
+                      decoration: BoxDecoration(
+                        color: isDarkMode
+                            ? Colors.black87
+                            : const Color(0xFF2D2D2D),
+                        borderRadius: BorderRadius.circular(8.0),
+                      ),
                       child: SingleChildScrollView(
                         child: Text(
                           widget.message.diffData!['newCode'].toString(),
@@ -523,8 +535,25 @@ class _MessageBubbleState extends State<MessageBubble>
                     Row(
                       children: [
                         OutlinedButton.icon(
-                          icon: const Icon(Icons.compare_arrows),
-                          label: const Text('View Diff'),
+                          icon: Icon(
+                            Icons.compare_arrows,
+                            color: isDarkMode ? Colors.white70 : Colors.black87,
+                          ),
+                          label: Text(
+                            'View Diff',
+                            style: TextStyle(
+                              color: isDarkMode
+                                  ? Colors.white70
+                                  : Colors.black87,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                              color: isDarkMode
+                                  ? Colors.white30
+                                  : Colors.black26,
+                            ),
+                          ),
                           onPressed: () {
                             if (widget.onDiffTap != null) {
                               widget.onDiffTap!(widget.message.diffData!);
@@ -533,8 +562,25 @@ class _MessageBubbleState extends State<MessageBubble>
                         ),
                         const SizedBox(width: 8),
                         OutlinedButton.icon(
-                          icon: const Icon(Icons.copy),
-                          label: const Text('Apply to Editor'),
+                          icon: Icon(
+                            Icons.copy,
+                            color: isDarkMode ? Colors.white70 : Colors.black87,
+                          ),
+                          label: Text(
+                            'Apply to Editor',
+                            style: TextStyle(
+                              color: isDarkMode
+                                  ? Colors.white70
+                                  : Colors.black87,
+                            ),
+                          ),
+                          style: OutlinedButton.styleFrom(
+                            side: BorderSide(
+                              color: isDarkMode
+                                  ? Colors.white30
+                                  : Colors.black26,
+                            ),
+                          ),
                           onPressed: () {
                             final codeProvider =
                                 Provider.of<CodeEditorProvider>(
@@ -581,6 +627,10 @@ class _MessageBubbleState extends State<MessageBubble>
 }
 
 class CodeBlockBuilder extends md.MarkdownElementBuilder {
+  final bool isDarkMode;
+
+  CodeBlockBuilder({required this.isDarkMode});
+
   @override
   Widget? visitElementAfter(dynamic element, TextStyle? preferredStyle) {
     String language = 'text';
@@ -591,15 +641,6 @@ class CodeBlockBuilder extends md.MarkdownElementBuilder {
             child.attributes['class']?.replaceFirst('language-', '') ?? 'text';
       }
     }
-
-    // --- TEMPORARY DEBUG LOGGING ---
-    final syntax = getSyntax(language);
-    print('--- CodeBlockBuilder DEBUG ---');
-    print('Element Tag: ${element.tag}');
-    print('Detected Language: "$language"');
-    print('Resolved Syntax: $syntax');
-    print('----------------------------');
-    // --- END DEBUG LOGGING ---
 
     final codeContent = element.textContent;
 
@@ -616,7 +657,7 @@ class CodeBlockBuilder extends md.MarkdownElementBuilder {
       width: double.infinity,
       margin: const EdgeInsets.symmetric(vertical: 8.0),
       decoration: BoxDecoration(
-        color: Colors.black87,
+        color: isDarkMode ? Colors.black87 : const Color(0xFF2D2D2D),
         borderRadius: BorderRadius.circular(8.0),
       ),
       child: Column(
@@ -628,7 +669,7 @@ class CodeBlockBuilder extends md.MarkdownElementBuilder {
               vertical: 4.0,
             ),
             decoration: BoxDecoration(
-              color: Colors.black54,
+              color: isDarkMode ? Colors.black54 : const Color(0xFF1E1E1E),
               borderRadius: const BorderRadius.only(
                 topLeft: Radius.circular(8.0),
                 topRight: Radius.circular(8.0),
@@ -718,7 +759,9 @@ class CodeBlockBuilder extends md.MarkdownElementBuilder {
           SyntaxView(
             code: codeContent,
             syntax: getSyntax(language),
-            syntaxTheme: SyntaxTheme.dracula(),
+            syntaxTheme: isDarkMode
+                ? SyntaxTheme.dracula()
+                : SyntaxTheme.ayuDark(), // Always use dark theme for code blocks
             withZoom: false,
             withLinesCount: true,
           ),
