@@ -12,9 +12,9 @@
   "description": "",
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
     "execa": "^9.6.0",
     "express": "^5.1.0",
-    "fs-extra": "^11.3.0",
-    "dotenv": "^16.4.7"
+    "fs-extra": "^11.3.0"
   }
 }

@@ -3,6 +3,7 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs-extra');
 const path = require('path');
+const puppeteer = require('puppeteer');
 
 const app = express();
 const port = process.env.PORT || 3003;
@@ -78,9 +79,21 @@ app.post('/deploy', async (req, res) => {
     
     console.log(`Deployment successful! URL: ${deploymentUrl}`);
 
+    // 7. Take a screenshot of the deployed site
+    console.log('Taking screenshot...');
+    const browser = await puppeteer.launch({
+      args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    });
+    const page = await browser.newPage();
+    await page.goto(deploymentUrl, { waitUntil: 'networkidle0' });
+    const screenshotBuffer = await page.screenshot({ encoding: 'base64' });
+    await browser.close();
+    console.log('Screenshot taken successfully.');
+
     res.status(200).json({
       message: 'Deployment successful!',
       deploymentUrl: deploymentUrl,
+      screenshot: screenshotBuffer,
     });
 
   } catch (error) {
