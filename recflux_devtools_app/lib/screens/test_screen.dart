@@ -296,6 +296,9 @@ class ActionCard extends StatelessWidget {
   }
 
   Widget _buildScrollActionUI(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+
     return Column(
       children: [
         ToggleButtons(
@@ -337,29 +340,65 @@ class ActionCard extends StatelessWidget {
             ),
           )
         else
-          Row(
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(
-                child: TextField(
-                  controller: action.xController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    hintText: 'X',
-                    border: OutlineInputBorder(),
-                    isDense: true,
-                  ),
+              Text(
+                action.scrollType == 'by'
+                    ? 'Scroll by X,Y pixels (relative)'
+                    : 'Scroll to X,Y position (absolute)',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: textColor.withOpacity(0.7),
                 ),
               ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: TextField(
-                  controller: action.yController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    hintText: 'Y',
-                    border: OutlineInputBorder(),
-                    isDense: true,
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: TextField(
+                      controller: action.xController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'X',
+                        hintText: '0',
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                        helperText: action.scrollType == 'by'
+                            ? 'Pixels right'
+                            : 'X position',
+                        helperStyle: TextStyle(fontSize: 10),
+                      ),
+                    ),
                   ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: TextField(
+                      controller: action.yController,
+                      keyboardType: TextInputType.number,
+                      decoration: InputDecoration(
+                        labelText: 'Y',
+                        hintText: '0',
+                        border: const OutlineInputBorder(),
+                        isDense: true,
+                        helperText: action.scrollType == 'by'
+                            ? 'Pixels down'
+                            : 'Y position',
+                        helperStyle: TextStyle(fontSize: 10),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                action.scrollType == 'by'
+                    ? 'Use positive values to scroll down/right, negative to scroll up/left'
+                    : 'Coordinates are from the top-left corner (0,0)',
+                style: TextStyle(
+                  fontSize: 10,
+                  fontStyle: FontStyle.italic,
+                  color: textColor.withOpacity(0.6),
                 ),
               ),
             ],
@@ -394,6 +433,9 @@ class UrlResultWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+
     return Card(
       elevation: 4,
       margin: const EdgeInsets.symmetric(vertical: 16),
@@ -404,7 +446,10 @@ class UrlResultWidget extends StatelessWidget {
           children: [
             Text(
               'Results for: ${result.url}',
-              style: Theme.of(context).textTheme.headlineSmall,
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                color: textColor,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 16),
             ...result.states.map((state) => StateResultWidget(state: state)),
@@ -423,10 +468,21 @@ class StateResultWidget extends StatelessWidget {
   Widget build(BuildContext context) {
     final violations = state['accessibilityReport']['violations'] as List;
     final screenshots = state['screenshots'] as List;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+    final subtitleColor = isDarkMode ? Colors.white70 : Colors.black54;
 
     return ExpansionTile(
-      title: Text('Trigger: ${state['trigger']}'),
-      subtitle: Text('Details: ${state['details']}'),
+      title: Text(
+        'Trigger: ${state['trigger']}',
+        style: TextStyle(color: textColor),
+      ),
+      subtitle: Text(
+        'Details: ${state['details']}',
+        style: TextStyle(color: subtitleColor),
+      ),
+      iconColor: textColor,
+      collapsedIconColor: textColor,
       children: [
         if (screenshots.isNotEmpty)
           Padding(
@@ -436,7 +492,9 @@ class StateResultWidget extends StatelessWidget {
               children: [
                 Text(
                   'Screenshots:',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleMedium?.copyWith(color: textColor),
                 ),
                 const SizedBox(height: 8),
                 SizedBox(
@@ -461,7 +519,9 @@ class StateResultWidget extends StatelessWidget {
               children: [
                 Text(
                   'Accessibility Issues (${violations.length}):',
-                  style: Theme.of(context).textTheme.titleMedium,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleMedium?.copyWith(color: textColor),
                 ),
                 const SizedBox(height: 8),
                 ...violations.map((v) => ViolationWidget(violation: v)),
@@ -469,9 +529,12 @@ class StateResultWidget extends StatelessWidget {
             ),
           ),
         if (violations.isEmpty)
-          const Padding(
-            padding: EdgeInsets.all(8.0),
-            child: Text('No accessibility issues found.'),
+          Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: Text(
+              'No accessibility issues found.',
+              style: TextStyle(color: textColor),
+            ),
           ),
       ],
     );
@@ -485,15 +548,30 @@ class ViolationWidget extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final nodes = violation['nodes'] as List;
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+
+    // Use colors that work in both light and dark modes
+    final cardColor = isDarkMode
+        ? const Color(0xFF3A3A00) // Dark yellow for dark mode
+        : Colors.yellow[100]; // Light yellow for light mode
+
+    final textColor = isDarkMode ? Colors.white : Colors.black87;
+    final subtitleColor = isDarkMode ? Colors.white70 : Colors.black54;
+
     return Card(
-      color: Colors.yellow[100],
+      color: cardColor,
       margin: const EdgeInsets.symmetric(vertical: 4),
       child: ExpansionTile(
         title: Text(
           violation['id'],
-          style: const TextStyle(fontWeight: FontWeight.bold),
+          style: TextStyle(fontWeight: FontWeight.bold, color: textColor),
         ),
-        subtitle: Text('Impact: ${violation['impact']} | ${violation['help']}'),
+        subtitle: Text(
+          'Impact: ${violation['impact']} | ${violation['help']}',
+          style: TextStyle(color: subtitleColor),
+        ),
+        iconColor: textColor,
+        collapsedIconColor: textColor,
         children: [
           Padding(
             padding: const EdgeInsets.all(8.0),
@@ -502,19 +580,35 @@ class ViolationWidget extends StatelessWidget {
               children: [
                 Text(
                   'Description: ${violation['description']}',
-                  style: const TextStyle(fontStyle: FontStyle.italic),
+                  style: TextStyle(
+                    fontStyle: FontStyle.italic,
+                    color: textColor,
+                  ),
                 ),
                 const SizedBox(height: 8),
-                Text('Help: ${violation['helpUrl']}'),
+                Text(
+                  'Help: ${violation['helpUrl']}',
+                  style: TextStyle(color: textColor),
+                ),
                 const SizedBox(height: 8),
                 Text(
                   'Affected Elements (${nodes.length}):',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: textColor,
+                  ),
                 ),
                 ...nodes.map(
                   (node) => Padding(
                     padding: const EdgeInsets.only(left: 16.0, top: 4.0),
-                    child: Text(node['html']),
+                    child: Text(
+                      node['html'],
+                      style: TextStyle(
+                        color: textColor,
+                        fontFamily: 'monospace',
+                        fontSize: 12,
+                      ),
+                    ),
                   ),
                 ),
               ],

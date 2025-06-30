@@ -120,17 +120,35 @@ async function executeAction(page, { action, selector, duration, text, scrollTyp
                     if (typeof x !== 'number' && typeof y !== 'number') {
                         throw new Error(`'scroll' of type 'by' requires an 'x' or 'y' numeric property.`);
                     }
-                    await page.evaluate(({ x, y }) => window.scrollBy(x || 0, y || 0), { x, y });
+                    console.log(`Scrolling by x: ${x}, y: ${y}`);
+                    await page.evaluate(({ x, y }) => {
+                        console.log(`Browser: Scrolling by x: ${x}, y: ${y}`);
+                        window.scrollBy(x || 0, y || 0);
+                        return { 
+                            scrollX: window.scrollX, 
+                            scrollY: window.scrollY 
+                        };
+                    }, { x: Number(x) || 0, y: Number(y) || 0 });
                     break;
                 case 'to':
                     if (typeof x !== 'number' && typeof y !== 'number') {
                         throw new Error(`'scroll' of type 'to' requires an 'x' or 'y' numeric property.`);
                     }
-                    await page.evaluate(({ x, y }) => window.scrollTo(x || 0, y || 0), { x, y });
+                    console.log(`Scrolling to x: ${x}, y: ${y}`);
+                    await page.evaluate(({ x, y }) => {
+                        console.log(`Browser: Scrolling to x: ${x}, y: ${y}`);
+                        window.scrollTo(x || 0, y || 0);
+                        return { 
+                            scrollX: window.scrollX, 
+                            scrollY: window.scrollY 
+                        };
+                    }, { x: Number(x) || 0, y: Number(y) || 0 });
                     break;
                 default:
                     throw new Error(`Unknown scrollType: ${scrollType}`);
             }
+            // Wait a bit after scrolling to ensure the page has settled
+            await new Promise(resolve => setTimeout(resolve, 500));
             await page.waitForNetworkIdle({ idleTime: 500, timeout: 120000 });
             break;
 

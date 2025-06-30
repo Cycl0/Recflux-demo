@@ -84,6 +84,10 @@ class _LoginScreenState extends State<LoginScreen> {
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: Theme.of(context).primaryColor,
                   foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
                 child: _isLoading
                     ? const SizedBox(
@@ -136,7 +140,10 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                     style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      padding: const EdgeInsets.symmetric(
+                        vertical: 16,
+                        horizontal: 24,
+                      ),
                       backgroundColor: Colors.white,
                       foregroundColor: Colors.black87,
                       elevation: 2,
@@ -144,18 +151,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(8),
                         side: const BorderSide(color: Colors.grey, width: 1),
                       ),
+                      minimumSize: const Size(double.infinity, 50),
                     ),
                     onPressed: _isLoading
                         ? null
                         : () => _loginWithGoogle(context),
                   ),
-                  const SizedBox(height: 8),
-                  if (kIsWeb)
-                    const Text(
-                      'Para o Google Sign-In funcionar, execute o app com:\nflutter run -d chrome --web-port=8080',
-                      style: TextStyle(fontSize: 12, color: Colors.grey),
-                      textAlign: TextAlign.center,
-                    ),
                 ],
               ),
 
@@ -165,9 +166,19 @@ class _LoginScreenState extends State<LoginScreen> {
               OutlinedButton(
                 onPressed: _isLoading ? null : () => _loginAsTestUser(context),
                 style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(
+                    vertical: 16,
+                    horizontal: 24,
+                  ),
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                 ),
-                child: const Text('Entrar como usuário de teste'),
+                child: const Text(
+                  'Entrar como usuário de teste',
+                  style: TextStyle(fontSize: 16),
+                ),
               ),
             ],
           ),

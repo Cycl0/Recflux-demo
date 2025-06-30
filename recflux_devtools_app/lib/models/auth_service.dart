@@ -45,9 +45,6 @@ class AuthService with ChangeNotifier {
         clientId: clientId,
       );
       print('Initialized Google Sign-In for web with clientId');
-      print(
-        'Make sure to add http://localhost:8080/ as an authorized redirect URI in Google Cloud Console',
-      );
     } else if (!kIsWeb) {
       // For mobile platforms, we don't need to specify clientId
       _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);

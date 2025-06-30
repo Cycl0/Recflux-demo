@@ -24,6 +24,12 @@ class TestAction {
     }
   }
 
+  // Helper method to safely parse integers
+  int? _safeParseInt(String? value) {
+    if (value == null || value.isEmpty) return 0;
+    return int.tryParse(value) ?? 0;
+  }
+
   Map<String, dynamic> toJson() {
     switch (type) {
       case 'click':
@@ -43,27 +49,23 @@ class TestAction {
               'selector': valueController.text,
             };
           case 'by':
-            return {
-              'action': 'scroll',
-              'scrollType': 'by',
-              'x': int.tryParse(xController?.text ?? '0') ?? 0,
-              'y': int.tryParse(yController?.text ?? '0') ?? 0,
-            };
+            final x = _safeParseInt(xController?.text);
+            final y = _safeParseInt(yController?.text);
+            print('Scroll BY - X: $x, Y: $y');
+            return {'action': 'scroll', 'scrollType': 'by', 'x': x, 'y': y};
           case 'to':
           default:
-            return {
-              'action': 'scroll',
-              'scrollType': 'to',
-              'x': int.tryParse(xController?.text ?? '0') ?? 0,
-              'y': int.tryParse(yController?.text ?? '0') ?? 0,
-            };
+            final x = _safeParseInt(xController?.text);
+            final y = _safeParseInt(yController?.text);
+            print('Scroll TO - X: $x, Y: $y');
+            return {'action': 'scroll', 'scrollType': 'to', 'x': x, 'y': y};
         }
       case 'wait':
       default:
         if (isWaitByDuration) {
           return {
             'action': 'wait',
-            'duration': int.tryParse(valueController.text) ?? 0,
+            'duration': _safeParseInt(valueController.text),
           };
         } else {
           return {'action': 'wait', 'selector': valueController.text};
