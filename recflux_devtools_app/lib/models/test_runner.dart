@@ -127,12 +127,8 @@ class TestRunner with ChangeNotifier {
     notifyListeners();
   }
 
-  int _port = ConfigUtils.defaultTestPort;
-  int get port => _port;
-  set port(int value) {
-    _port = value;
-    notifyListeners();
-  }
+  // Use the default port from ConfigUtils directly without a setter
+  final int port = ConfigUtils.defaultTestPort;
 
   final List<TestAction> _actions = [];
   List<TestAction> get actions => _actions;
@@ -177,9 +173,9 @@ class TestRunner with ChangeNotifier {
       });
 
       final String host = ConfigUtils.getApiHost();
-      print('<<<<<< [DEBUG] Using host: "$host" on port: $_port >>>>>>');
+      print('<<<<<< [DEBUG] Using host: "$host" on port: $port >>>>>>');
       final response = await http.post(
-        Uri.parse('http://$host:$_port/test'),
+        Uri.parse('http://$host:$port/test'),
         headers: {'Content-Type': 'application/json'},
         body: requestBody,
       );

@@ -45,9 +45,6 @@ class TestScreen extends StatelessWidget {
 class ConfigSection extends StatelessWidget {
   const ConfigSection({super.key});
   static final _urlController = TextEditingController();
-  static final _portController = TextEditingController(
-    text: ConfigUtils.defaultTestPort.toString(),
-  );
   static final List<Resolution> _resolutions = [
     Resolution(width: 1920, height: 1080),
     Resolution(width: 1366, height: 768),
@@ -66,21 +63,6 @@ class ConfigSection extends StatelessWidget {
           controller: _urlController,
           decoration: const InputDecoration(hintText: 'https://example.com'),
           onChanged: (value) => runner.url = value,
-        ),
-        const SizedBox(height: 16),
-        Text('Server Port', style: Theme.of(context).textTheme.titleLarge),
-        TextField(
-          controller: _portController,
-          keyboardType: TextInputType.number,
-          decoration: InputDecoration(
-            hintText: ConfigUtils.defaultTestPort.toString(),
-          ),
-          onChanged: (value) {
-            final port = int.tryParse(value);
-            if (port != null) {
-              runner.port = port;
-            }
-          },
         ),
         const SizedBox(height: 16),
         Text('Resolution', style: Theme.of(context).textTheme.titleLarge),
@@ -490,21 +472,73 @@ class StateResultWidget extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'Screenshots:',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(color: textColor),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'Screenshots:',
+                      style: Theme.of(
+                        context,
+                      ).textTheme.titleMedium?.copyWith(color: textColor),
+                    ),
+                    if (screenshots.length > 1)
+                      Text(
+                        'Swipe to view all ${screenshots.length} screenshots',
+                        style: TextStyle(
+                          color: subtitleColor,
+                          fontSize: 12,
+                          fontStyle: FontStyle.italic,
+                        ),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 8),
-                SizedBox(
+                Container(
                   height: 400, // Adjust height as needed
-                  child: ListView.builder(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: screenshots.length,
-                    itemBuilder: (context, index) => Padding(
-                      padding: const EdgeInsets.only(right: 8.0),
-                      child: Image.memory(base64Decode(screenshots[index])),
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
+                      width: 1,
+                    ),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: screenshots.asMap().entries.map((entry) {
+                          final index = entry.key;
+                          final screenshot = entry.value;
+                          return Stack(
+                            children: [
+                              Image.memory(base64Decode(screenshot)),
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 8,
+                                    vertical: 4,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: Colors.black.withOpacity(0.7),
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                  child: Text(
+                                    '${index + 1}/${screenshots.length}',
+                                    style: const TextStyle(
+                                      color: Colors.white,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
+                      ),
                     ),
                   ),
                 ),
