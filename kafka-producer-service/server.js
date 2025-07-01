@@ -29,7 +29,7 @@ const swaggerOptions = {
 const specs = swaggerJsdoc(swaggerOptions);
 
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
+app.use(express.json({ limit: '500mb' }));
 
 // Serve Swagger UI
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
