@@ -1,0 +1,14 @@
+{
+  "name": "kafka-producer-service",
+  "version": "1.0.0",
+  "description": "Service to publish accessibility test results to Kafka",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "cors": "^2.8.5",
+    "kafkajs": "^2.2.4"
+  }
+} 

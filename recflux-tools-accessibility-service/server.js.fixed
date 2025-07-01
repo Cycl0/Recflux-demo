@@ -83,166 +83,13 @@ async function analyzeAndScreenshot(page, fullPage = false) {
     // Capture screenshots
     const screenshots = [];
     try {
-        if (fullPage) {
-            console.log('Capturing multiple viewport screenshots...');
-            
-            // Get viewport size and page dimensions
-            const viewportSize = page.viewportSize();
-            const pageHeight = await page.evaluate(() => {
-                return Math.max(
-                    document.body.scrollHeight,
-                    document.documentElement.scrollHeight,
-                    document.body.offsetHeight,
-                    document.documentElement.offsetHeight,
-                    document.body.clientHeight,
-                    document.documentElement.clientHeight
-                );
-            });
-            
-            const viewportHeight = viewportSize.height;
-            console.log(`Page height: ${pageHeight}px, Viewport height: ${viewportHeight}px`);
-            
-            // Use a smaller step size to ensure some overlap between screenshots
-            // This helps with content that might be cut off at viewport boundaries
-            const scrollStep = Math.floor(viewportHeight * 0.8); // 80% of viewport height for overlap
-            
-            // Calculate number of screenshots needed with overlap
-            const screenshotsNeeded = Math.ceil(pageHeight / scrollStep);
-            console.log(`Taking ${screenshotsNeeded} viewport screenshots with overlap`);
-            
-            // Save original scroll position to restore later
-            const originalScrollY = await page.evaluate(() => window.scrollY);
-            
-            // First take a screenshot of the top of the page
-            console.log('Taking screenshot at top of page');
-            await page.evaluate(() => window.scrollTo(0, 0));
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            try {
-                await page.waitForLoadState('networkidle', { timeout: 5000 });
-            } catch (e) {
-                console.log('Network did not reach idle state, continuing anyway');
-            }
-            
-            let topScreenshotData = await page.screenshot();
-            if (Buffer.isBuffer(topScreenshotData)) {
-                screenshots.push(topScreenshotData.toString('base64'));
-            } else if (typeof topScreenshotData === 'string') {
-                screenshots.push(topScreenshotData);
-            }
-            
-            // Then take screenshots at intervals down the page
-            for (let i = 1; i < screenshotsNeeded - 1; i++) {
-                // Scroll to position with overlap
-                const scrollTo = i * scrollStep;
-                console.log(`Scrolling to position ${scrollTo}px`);
-                
-                // Use smooth scrolling to help trigger lazy loading
-                await page.evaluate(async (scrollY) => {
-                    // Scroll in smaller steps to trigger lazy loading
-                    const currentY = window.scrollY;
-                    const distance = scrollY - currentY;
-                    const steps = 10;
-                    const stepSize = distance / steps;
-                    
-                    for (let step = 1; step <= steps; step++) {
-                        window.scrollTo(0, currentY + stepSize * step);
-                        // Small delay between scroll steps
-                        await new Promise(r => setTimeout(r, 50));
-                    }
-                    
-                    // Final scroll to exact position
-                    window.scrollTo(0, scrollY);
-                    return window.scrollY;
-                }, scrollTo);
-                
-                // Wait longer for content to render and lazy-loaded elements to appear
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                
-                // Ensure all network requests have completed
-                try {
-                    await page.waitForLoadState('networkidle', { timeout: 5000 });
-                } catch (e) {
-                    console.log('Network did not reach idle state after scrolling, continuing anyway');
-                }
-                
-                // Force a repaint to ensure content is properly rendered
-                await page.evaluate(() => {
-                    // This forces a layout recalculation
-                    document.body.getBoundingClientRect();
-                    
-                    // Check if there are any lazy-loaded images in the viewport
-                    const viewportHeight = window.innerHeight;
-                    const images = Array.from(document.querySelectorAll('img'));
-                    const imagesInViewport = images.filter(img => {
-                        const rect = img.getBoundingClientRect();
-                        return rect.top >= 0 && rect.bottom <= viewportHeight;
-                    });
-                    
-                    console.log(`Found ${imagesInViewport.length} images in viewport`);
-                    
-                    // Return information about the viewport for debugging
-                    return {
-                        scrollY: window.scrollY,
-                        viewportHeight,
-                        imagesCount: imagesInViewport.length
-                    };
-                });
-                
-                // Take screenshot
-                console.log(`Taking screenshot at scroll position ${scrollTo}px`);
-                const screenshotData = await page.screenshot();
-                
-                // Convert Buffer to base64 string
-                if (Buffer.isBuffer(screenshotData)) {
-                    const base64String = screenshotData.toString('base64');
-                    screenshots.push(base64String);
-                } else if (typeof screenshotData === 'string') {
-                    screenshots.push(screenshotData);
-                }
-            }
-            
-            // Finally, take a screenshot at the bottom of the page
-            if (screenshotsNeeded > 1) {
-                console.log('Taking screenshot at bottom of page');
-                await page.evaluate((pageHeight) => {
-                    window.scrollTo(0, pageHeight);
-                }, pageHeight);
-                
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                
-                try {
-                    await page.waitForLoadState('networkidle', { timeout: 5000 });
-                } catch (e) {
-                    console.log('Network did not reach idle state, continuing anyway');
-                }
-                
-                let bottomScreenshotData = await page.screenshot();
-                if (Buffer.isBuffer(bottomScreenshotData)) {
-                    screenshots.push(bottomScreenshotData.toString('base64'));
-                } else if (typeof bottomScreenshotData === 'string') {
-                    screenshots.push(bottomScreenshotData);
-                }
-            }
-            
-            // Scroll back to original position
-            await page.evaluate((scrollY) => window.scrollTo(0, scrollY), originalScrollY);
-            
-        } else {
-            // Just take a single viewport screenshot
-            console.log('Capturing viewport screenshot...');
-            const screenshotData = await page.screenshot();
-            
-            // Convert Buffer to base64 string
-            if (Buffer.isBuffer(screenshotData)) {
-                const base64String = screenshotData.toString('base64');
-                screenshots.push(base64String);
-            } else if (typeof screenshotData === 'string') {
-                screenshots.push(screenshotData);
-            }
-        }
-        
-        console.log(`Captured ${screenshots.length} screenshots`);
+        console.log(`Capturing ${fullPage ? 'full page' : 'viewport'} screenshot...`);
+        // Use Playwright's built-in fullPage option for reliability
+        const screenshotData = await page.screenshot({
+            encoding: 'base64',
+            fullPage: fullPage // Directly use the flag
+        });
+        screenshots.push(screenshotData);
     } catch (screenshotError) {
         console.error('Error capturing screenshots:', screenshotError);
     }
@@ -304,7 +151,7 @@ async function executeAction(page, { action, selector, duration, text, scrollTyp
             try {
                 const elementToType = await getElement(selector);
                 await elementToType.fill(text); // Use Playwright's robust fill method
-                await page.waitForLoadState('networkidle', { timeout: 120000 }).catch(e => 
+                await page.waitForNetworkIdle({ idleTime: 1000, timeout: 120000 }).catch(e => 
                     console.log('Network did not reach idle state after typing, continuing anyway')
                 );
             } catch (typeError) {
@@ -321,7 +168,7 @@ async function executeAction(page, { action, selector, duration, text, scrollTyp
             try {
                 const elementToClick = await getElement(selector);
                 await elementToClick.click({ force: true, timeout: 60000 });
-                await page.waitForLoadState('networkidle', { timeout: 120000 }).catch(e =>
+                await page.waitForNetworkIdle({ idleTime: 1000, timeout: 120000 }).catch(e =>
                     console.log('Network did not reach idle state after clicking, continuing anyway')
                 );
             } catch (clickError) {
@@ -360,7 +207,7 @@ async function executeAction(page, { action, selector, duration, text, scrollTyp
                     throw new Error(`Unknown scrollType: ${scrollType}`);
             }
             await new Promise(resolve => setTimeout(resolve, 500));
-            await page.waitForLoadState('networkidle', { timeout: 120000 }).catch(e =>
+            await page.waitForNetworkIdle({ idleTime: 500, timeout: 120000 }).catch(e =>
                 console.log('Network did not reach idle state after scrolling, continuing anyway')
             );
             break;
@@ -385,11 +232,9 @@ async function runTestFlow(browser, url, resolution, actions = []) {
 
     const results = [];
 
-    // Initial analysis - use full page for the initial state
+    // Initial analysis
     console.log('Running initial analysis...');
     const initialResult = await analyzeAndScreenshot(page, true);
-    console.log(`Initial screenshots count: ${initialResult.screenshots?.length || 0}`);
-    
     results.push({
         action: 'initial',
         ...initialResult
@@ -398,18 +243,10 @@ async function runTestFlow(browser, url, resolution, actions = []) {
     // Execute actions
     for (const action of actions) {
         await executeAction(page, action);
-        // Take only a viewport screenshot after actions (not full page)
-        const resultAfterAction = await analyzeAndScreenshot(page, false);
-        console.log(`Action ${action.action} screenshots count: ${resultAfterAction.screenshots?.length || 0}`);
-        
+        const resultAfterAction = await analyzeAndScreenshot(page, true);
         results.push({
             action: action.action,
             selector: action.selector,
-            text: action.text, // Include text for type actions
-            scrollType: action.scrollType, // Include scroll type for scroll actions
-            x: action.x, // Include x for scroll actions
-            y: action.y, // Include y for scroll actions
-            duration: action.duration, // Include duration for wait actions
             ...resultAfterAction
         });
     }
@@ -431,16 +268,6 @@ async function runTestFlow(browser, url, resolution, actions = []) {
         console.log('Successfully published test results to Kafka service.');
     } catch (error) {
         console.error('Failed to publish test results to Kafka service:', error.message);
-    }
-
-    // Log final results structure before returning
-    console.log(`Final results count: ${results.length}`);
-    for (let i = 0; i < results.length; i++) {
-        console.log(`Result ${i} action: ${results[i].action}`);
-        console.log(`Result ${i} has screenshots: ${results[i].screenshots !== undefined}`);
-        if (results[i].screenshots) {
-            console.log(`Result ${i} screenshots count: ${results[i].screenshots.length}`);
-        }
     }
 
     await context.close();
@@ -477,35 +304,6 @@ app.post('/test-accessibility', async (req, res) => {
             const states = await runTestFlow(browser, url, resolution, actions);
             allResults.push({ url, states });
         }
-        
-        // Log final response structure
-        console.log(`All results count: ${allResults.length}`);
-        if (allResults.length > 0) {
-            console.log(`First result URL: ${allResults[0].url}`);
-            console.log(`First result states count: ${allResults[0].states.length}`);
-            
-            if (allResults[0].states.length > 0) {
-                const firstState = allResults[0].states[0];
-                console.log(`First state action: ${firstState.action}`);
-                console.log(`First state has screenshots: ${firstState.screenshots !== undefined}`);
-                
-                if (firstState.screenshots) {
-                    console.log(`First state screenshots count: ${firstState.screenshots.length}`);
-                    
-                    if (firstState.screenshots.length > 0) {
-                        const firstScreenshot = firstState.screenshots[0];
-                        console.log(`First screenshot type: ${typeof firstScreenshot}`);
-                        console.log(`First screenshot is string: ${typeof firstScreenshot === 'string'}`);
-                        
-                        if (typeof firstScreenshot === 'string') {
-                            console.log(`First screenshot length: ${firstScreenshot.length}`);
-                            console.log(`First screenshot starts with: ${firstScreenshot.substring(0, 50)}...`);
-                        }
-                    }
-                }
-            }
-        }
-        
         res.status(200).json(allResults);
     } catch (error) {
         console.error('An error occurred during the test flow:', error);

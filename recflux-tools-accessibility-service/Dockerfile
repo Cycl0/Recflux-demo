@@ -1,24 +1,27 @@
-# Use the official Puppeteer image which comes with Chromium and all necessary dependencies.
-FROM ghcr.io/puppeteer/puppeteer:22.12.1
+# Use the official Playwright image which is designed for this purpose
+FROM mcr.microsoft.com/playwright:v1.53.2-jammy
 
-# As root, create a directory for the app and set ownership.
+# Switch to root to create and own the app directory
 USER root
-RUN mkdir -p /home/pptruser/app && chown -R pptruser:pptruser /home/pptruser/app
+WORKDIR /app
 
-# Switch to the non-root user
-USER pptruser
-
-# Now set the working directory
-WORKDIR /home/pptruser/app
-
-# Copy package files
+# Copy application files
 COPY package*.json ./
+COPY server.js .
 
-# Install dependencies
+# Install npm dependencies
 RUN npm install
 
-# Copy the server script
-COPY server.js .
+# The Playwright base image already has the browsers and dependencies,
+# so the `npx playwright install` command is no longer needed.
+# This greatly simplifies the setup.
+
+# Change ownership of the app directory to the non-root user 'pwuser'
+# that comes with the base image
+RUN chown -R pwuser:pwuser /app
+
+# Switch to the non-root user to run the application
+USER pwuser
 
 # Expose the port the app runs on
 EXPOSE 3002

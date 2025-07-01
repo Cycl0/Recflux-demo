@@ -175,15 +175,53 @@ class TestRunner with ChangeNotifier {
       final String host = ConfigUtils.getApiHost();
       print('<<<<<< [DEBUG] Using host: "$host" on port: $port >>>>>>');
       final response = await http.post(
-        Uri.parse('http://$host:$port/test'),
+        Uri.parse('http://$host:$port/test-accessibility'),
         headers: {'Content-Type': 'application/json'},
         body: requestBody,
       );
 
       if (response.statusCode == 200) {
+        // Log the raw response body to debug the data structure
+        print('Server Response: ${response.body}');
+
+        // Add more detailed logging
         final List<dynamic> data = jsonDecode(response.body);
+        print('Response data length: ${data.length}');
+
+        if (data.isNotEmpty) {
+          final firstResult = data[0];
+          print('First result URL: ${firstResult['url']}');
+
+          final states = firstResult['states'] as List?;
+          print('States count: ${states?.length ?? 0}');
+
+          if (states != null && states.isNotEmpty) {
+            final firstState = states[0];
+            print('First state keys: ${firstState.keys.toList()}');
+
+            if (firstState.containsKey('screenshots')) {
+              final screenshots = firstState['screenshots'] as List?;
+              print('Screenshots count: ${screenshots?.length ?? 0}');
+
+              if (screenshots != null && screenshots.isNotEmpty) {
+                print('First screenshot type: ${screenshots[0].runtimeType}');
+                if (screenshots[0] is String) {
+                  final screenshotStr = screenshots[0] as String;
+                  print('Screenshot string length: ${screenshotStr.length}');
+                  print(
+                      'Screenshot string starts with: ${screenshotStr.substring(0, screenshotStr.length > 50 ? 50 : screenshotStr.length)}');
+                }
+              }
+            } else {
+              print('No screenshots key in first state');
+            }
+          }
+        }
+
         _results = data.map((r) => TestResult.fromJson(r)).toList();
       } else {
+        // Log the raw error response body
+        print('Server Error Response: ${response.body}');
         final errorData = jsonDecode(response.body);
         _error = 'Test failed: ${errorData['error']} - ${errorData['details']}';
       }

@@ -402,9 +402,8 @@ class ResultsSection extends StatelessWidget {
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
-      children: results
-          .map((result) => UrlResultWidget(result: result))
-          .toList(),
+      children:
+          results.map((result) => UrlResultWidget(result: result)).toList(),
     );
   }
 }
@@ -429,9 +428,9 @@ class UrlResultWidget extends StatelessWidget {
             Text(
               'Results for: ${result.url}',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                color: textColor,
-                fontWeight: FontWeight.bold,
-              ),
+                    color: textColor,
+                    fontWeight: FontWeight.bold,
+                  ),
             ),
             const SizedBox(height: 16),
             ...result.states.map((state) => StateResultWidget(state: state)),
@@ -448,129 +447,127 @@ class StateResultWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final violations = state['accessibilityReport']['violations'] as List;
-    final screenshots = state['screenshots'] as List;
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-    final textColor = isDarkMode ? Colors.white : Colors.black87;
-    final subtitleColor = isDarkMode ? Colors.white70 : Colors.black54;
+    // Safely extract the report and its properties
+    final report = state['accessibilityReport'] as Map<String, dynamic>? ?? {};
+    final violations = report['violations'] as List? ?? [];
+    final passes = report['passes'] as List? ?? [];
+    final stateUrl = report['url'] as String? ?? 'URL not found';
 
-    return ExpansionTile(
-      title: Text(
-        'Trigger: ${state['trigger']}',
-        style: TextStyle(color: textColor),
-      ),
-      subtitle: Text(
-        'Details: ${state['details']}',
-        style: TextStyle(color: subtitleColor),
-      ),
-      iconColor: textColor,
-      collapsedIconColor: textColor,
-      children: [
-        if (screenshots.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'Screenshots:',
-                      style: Theme.of(
-                        context,
-                      ).textTheme.titleMedium?.copyWith(color: textColor),
-                    ),
-                    if (screenshots.length > 1)
+    final screenshots = state['screenshots'] as List? ?? [];
+    // Debug screenshot data
+    print('Screenshots list length: ${screenshots.length}');
+    if (screenshots.isNotEmpty) {
+      print('First screenshot type: ${screenshots[0].runtimeType}');
+      if (screenshots[0] is String) {
+        final screenshotStr = screenshots[0] as String;
+        print('Screenshot string length: ${screenshotStr.length}');
+        print(
+            'Screenshot string starts with: ${screenshotStr.substring(0, screenshotStr.length > 50 ? 50 : screenshotStr.length)}');
+      } else {
+        print('Screenshot is not a String: $screenshots');
+      }
+    } else {
+      print('No screenshots found in state: $state');
+    }
+
+    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDarkMode ? Colors.white : Colors.black;
+
+    final String actionType = state['action'] as String? ?? 'initial';
+
+    return Card(
+      elevation: 2,
+      margin: const EdgeInsets.symmetric(vertical: 8.0),
+      child: ExpansionTile(
+        initiallyExpanded: true,
+        leading: Icon(
+          violations.isNotEmpty
+              ? Icons.warning_amber_rounded
+              : Icons.check_circle_outline_rounded,
+          color: violations.isNotEmpty ? Colors.orange : Colors.green,
+        ),
+        title: Text(
+          'State: ${state['action'] ?? 'Initial'}',
+          style: const TextStyle(fontWeight: FontWeight.bold),
+        ),
+        subtitle: Text(
+          '${violations.length} violations, ${passes.length} passes',
+        ),
+        children: [
+          if (screenshots.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
                       Text(
-                        'Swipe to view all ${screenshots.length} screenshots',
-                        style: TextStyle(
-                          color: subtitleColor,
-                          fontSize: 12,
-                          fontStyle: FontStyle.italic,
+                        'Screenshots:',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      if (screenshots.length > 1)
+                        Text(
+                          'Swipe to view all ${screenshots.length}',
+                          style: Theme.of(context).textTheme.bodySmall,
                         ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Container(
-                  height: 400, // Adjust height as needed
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: isDarkMode ? Colors.grey[700]! : Colors.grey[300]!,
-                      width: 1,
-                    ),
-                    borderRadius: BorderRadius.circular(8),
+                    ],
                   ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(8),
-                    child: SingleChildScrollView(
-                      physics: const BouncingScrollPhysics(),
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: screenshots.asMap().entries.map((entry) {
-                          final index = entry.key;
-                          final screenshot = entry.value;
-                          return Stack(
-                            children: [
-                              Image.memory(base64Decode(screenshot)),
-                              Positioned(
-                                top: 8,
-                                right: 8,
-                                child: Container(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 8,
-                                    vertical: 4,
-                                  ),
-                                  decoration: BoxDecoration(
-                                    color: Colors.black.withOpacity(0.7),
-                                    borderRadius: BorderRadius.circular(12),
-                                  ),
-                                  child: Text(
-                                    '${index + 1}/${screenshots.length}',
-                                    style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
-                          );
-                        }).toList(),
+                  const SizedBox(height: 8),
+                  Container(
+                    height: 400, // Adjust height as needed
+                    decoration: BoxDecoration(
+                      border: Border.all(
+                        color: Theme.of(context).dividerColor,
+                        width: 1,
                       ),
+                      borderRadius: BorderRadius.circular(8),
                     ),
+                    child: screenshots.isEmpty
+                        ? const Center(child: Text('No screenshots available'))
+                        : ScreenshotGallery(
+                            screenshots: screenshots,
+                            actionType: actionType,
+                          ),
                   ),
-                ),
-              ],
+                ],
+              ),
+            ),
+          ListTile(
+            leading: const Icon(Icons.link),
+            title: Text(
+              stateUrl, // Use the correctly accessed URL
+              style: const TextStyle(fontSize: 12),
             ),
           ),
-        if (violations.isNotEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Accessibility Issues (${violations.length}):',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleMedium?.copyWith(color: textColor),
-                ),
-                const SizedBox(height: 8),
-                ...violations.map((v) => ViolationWidget(violation: v)),
-              ],
+          const Divider(),
+          if (violations.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Accessibility Issues (${violations.length}):',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.titleMedium?.copyWith(color: textColor),
+                  ),
+                  const SizedBox(height: 8),
+                  ...violations.map((v) => ViolationWidget(violation: v)),
+                ],
+              ),
             ),
-          ),
-        if (violations.isEmpty)
-          Padding(
-            padding: const EdgeInsets.all(8.0),
-            child: Text(
-              'No accessibility issues found.',
-              style: TextStyle(color: textColor),
+          if (violations.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(8.0),
+              child: Text(
+                'No accessibility issues found.',
+              ),
             ),
-          ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -650,6 +647,167 @@ class ViolationWidget extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class ScreenshotGallery extends StatefulWidget {
+  final List<dynamic> screenshots;
+  final String actionType;
+
+  const ScreenshotGallery({
+    super.key,
+    required this.screenshots,
+    this.actionType = 'initial',
+  });
+
+  @override
+  State<ScreenshotGallery> createState() => _ScreenshotGalleryState();
+}
+
+class _ScreenshotGalleryState extends State<ScreenshotGallery> {
+  int _currentPage = 0;
+  final PageController _pageController = PageController();
+
+  @override
+  void initState() {
+    super.initState();
+    _pageController.addListener(_onPageChanged);
+  }
+
+  @override
+  void dispose() {
+    _pageController.removeListener(_onPageChanged);
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  void _onPageChanged() {
+    final page = _pageController.page?.round() ?? 0;
+    if (page != _currentPage) {
+      setState(() {
+        _currentPage = page;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool isInitialAction = widget.actionType == 'initial';
+    final String captionPrefix = isInitialAction ? 'Full Page' : 'Viewport';
+
+    return Column(
+      children: [
+        // Screenshot gallery
+        Expanded(
+          child: PageView.builder(
+            controller: _pageController,
+            scrollDirection: Axis.horizontal,
+            itemCount: widget.screenshots.length,
+            itemBuilder: (context, index) {
+              // Ensure the screenshot data is treated as a String before decoding
+              final screenshotData = widget.screenshots[index];
+              if (screenshotData is String) {
+                try {
+                  // Try to decode the base64 string
+                  final decodedData = base64Decode(screenshotData);
+                  return Stack(
+                    children: [
+                      // The image
+                      Center(
+                        child: Image.memory(
+                          decodedData,
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) {
+                            print('Error rendering image: $error');
+                            return Container(
+                              width: double.infinity,
+                              color: Colors.grey.shade200,
+                              child: Center(
+                                child: Text('Failed to load image: $error'),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      // Caption overlay at the bottom
+                      Positioned(
+                        bottom: 0,
+                        left: 0,
+                        right: 0,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              vertical: 8, horizontal: 16),
+                          color: Colors.black.withOpacity(0.5),
+                          child: Text(
+                            isInitialAction && widget.screenshots.length > 1
+                                ? '$captionPrefix ${index + 1} of ${widget.screenshots.length}'
+                                : captionPrefix,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                    ],
+                  );
+                } catch (e) {
+                  print('Error decoding base64 image: $e');
+                  return Container(
+                    width: double.infinity,
+                    color: Colors.red.shade100,
+                    child: Center(
+                      child: Text('Invalid base64 data: ${e.toString()}'),
+                    ),
+                  );
+                }
+              }
+              // Return an empty container if data is not a string
+              return Container(
+                width: double.infinity,
+                color: Colors.grey.shade300,
+                child: Center(
+                  child: Text(
+                      'Screenshot data is not a string: ${screenshotData.runtimeType}'),
+                ),
+              );
+            },
+          ),
+        ),
+        // Dots indicator for PageView
+        if (widget.screenshots.length > 1)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 8),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: List.generate(
+                widget.screenshots.length,
+                (index) => GestureDetector(
+                  onTap: () {
+                    _pageController.animateToPage(
+                      index,
+                      duration: const Duration(milliseconds: 300),
+                      curve: Curves.easeInOut,
+                    );
+                  },
+                  child: Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    width: _currentPage == index ? 10 : 8,
+                    height: _currentPage == index ? 10 : 8,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: _currentPage == index
+                          ? Theme.of(context).primaryColor
+                          : Colors.grey.withOpacity(0.5),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
