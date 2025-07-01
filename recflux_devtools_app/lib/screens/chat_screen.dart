@@ -152,11 +152,11 @@ class _ChatScreenState extends State<ChatScreen> {
                               // Copy new code to clipboard
                               final codeProvider =
                                   Provider.of<CodeEditorProvider>(
-                                    context,
-                                    listen: false,
-                                  );
+                                context,
+                                listen: false,
+                              );
                               if (codeProvider.currentFile != null) {
-                                codeProvider.updateCurrentFile(
+                                codeProvider.updateCurrentFileContent(
                                   _currentDiffData!['newCode'],
                                 );
                                 ScaffoldMessenger.of(context).showSnackBar(
@@ -236,8 +236,8 @@ class _ChatScreenState extends State<ChatScreen> {
                           onTap: chatProvider.isLoading
                               ? null
                               : () {
-                                  final message = _messageController.text
-                                      .trim();
+                                  final message =
+                                      _messageController.text.trim();
                                   if (message.isNotEmpty) {
                                     chatProvider.sendMessage(
                                       context,
@@ -361,11 +361,11 @@ class _MessageBubbleState extends State<MessageBubble>
 
     _slideAnimation =
         Tween<Offset>(begin: const Offset(0, 0.5), end: Offset.zero).animate(
-          CurvedAnimation(
-            parent: _animationController,
-            curve: Curves.easeOutCubic,
-          ),
-        );
+      CurvedAnimation(
+        parent: _animationController,
+        curve: Curves.easeOutCubic,
+      ),
+    );
 
     _fadeAnimation = CurvedAnimation(
       parent: _animationController,
@@ -483,23 +483,23 @@ class _MessageBubbleState extends State<MessageBubble>
           children: [
             md.MarkdownBody(
               data: widget.message.content,
-              styleSheet: md.MarkdownStyleSheet.fromTheme(Theme.of(context))
-                  .copyWith(
-                    p: TextStyle(color: textColor, fontSize: 15),
-                    code: TextStyle(
-                      backgroundColor: isDarkMode
-                          ? Colors.black.withOpacity(0.2)
-                          : Colors.black.withOpacity(0.1),
-                      color: textColor,
-                      fontFamily: 'monospace',
-                    ),
-                    codeblockDecoration: BoxDecoration(
-                      color: isDarkMode
-                          ? Colors.black.withOpacity(0.2)
-                          : Colors.black.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8.0),
-                    ),
-                  ),
+              styleSheet:
+                  md.MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                p: TextStyle(color: textColor, fontSize: 15),
+                code: TextStyle(
+                  backgroundColor: isDarkMode
+                      ? Colors.black.withOpacity(0.2)
+                      : Colors.black.withOpacity(0.1),
+                  color: textColor,
+                  fontFamily: 'monospace',
+                ),
+                codeblockDecoration: BoxDecoration(
+                  color: isDarkMode
+                      ? Colors.black.withOpacity(0.2)
+                      : Colors.black.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8.0),
+                ),
+              ),
               builders: {'pre': CodeBlockBuilder(isDarkMode: isDarkMode)},
             ),
             if (widget.message.diffData != null)
@@ -542,16 +542,14 @@ class _MessageBubbleState extends State<MessageBubble>
                           label: Text(
                             'View Diff',
                             style: TextStyle(
-                              color: isDarkMode
-                                  ? Colors.white70
-                                  : Colors.black87,
+                              color:
+                                  isDarkMode ? Colors.white70 : Colors.black87,
                             ),
                           ),
                           style: OutlinedButton.styleFrom(
                             side: BorderSide(
-                              color: isDarkMode
-                                  ? Colors.white30
-                                  : Colors.black26,
+                              color:
+                                  isDarkMode ? Colors.white30 : Colors.black26,
                             ),
                           ),
                           onPressed: () {
@@ -569,29 +567,27 @@ class _MessageBubbleState extends State<MessageBubble>
                           label: Text(
                             'Apply to Editor',
                             style: TextStyle(
-                              color: isDarkMode
-                                  ? Colors.white70
-                                  : Colors.black87,
+                              color:
+                                  isDarkMode ? Colors.white70 : Colors.black87,
                             ),
                           ),
                           style: OutlinedButton.styleFrom(
                             side: BorderSide(
-                              color: isDarkMode
-                                  ? Colors.white30
-                                  : Colors.black26,
+                              color:
+                                  isDarkMode ? Colors.white30 : Colors.black26,
                             ),
                           ),
                           onPressed: () {
                             final codeProvider =
                                 Provider.of<CodeEditorProvider>(
-                                  context,
-                                  listen: false,
-                                );
+                              context,
+                              listen: false,
+                            );
                             final newCode =
                                 widget.message.diffData!['newCode'] as String;
 
                             if (codeProvider.currentFile != null) {
-                              codeProvider.updateCurrentFile(newCode);
+                              codeProvider.updateCurrentFileContent(newCode);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('Code updated in editor'),
@@ -600,12 +596,8 @@ class _MessageBubbleState extends State<MessageBubble>
                             } else {
                               final fileExtension =
                                   widget.message.diffData!['fileExtension'] ??
-                                  'js';
-                              codeProvider.addFile(
-                                'generated.$fileExtension',
-                                newCode,
-                                getLanguageFromExtension(fileExtension),
-                              );
+                                      'js';
+                              codeProvider.addFile('generated.$fileExtension');
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
                                   content: Text('New file created in editor'),
@@ -723,7 +715,7 @@ class CodeBlockBuilder extends md.MarkdownElementBuilder {
                         );
 
                         if (codeProvider.currentFile != null) {
-                          codeProvider.updateCurrentFile(codeContent);
+                          codeProvider.updateCurrentFileContent(codeContent);
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text('Code updated in editor'),
@@ -733,10 +725,6 @@ class CodeBlockBuilder extends md.MarkdownElementBuilder {
                           // Create new file with this content
                           codeProvider.addFile(
                             'generated.${getExtensionFromLanguage(language)}',
-                            codeContent,
-                            getLanguageFromExtension(
-                              getExtensionFromLanguage(language),
-                            ),
                           );
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
@@ -761,7 +749,8 @@ class CodeBlockBuilder extends md.MarkdownElementBuilder {
             syntax: getSyntax(language),
             syntaxTheme: isDarkMode
                 ? SyntaxTheme.dracula()
-                : SyntaxTheme.ayuDark(), // Always use dark theme for code blocks
+                : SyntaxTheme
+                    .ayuDark(), // Always use dark theme for code blocks
             withZoom: false,
             withLinesCount: true,
           ),

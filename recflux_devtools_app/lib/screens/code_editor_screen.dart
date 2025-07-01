@@ -33,13 +33,11 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
   @override
   void initState() {
     super.initState();
-    // Use a post-frame callback to ensure the provider is available.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _codeEditorProvider = Provider.of<CodeEditorProvider>(
-        context,
-        listen: false,
-      );
+      _codeEditorProvider =
+          Provider.of<CodeEditorProvider>(context, listen: false);
       _codeEditorProvider?.addListener(_onProviderChange);
+      _codeEditorProvider?.fetchProjects();
     });
   }
 
@@ -49,23 +47,34 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
     final provider = _codeEditorProvider;
     if (provider == null) return;
 
-    // Update the text in the active controller if the file content changes externally
+    // Clear controllers when files change to force refresh
+    if (provider.files.isNotEmpty && _controllers.isNotEmpty) {
+      final currentFileIds = provider.files.map((f) => f.id).toSet();
+      final controllerIds = _controllers.keys.toSet();
+
+      // Remove controllers for files that no longer exist
+      for (final controllerId in controllerIds) {
+        if (!currentFileIds.contains(controllerId)) {
+          _controllers[controllerId]?.dispose();
+          _controllers.remove(controllerId);
+        }
+      }
+    }
+
     if (provider.currentFile != null &&
-        _controllers.containsKey(provider.currentFile!.name)) {
-      final controller = _controllers[provider.currentFile!.name]!;
+        _controllers.containsKey(provider.currentFile!.id)) {
+      final controller = _controllers[provider.currentFile!.id]!;
       if (controller.text != provider.currentFile!.content) {
         controller.text = provider.currentFile!.content;
       }
     }
 
-    final shouldShowDialog =
-        provider.isDeploying ||
+    final shouldShowDialog = provider.isDeploying ||
         provider.deploymentUrl != null ||
         provider.error != null;
+    final isDialogAlreadyShown = ModalRoute.of(context)?.isCurrent == false;
 
-    // This logic ensures the dialog doesn't get built multiple times.
-    final isDialogRoute = ModalRoute.of(context)?.isCurrent == false;
-    if (shouldShowDialog && !isDialogRoute) {
+    if (shouldShowDialog && !isDialogAlreadyShown) {
       _showDeploymentDialog();
     }
   }
@@ -79,21 +88,16 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
   }
 
   CodeController _getControllerForFile(CodeFile file) {
-    if (!_controllers.containsKey(file.name)) {
-      _controllers[file.name] = CodeController(
-        text: file.content,
-        language: javascript, // Defaulting to javascript
-      );
-    }
-    return _controllers[file.name]!;
+    return _controllers.putIfAbsent(
+      file.id,
+      () => CodeController(text: file.content, language: javascript),
+    );
   }
 
   Future<void> _launchUrl(String url) async {
-    final uri = Uri.parse(url);
-    if (!await launchUrl(uri)) {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Could not launch $url')));
+    if (!await launchUrl(Uri.parse(url))) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Could not launch $url')));
     }
   }
 
@@ -206,73 +210,136 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
   Widget build(BuildContext context) {
     return Consumer<CodeEditorProvider>(
       builder: (context, codeEditor, child) {
-        final currentFile = codeEditor.currentFile;
         return Scaffold(
           appBar: AppBar(
-            title: Text(currentFile?.name ?? 'Code Editor'),
+            title: _buildProjectSelector(codeEditor),
             actions: [
+              GestureDetector(
+                onLongPress: () {
+                  // Clear all controllers to force refresh
+                  _controllers.values
+                      .forEach((controller) => controller.dispose());
+                  _controllers.clear();
+                  codeEditor.refreshAllProjects();
+                  ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                      content: Text('Refreshing all projects...')));
+                },
+                child: IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: () {
+                    // Clear all controllers to force refresh
+                    _controllers.values
+                        .forEach((controller) => controller.dispose());
+                    _controllers.clear();
+                    codeEditor.refreshCurrentProject();
+                    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+                        content: Text('Refreshing project data...')));
+                  },
+                  tooltip:
+                      'Refresh Project Data (Long press to refresh all projects)',
+                ),
+              ),
               IconButton(
                 icon: const Icon(Icons.cloud_upload),
                 onPressed: codeEditor.currentFile == null
                     ? null
                     : () {
-                        // Save the latest code to the provider before deploying
-                        final controller = _getControllerForFile(
-                          codeEditor.currentFile!,
-                        );
-                        codeEditor.updateCurrentFile(controller.text);
-                        codeEditor.deployCode();
+                        final controller =
+                            _getControllerForFile(codeEditor.currentFile!);
+                        codeEditor
+                            .updateCurrentFileContent(controller.text)
+                            .then((_) => codeEditor.deployCode());
                       },
-                tooltip: 'Deploy Code',
-              ),
-              IconButton(
-                icon: const Icon(Icons.play_arrow),
-                onPressed: () {
-                  if (currentFile != null) {
-                    final code = _getControllerForFile(currentFile).text;
-                    _runCode(context, code, currentFile.language);
-                  }
-                },
+                tooltip: 'Save & Deploy',
               ),
               IconButton(
                 icon: const Icon(Icons.save),
-                onPressed: () {
-                  if (currentFile != null) {
-                    final controller = _getControllerForFile(currentFile);
-                    codeEditor.updateCurrentFile(controller.text);
-                  }
-                  codeEditor.saveFiles();
-                  ScaffoldMessenger.of(
-                    context,
-                  ).showSnackBar(const SnackBar(content: Text('File saved!')));
-                },
+                onPressed: codeEditor.currentFile == null
+                    ? null
+                    : () {
+                        final controller =
+                            _getControllerForFile(codeEditor.currentFile!);
+                        codeEditor.updateCurrentFileContent(controller.text);
+                        ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('File saved!')));
+                      },
               ),
             ],
           ),
           drawer: _buildDrawer(codeEditor),
-          body: codeEditor.isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : (currentFile != null
-                    ? _buildEditorView(currentFile, codeEditor)
-                    : const Center(
-                        child: Text(
-                          'Select a file or create a new one to start.',
-                        ),
-                      )),
+          body: _buildBody(codeEditor),
         );
       },
     );
+  }
+
+  Widget _buildProjectSelector(CodeEditorProvider provider) {
+    if (provider.isLoading && provider.projects.isEmpty) {
+      return const Text('Loading Projects...');
+    }
+    if (provider.projects.isEmpty) {
+      return const Text('No Projects Found');
+    }
+    return DropdownButton<Project>(
+      value: provider.currentProject,
+      isExpanded: true,
+      underline: Container(),
+      onChanged: (Project? newValue) {
+        if (newValue != null) {
+          provider.selectProject(newValue);
+        }
+      },
+      items: provider.projects.map<DropdownMenuItem<Project>>((Project p) {
+        return DropdownMenuItem<Project>(value: p, child: Text(p.name));
+      }).toList(),
+    );
+  }
+
+  Widget _buildBody(CodeEditorProvider codeEditor) {
+    if (codeEditor.isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (codeEditor.currentProject == null) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Text('No project selected.'),
+            ElevatedButton(
+              onPressed: () => _showAddProjectDialog(codeEditor),
+              child: const Text('Create a New Project'),
+            ),
+          ],
+        ),
+      );
+    }
+    if (codeEditor.currentFile == null) {
+      return const Center(
+        child: Text('Select a file or create a new one to start.'),
+      );
+    }
+    return _buildEditorView(codeEditor.currentFile!);
   }
 
   Drawer _buildDrawer(CodeEditorProvider codeEditor) {
     return Drawer(
       child: Column(
         children: [
-          const DrawerHeader(
-            decoration: BoxDecoration(color: Colors.blue),
-            child: Text(
-              'Files',
-              style: TextStyle(color: Colors.white, fontSize: 24),
+          DrawerHeader(
+            decoration: BoxDecoration(color: Theme.of(context).primaryColor),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  codeEditor.currentProject?.name ?? 'Files',
+                  style: const TextStyle(color: Colors.white, fontSize: 24),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.add, color: Colors.white),
+                  onPressed: () => _showAddProjectDialog(codeEditor),
+                  tooltip: 'New Project',
+                )
+              ],
             ),
           ),
           Expanded(
@@ -282,146 +349,132 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
                 final file = codeEditor.files[index];
                 return ListTile(
                   title: Text(file.name),
-                  selected: codeEditor.currentFileIndex == index,
+                  selected: codeEditor.files.indexOf(codeEditor.currentFile!) ==
+                      index,
                   onTap: () {
                     codeEditor.setCurrentFileIndex(index);
                     Navigator.pop(context); // Close drawer
                   },
                   trailing: IconButton(
-                    icon: const Icon(Icons.delete_outline),
-                    onPressed: () => _showDeleteFileDialog(index, file.name),
+                    icon: const Icon(Icons.delete_outline, color: Colors.red),
+                    onPressed: () =>
+                        _showDeleteFileDialog(codeEditor, index, file.name),
                   ),
                 );
               },
             ),
           ),
+          const Divider(),
           ListTile(
             leading: const Icon(Icons.add),
             title: const Text('Add New File'),
-            onTap: _showAddFileDialog,
+            onTap: () => _showAddFileDialog(codeEditor),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildEditorView(CodeFile currentFile, CodeEditorProvider codeEditor) {
+  Widget _buildEditorView(CodeFile currentFile) {
     final controller = _getControllerForFile(currentFile);
     return CodeTheme(
       data: CodeThemeData(styles: monokaiSublimeTheme),
       child: SingleChildScrollView(
         child: CodeField(
           controller: controller,
-          onChanged: (text) {
-            codeEditor.updateCurrentFile(text);
-          },
         ),
       ),
     );
   }
 
-  void _runCode(BuildContext context, String code, String language) {
-    final theme = Theme.of(context).brightness == Brightness.dark
-        ? syntax_view.SyntaxTheme.vscodeDark()
-        : syntax_view.SyntaxTheme.vscodeLight();
-
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => Scaffold(
-          appBar: AppBar(title: const Text('Execution Result')),
-          body: syntax_view.SyntaxView(
-            code: code,
-            syntax: LanguageUtils.getSyntaxFor(language),
-            syntaxTheme: theme,
-            expanded: true,
-          ),
+  void _showAddProjectDialog(CodeEditorProvider provider) {
+    final nameController = TextEditingController();
+    final descController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Create New Project'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Project Name')),
+            TextField(
+                controller: descController,
+                decoration:
+                    const InputDecoration(labelText: 'Description (Optional)')),
+          ],
         ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              if (nameController.text.isNotEmpty) {
+                provider.createProject(nameController.text,
+                    description: descController.text);
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Create'),
+          ),
+        ],
       ),
     );
   }
 
-  void _showAddFileDialog() {
-    _newFileLanguage = 'javascript';
-    _newFileNameController.clear();
-
+  void _showAddFileDialog(CodeEditorProvider provider) {
+    final nameController = TextEditingController();
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Add New File'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: _newFileNameController,
-                decoration: const InputDecoration(
-                  labelText: 'File Name (e.g., app.js)',
-                ),
-              ),
-            ],
+      builder: (context) => AlertDialog(
+        title: const Text('Create New File'),
+        content: TextField(
+          controller: nameController,
+          decoration:
+              const InputDecoration(labelText: 'File Name (e.g. app.js)'),
+        ),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () {
+              if (nameController.text.isNotEmpty) {
+                provider.addFile(nameController.text);
+                Navigator.pop(context);
+              }
+            },
+            child: const Text('Create'),
           ),
-          actions: [
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            TextButton(
-              child: const Text('Add'),
-              onPressed: () {
-                final fileName = _newFileNameController.text;
-                if (fileName.isNotEmpty) {
-                  final extension =
-                      LanguageUtils
-                          .supportedLanguages[_newFileLanguage]?['extension'] ??
-                      '.js';
-                  final fullFileName = fileName.endsWith(extension)
-                      ? fileName
-                      : '$fileName$extension';
-
-                  final codeEditor = Provider.of<CodeEditorProvider>(
-                    context,
-                    listen: false,
-                  );
-                  codeEditor.addFile(fullFileName, '', _newFileLanguage);
-                  _newFileNameController.clear();
-                  Navigator.of(context).pop();
-                }
-              },
-            ),
-          ],
-        );
-      },
+        ],
+      ),
     );
   }
 
-  void _showDeleteFileDialog(int index, String fileName) {
+  void _showDeleteFileDialog(
+      CodeEditorProvider provider, int index, String fileName) {
     showDialog(
       context: context,
-      builder: (context) {
-        return AlertDialog(
-          title: const Text('Delete File'),
-          content: Text('Are you sure you want to delete "$fileName"?'),
-          actions: [
-            TextButton(
-              child: const Text('Cancel'),
-              onPressed: () => Navigator.of(context).pop(),
-            ),
-            TextButton(
-              child: const Text('Delete'),
-              onPressed: () {
-                final codeEditor = Provider.of<CodeEditorProvider>(
-                  context,
-                  listen: false,
-                );
-                codeEditor.deleteFile(index);
-                _controllers.remove(fileName);
-                Navigator.of(context).pop();
-              },
-            ),
-          ],
-        );
-      },
+      builder: (context) => AlertDialog(
+        title: const Text('Delete File'),
+        content: Text('Are you sure you want to delete "$fileName"?'),
+        actions: [
+          TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel')),
+          TextButton(
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            onPressed: () {
+              provider.deleteFile(index);
+              Navigator.pop(context);
+            },
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
     );
   }
 }

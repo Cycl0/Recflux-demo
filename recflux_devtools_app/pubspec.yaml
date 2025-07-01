@@ -55,6 +55,7 @@ dependencies:
   # Use with the CupertinoIcons class for iOS style icons.
 
   kafkabr: ^1.1.1
+  supabase_flutter: ^2.5.0
 
 dev_dependencies:
   flutter_test:

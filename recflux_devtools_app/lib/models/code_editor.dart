@@ -3,61 +3,84 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+
+class Project {
+  final String id;
+  String name;
+  String? description;
+  final String userId;
+
+  Project({
+    required this.id,
+    required this.name,
+    this.description,
+    required this.userId,
+  });
+
+  factory Project.fromJson(Map<String, dynamic> json) {
+    return Project(
+      id: json['id'],
+      name: json['name'],
+      description: json['description'],
+      userId: json['user_id'],
+    );
+  }
+}
 
 class CodeFile {
+  final String id;
   String name;
   String content;
-  String language;
+  final String projectId;
   DateTime lastModified;
 
   CodeFile({
+    required this.id,
     required this.name,
     required this.content,
-    required this.language,
+    required this.projectId,
     DateTime? lastModified,
   }) : this.lastModified = lastModified ?? DateTime.now();
 
-  factory CodeFile.fromJson(Map<String, dynamic> json) {
+  factory CodeFile.fromVersion(
+      Map<String, dynamic> metadata, Map<String, dynamic> version) {
     return CodeFile(
-      name: json['name'],
-      content: json['content'],
-      language: json['language'],
-      lastModified: DateTime.parse(json['lastModified']),
+      id: metadata['id'],
+      name: metadata['name'],
+      projectId: metadata['project_id'],
+      content: version['code'] ?? '',
+      lastModified: DateTime.parse(version['created_at']),
     );
-  }
-
-  Map<String, dynamic> toJson() {
-    return {
-      'name': name,
-      'content': content,
-      'language': language,
-      'lastModified': lastModified.toIso8601String(),
-    };
   }
 }
 
 class CodeEditorProvider with ChangeNotifier {
-  String _code = '';
+  final SupabaseClient _supabase = Supabase.instance.client;
+
+  List<Project> _projects = [];
+  Project? _currentProject;
+
   List<CodeFile> _files = [];
   int _currentFileIndex = -1;
+
   bool _isLoading = false;
   String? _error;
-  bool _isSaving = false;
 
   // Deployment state
   bool _isDeploying = false;
   String? _deploymentUrl;
   String? _screenshot;
 
+  List<Project> get projects => _projects;
+  Project? get currentProject => _currentProject;
   List<CodeFile> get files => _files;
   CodeFile? get currentFile =>
       _currentFileIndex >= 0 && _currentFileIndex < _files.length
           ? _files[_currentFileIndex]
           : null;
-  int get currentFileIndex => _currentFileIndex;
   bool get isLoading => _isLoading;
   String? get error => _error;
-  bool get isSaving => _isSaving;
 
   // Getters for deployment state
   bool get isDeploying => _isDeploying;
@@ -65,51 +88,183 @@ class CodeEditorProvider with ChangeNotifier {
   String? get screenshot => _screenshot;
 
   CodeEditorProvider() {
-    _loadFiles();
+    fetchProjects();
   }
 
-  Future<void> _loadFiles() async {
+  String? _cachedUserId;
+
+  Future<String?> get _userId async {
+    if (_cachedUserId != null) return _cachedUserId;
+
+    final authUser = _supabase.auth.currentUser;
+    if (authUser?.email == null) return null;
+
+    try {
+      final userRecord = await _supabase
+          .from('users')
+          .select('id')
+          .eq('email', authUser!.email!)
+          .maybeSingle();
+
+      _cachedUserId = userRecord?['id'];
+      return _cachedUserId;
+    } catch (e) {
+      print('Error getting user ID: $e');
+      return null;
+    }
+  }
+
+  Future<void> fetchProjects() async {
+    final userId = await _userId;
+    if (userId == null) {
+      _error = "User not authenticated. Please sign in first.";
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
     _isLoading = true;
-    _error = null;
     notifyListeners();
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final filesJson = prefs.getString('code_files');
+      print('Fetching projects for user: $userId');
+      final response =
+          await _supabase.from('projects').select().eq('user_id', userId);
+      print('Found ${response.length} projects');
 
-      if (filesJson != null) {
-        final List<dynamic> decoded = jsonDecode(filesJson);
-        _files = decoded.map((f) => CodeFile.fromJson(f)).toList();
-      } else {
-        // Add a default file if none exist
-        _files = [
-          CodeFile(
-            name: 'main.js',
-            content: '// Write your code here\nconsole.log("Hello, world!");\n',
-            language: 'javascript',
-          ),
-        ];
+      _projects =
+          (response as List).map((data) => Project.fromJson(data)).toList();
+
+      print(
+          'Projects loaded: ${_projects.map((p) => '${p.name} (${p.id})').join(', ')}');
+
+      if (_projects.isNotEmpty) {
+        await selectProject(_projects.first);
       }
-
-      _currentFileIndex = _files.isEmpty ? -1 : 0;
     } catch (e) {
-      _error = 'Failed to load files: $e';
+      _error = "Failed to fetch projects: $e";
+      print('Error fetching projects: $e');
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> saveFiles() async {
+  // Method to refresh projects when user signs in
+  Future<void> refreshOnAuthChange() async {
+    if (_supabase.auth.currentUser != null) {
+      _cachedUserId = null; // Clear cache to get fresh user ID
+      await fetchProjects();
+    } else {
+      _cachedUserId = null; // Clear cache
+      _projects = [];
+      _currentProject = null;
+      _files = [];
+      _currentFileIndex = -1;
+      _error = null;
+      notifyListeners();
+    }
+  }
+
+  Future<void> selectProject(Project project) async {
+    _currentProject = project;
+    _files = [];
+    _currentFileIndex = -1;
+    notifyListeners();
+    await _fetchFilesForProject(project.id);
+  }
+
+  Future<void> refreshCurrentProject() async {
+    if (_currentProject != null) {
+      print('Refreshing current project: ${_currentProject!.name}');
+      // Clear current file index to force UI refresh
+      _currentFileIndex = -1;
+      notifyListeners();
+      await _fetchFilesForProject(_currentProject!.id);
+    }
+  }
+
+  Future<void> refreshAllProjects() async {
+    print('Refreshing all projects');
+    await fetchProjects();
+  }
+
+  Future<void> _fetchFilesForProject(String projectId) async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+    try {
+      print('Fetching files for project: $projectId');
+
+      // First get all files for the project
+      final filesResponse = await _supabase
+          .from('files_metadata')
+          .select('*')
+          .eq('project_id', projectId);
+
+      print('Found ${filesResponse.length} files for project');
+
+      _files = [];
+
+      // For each file, get the latest version
+      for (final fileData in filesResponse) {
+        print('Processing file: ${fileData['name']}');
+
+        // Get the latest version for this file
+        final versionsResponse = await _supabase
+            .from('file_versions')
+            .select('code, created_at, version')
+            .eq('file_id', fileData['id'])
+            .order('version', ascending: false)
+            .limit(1);
+
+        Map<String, dynamic> latestVersion;
+        if (versionsResponse.isNotEmpty) {
+          latestVersion = versionsResponse.first;
+          print(
+              'File ${fileData['name']} has version ${latestVersion['version']}');
+        } else {
+          latestVersion = {
+            'code': '',
+            'created_at': DateTime.now().toIso8601String(),
+            'version': 0
+          };
+          print('File ${fileData['name']} has no versions');
+        }
+
+        final file = CodeFile.fromVersion(fileData, latestVersion);
+        print(
+            'Loaded file: ${file.name} with content length: ${file.content.length}');
+        _files.add(file);
+      }
+
+      _currentFileIndex = _files.isEmpty ? -1 : 0;
+      print('Current file index set to: $_currentFileIndex');
+    } catch (e) {
+      _error = "Failed to fetch files: $e";
+      print('Error fetching files: $e');
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> createProject(String name, {String? description}) async {
+    final userId = await _userId;
+    if (userId == null) return;
     _isLoading = true;
     notifyListeners();
 
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final filesJson = jsonEncode(_files.map((f) => f.toJson()).toList());
-      await prefs.setString('code_files', filesJson);
+      final response = await _supabase.from('projects').insert({
+        'name': name,
+        'description': description,
+        'user_id': userId,
+      }).select();
+      final newProject = Project.fromJson(response.first);
+      _projects.add(newProject);
+      await selectProject(newProject);
     } catch (e) {
-      _error = 'Failed to save files: $e';
+      _error = "Failed to create project: $e";
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -123,38 +278,101 @@ class CodeEditorProvider with ChangeNotifier {
     }
   }
 
-  void updateCurrentFile(String content) {
-    if (currentFile != null) {
-      currentFile!.content = content;
-      currentFile!.lastModified = DateTime.now();
-      notifyListeners();
-      saveFiles();
-    }
-  }
-
-  void addFile(String name, String content, String language) {
-    _files.add(CodeFile(name: name, content: content, language: language));
-    _currentFileIndex = _files.length - 1;
+  Future<void> updateCurrentFileContent(String content) async {
+    if (currentFile == null) return;
+    final userId = await _userId;
+    if (userId == null) return;
+    _isLoading = true;
     notifyListeners();
-    saveFiles();
-  }
+    try {
+      print('Saving file: ${currentFile!.name} (${currentFile!.id})');
+      print('Content length: ${content.length}');
 
-  void renameFile(int index, String newName) {
-    if (index >= 0 && index < _files.length) {
-      _files[index].name = newName;
+      currentFile!.content = content;
+      // Get the current highest version number for this file
+      final currentVersions = await _supabase
+          .from('file_versions')
+          .select('version')
+          .eq('file_id', currentFile!.id)
+          .order('version', ascending: false)
+          .limit(1);
+
+      final nextVersion = currentVersions.isNotEmpty
+          ? (currentVersions.first['version'] as int) + 1
+          : 1;
+
+      print('Creating version: $nextVersion');
+
+      final result = await _supabase.from('file_versions').insert({
+        'file_id': currentFile!.id,
+        'code': content,
+        'created_by': userId,
+        'version': nextVersion
+      });
+
+      print('Version saved: $result');
+      currentFile!.lastModified = DateTime.now();
+    } catch (e) {
+      _error = "Failed to save file: $e";
+      print('Error saving file: $e');
+    } finally {
+      _isLoading = false;
       notifyListeners();
-      saveFiles();
     }
   }
 
-  void deleteFile(int index) {
-    if (index >= 0 && index < _files.length) {
+  Future<void> addFile(String name) async {
+    if (currentProject == null) return;
+    final userId = await _userId;
+    if (userId == null) return;
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      // Create metadata
+      final metadataResponse = await _supabase.from('files_metadata').insert({
+        'project_id': currentProject!.id,
+        'name': name,
+      }).select();
+      final newFileMetadata = metadataResponse.first;
+
+      // Create initial version
+      final versionResponse = await _supabase.from('file_versions').insert({
+        'file_id': newFileMetadata['id'],
+        'code': '// New file content',
+        'created_by': userId,
+        'version': 1
+      }).select();
+
+      final newFile =
+          CodeFile.fromVersion(newFileMetadata, versionResponse.first);
+      _files.add(newFile);
+      _currentFileIndex = _files.length - 1;
+    } catch (e) {
+      _error = "Failed to add file: $e";
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> deleteFile(int index) async {
+    if (index < 0 || index >= _files.length) return;
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      final fileId = _files[index].id;
+      await _supabase.from('files_metadata').delete().eq('id', fileId);
       _files.removeAt(index);
       if (_currentFileIndex >= _files.length) {
         _currentFileIndex = _files.isEmpty ? -1 : _files.length - 1;
       }
+    } catch (e) {
+      _error = "Failed to delete file: $e";
+    } finally {
+      _isLoading = false;
       notifyListeners();
-      saveFiles();
     }
   }
 
@@ -174,8 +392,7 @@ class CodeEditorProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final urlString =
-          dotenv.env['DEPLOY_SERVICE_URL'] ?? 'http://localhost:3003/deploy';
+      final urlString = 'http://localhost:3003/deploy';
       final url = Uri.parse(urlString);
       final response = await http.post(
         url,
@@ -194,13 +411,6 @@ class CodeEditorProvider with ChangeNotifier {
       _error = 'An error occurred during deployment: $e';
     } finally {
       _isDeploying = false;
-      notifyListeners();
-    }
-  }
-
-  void setCode(String newCode) {
-    if (_code != newCode) {
-      _code = newCode;
       notifyListeners();
     }
   }

@@ -1,13 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 import 'user_model.dart';
 
 class AuthService with ChangeNotifier {
-  // Initialize Google Sign-In only if we have a client ID
+  final SupabaseClient _supabase = Supabase.instance.client;
   GoogleSignIn? _googleSignIn;
+  Function()? _onAuthStateChanged;
 
   String? _userEmail;
   String? _userName;
@@ -19,7 +20,6 @@ class AuthService with ChangeNotifier {
   String? get userPhotoUrl => _userPhotoUrl;
   bool get isSignedIn => _isSignedIn;
 
-  // Add a user getter that returns a simple user object
   UserModel? get user {
     if (!_isSignedIn || _userEmail == null) return null;
     return UserModel(
@@ -29,12 +29,15 @@ class AuthService with ChangeNotifier {
     );
   }
 
-  // Get test user email from environment variables or use a default that should exist in the database
   String get testEmail => 'test@example.com';
+
+  void setAuthStateChangedCallback(Function() callback) {
+    _onAuthStateChanged = callback;
+  }
 
   AuthService() {
     _initGoogleSignIn();
-    _loadUserData();
+    _initSupabaseAuth();
   }
 
   void _initGoogleSignIn() {
@@ -46,42 +49,113 @@ class AuthService with ChangeNotifier {
       );
       print('Initialized Google Sign-In for web with clientId');
     } else if (!kIsWeb) {
-      // For mobile platforms, we don't need to specify clientId
       _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
     } else {
       print(
-        'Google Sign-In client ID not configured. Google Sign-In will be disabled.',
-      );
+          'Google Sign-In client ID not configured. Google Sign-In will be disabled.');
     }
   }
 
-  Future<void> _loadUserData() async {
-    final prefs = await SharedPreferences.getInstance();
-    _userEmail = prefs.getString('userEmail');
-    _userName = prefs.getString('userName');
-    _userPhotoUrl = prefs.getString('userPhotoUrl');
-    _isSignedIn = _userEmail != null;
+  void _initSupabaseAuth() {
+    // Listen to auth state changes
+    _supabase.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      final Session? session = data.session;
+
+      print('Auth state changed: $event');
+
+      if (event == AuthChangeEvent.signedIn && session != null) {
+        _updateUserFromSession(session);
+      } else if (event == AuthChangeEvent.signedOut) {
+        _clearUserData();
+      }
+    });
+
+    // Check if user is already signed in
+    final session = _supabase.auth.currentSession;
+    if (session != null) {
+      _updateUserFromSession(session);
+    }
+  }
+
+  void _updateUserFromSession(Session session) {
+    final user = session.user;
+    _userEmail = user.email?.toLowerCase();
+    _userName = user.userMetadata?['full_name'] ?? user.userMetadata?['name'];
+    _userPhotoUrl = user.userMetadata?['avatar_url'];
+    _isSignedIn = true;
+
+    print('User signed in via Supabase: $_userEmail');
     notifyListeners();
+    _onAuthStateChanged?.call();
+
+    // Ensure user exists in our users table
+    _ensureUserExists(user);
   }
 
-  Future<void> _saveUserData() async {
-    final prefs = await SharedPreferences.getInstance();
-    if (_userEmail != null) {
-      prefs.setString('userEmail', _userEmail!);
+  Future<void> _ensureUserExists(User user) async {
+    try {
+      // Check if user already exists in our users table
+      if (user.email == null) {
+        print('User email is null, cannot create user record');
+        return;
+      }
+
+      final existingUser = await _supabase
+          .from('users')
+          .select()
+          .eq('email', user.email!)
+          .maybeSingle();
+
+      if (existingUser == null) {
+        print('Creating new user record for: ${user.email}');
+
+        // Create user in our users table
+        final userData = <String, dynamic>{
+          'email': user.email ?? '',
+          'username':
+              user.email?.split('@')[0] ?? 'user_${user.id.substring(0, 8)}',
+        };
+
+        if (user.appMetadata?['provider'] == 'google') {
+          userData['google_id'] = user.id;
+        }
+
+        final fullName =
+            user.userMetadata?['full_name'] ?? user.userMetadata?['name'];
+        if (fullName != null) {
+          userData['full_name'] = fullName;
+        }
+
+        final avatarUrl = user.userMetadata?['avatar_url'];
+        if (avatarUrl != null) {
+          userData['avatar_url'] = avatarUrl;
+        }
+
+        await _supabase.from('users').insert(userData);
+        print('Created user record in database: ${user.email}');
+      } else {
+        print(
+            'Found existing user record: ${existingUser['id']} for email: ${user.email}');
+      }
+    } catch (e) {
+      print('Error ensuring user exists: $e');
     }
-    if (_userName != null) {
-      prefs.setString('userName', _userName!);
-    }
-    if (_userPhotoUrl != null) {
-      prefs.setString('userPhotoUrl', _userPhotoUrl!);
-    }
+  }
+
+  void _clearUserData() {
+    _userEmail = null;
+    _userName = null;
+    _userPhotoUrl = null;
+    _isSignedIn = false;
+    notifyListeners();
+    _onAuthStateChanged?.call();
   }
 
   Future<bool> signInWithGoogle() async {
     if (_googleSignIn == null) {
       print(
-        'Google Sign-In is not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in .env file.',
-      );
+          'Google Sign-In is not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in .env file.');
       return false;
     }
 
@@ -91,17 +165,48 @@ class AuthService with ChangeNotifier {
         return false;
       }
 
-      _userEmail = googleUser.email
-          .toLowerCase(); // Normalize email to lowercase
-      _userName = googleUser.displayName;
-      _userPhotoUrl = googleUser.photoUrl;
-      _isSignedIn = true;
+      final GoogleSignInAuthentication googleAuth =
+          await googleUser.authentication;
 
-      print('Signed in with Google: $_userEmail');
+      print(
+          'Google auth - idToken: ${googleAuth.idToken != null ? "present" : "null"}');
+      print(
+          'Google auth - accessToken: ${googleAuth.accessToken != null ? "present" : "null"}');
 
-      await _saveUserData();
-      notifyListeners();
-      return true;
+      AuthResponse response;
+
+      if (googleAuth.idToken != null) {
+        // Try with idToken first
+        response = await _supabase.auth.signInWithIdToken(
+          provider: OAuthProvider.google,
+          idToken: googleAuth.idToken!,
+          accessToken: googleAuth.accessToken,
+        );
+      } else if (googleAuth.accessToken != null) {
+        // For web, we'll use the OAuth flow which will redirect
+        if (kIsWeb) {
+          await _supabase.auth.signInWithOAuth(
+            OAuthProvider.google,
+            redirectTo: '${Uri.base.origin}/auth/callback',
+          );
+          return true; // The redirect will handle the rest
+        } else {
+          throw Exception(
+              'Access token authentication not supported on mobile');
+        }
+      } else {
+        throw Exception('No authentication tokens received from Google');
+      }
+
+      if (response.user != null) {
+        print(
+            'Successfully signed in with Google via Supabase: ${response.user!.email}');
+        return true;
+      } else {
+        print(
+            'Failed to sign in with Google via Supabase - no user in response');
+        return false;
+      }
     } catch (error) {
       print('Error signing in with Google: $error');
       return false;
@@ -110,18 +215,18 @@ class AuthService with ChangeNotifier {
 
   Future<bool> signInWithEmailPassword(String email, String password) async {
     try {
-      // For testing purposes, we'll accept any email/password combination
-      // In a real app, you would validate against a backend
-      _userEmail = email.toLowerCase(); // Normalize email to lowercase
-      _userName = email.split('@')[0]; // Use part of email as name
-      _userPhotoUrl = null;
-      _isSignedIn = true;
+      final AuthResponse response = await _supabase.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
 
-      print('Signed in with email: $_userEmail');
-
-      await _saveUserData();
-      notifyListeners();
-      return true;
+      if (response.user != null) {
+        print('Successfully signed in with email: ${response.user!.email}');
+        return true;
+      } else {
+        print('Failed to sign in with email');
+        return false;
+      }
     } catch (error) {
       print('Error signing in with email/password: $error');
       return false;
@@ -130,15 +235,13 @@ class AuthService with ChangeNotifier {
 
   Future<bool> signInAsTestUser() async {
     try {
+      // For test user, we'll create a session manually
       _userEmail = testEmail;
       _userName = 'Test User';
       _userPhotoUrl = null;
       _isSignedIn = true;
 
-      // Print debug info
       print('Signed in as test user: $_userEmail');
-
-      await _saveUserData();
       notifyListeners();
       return true;
     } catch (error) {
@@ -153,17 +256,8 @@ class AuthService with ChangeNotifier {
         await _googleSignIn!.signOut();
       }
 
-      final prefs = await SharedPreferences.getInstance();
-      prefs.remove('userEmail');
-      prefs.remove('userName');
-      prefs.remove('userPhotoUrl');
-
-      _userEmail = null;
-      _userName = null;
-      _userPhotoUrl = null;
-      _isSignedIn = false;
-
-      notifyListeners();
+      await _supabase.auth.signOut();
+      _clearUserData();
     } catch (error) {
       print('Error signing out: $error');
     }

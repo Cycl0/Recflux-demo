@@ -28,17 +28,17 @@ class ChatMessage {
     DateTime? timestamp,
     this.diffData,
     this.isLoading = false,
-  }) : id = id ?? _uuid.v4(),
-       timestamp = timestamp ?? DateTime.now();
+  })  : id = id ?? _uuid.v4(),
+        timestamp = timestamp ?? DateTime.now();
 
   Map<String, dynamic> toJson() => {
-    'id': id,
-    'role': role.toString().split('.').last,
-    'content': content,
-    'timestamp': timestamp.toIso8601String(),
-    if (diffData != null) 'diffData': diffData,
-    'isLoading': isLoading,
-  };
+        'id': id,
+        'role': role.toString().split('.').last,
+        'content': content,
+        'timestamp': timestamp.toIso8601String(),
+        if (diffData != null) 'diffData': diffData,
+        'isLoading': isLoading,
+      };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) {
     return ChatMessage(
@@ -151,9 +151,8 @@ class ChatProvider with ChangeNotifier {
 
       if (response.statusCode == 200) {
         // Get substring safely to avoid index out of bounds
-        final previewLength = response.body.length > 100
-            ? 100
-            : response.body.length;
+        final previewLength =
+            response.body.length > 100 ? 100 : response.body.length;
         print(
           'API Response body: ${response.body.substring(0, previewLength)}...',
         );
@@ -181,8 +180,7 @@ class ChatProvider with ChangeNotifier {
           final RegExp simpleCodeBlockRegex = RegExp(r'```([\s\S]*?)```');
 
           // Try with language specifier first, then fallback
-          final match =
-              codeBlockRegex.firstMatch(responseText) ??
+          final match = codeBlockRegex.firstMatch(responseText) ??
               simpleCodeBlockRegex.firstMatch(responseText);
 
           Map<String, dynamic>? extractedData;
@@ -203,9 +201,8 @@ class ChatProvider with ChangeNotifier {
                 cleanedBlock = cleanedBlock.trim();
               }
               if (cleanedBlock.endsWith('```')) {
-                cleanedBlock = cleanedBlock
-                    .substring(0, cleanedBlock.length - 3)
-                    .trim();
+                cleanedBlock =
+                    cleanedBlock.substring(0, cleanedBlock.length - 3).trim();
               }
 
               extractedData = jsonDecode(cleanedBlock);
@@ -255,9 +252,8 @@ class ChatProvider with ChangeNotifier {
               );
 
               // Extract the code and the explanation separately
-              String textWithoutCode = responseText
-                  .replaceAll(codeMatch[0]!, '')
-                  .trim();
+              String textWithoutCode =
+                  responseText.replaceAll(codeMatch[0]!, '').trim();
 
               data = {
                 'explanation': textWithoutCode,
@@ -340,10 +336,10 @@ class ChatProvider with ChangeNotifier {
           String prefix = actionType == 'GERAR'
               ? '🚀 **Código Gerado:**\n\n'
               : actionType == 'EDITAR'
-              ? '✏️ **Edição:**\n\n'
-              : actionType == 'FOCAR'
-              ? '🎯 **Foco:**\n\n'
-              : '💬 **Resposta:**\n\n';
+                  ? '✏️ **Edição:**\n\n'
+                  : actionType == 'FOCAR'
+                      ? '🎯 **Foco:**\n\n'
+                      : '💬 **Resposta:**\n\n';
 
           // Check if we have a direct code field in the JSON response
           if (data['code'] != null && data['code'] is String) {
@@ -400,9 +396,8 @@ class ChatProvider with ChangeNotifier {
                   cleanedBlock = cleanedBlock.trim();
                 }
                 if (cleanedBlock.endsWith('```')) {
-                  cleanedBlock = cleanedBlock
-                      .substring(0, cleanedBlock.length - 3)
-                      .trim();
+                  cleanedBlock =
+                      cleanedBlock.substring(0, cleanedBlock.length - 3).trim();
                 }
 
                 print(
@@ -604,7 +599,7 @@ class ChatProvider with ChangeNotifier {
             if (diffData['newCode'] != null) {
               print('New code length: ${diffData['newCode'].length}');
               print(
-                'New code preview: ${diffData['newCode'].substring(0, min(100, diffData['newCode'].length))}',
+                'New code preview: ${diffData['newCode'].substring(0, (100 < diffData['newCode'].length) ? 100 : diffData['newCode'].length)}',
               );
             } else {
               print('Warning: newCode is null in diffData');
@@ -631,8 +626,7 @@ class ChatProvider with ChangeNotifier {
           };
         }
 
-        _error =
-            errorData['explanation'] ??
+        _error = errorData['explanation'] ??
             errorData['error'] ??
             'Erro desconhecido';
 
@@ -647,8 +641,7 @@ class ChatProvider with ChangeNotifier {
 
           // Special handling for "User not found" error
           if (errorData['error'] == 'User not found') {
-            errorMessage =
-                '❌ Erro: Usuário não encontrado\n\n'
+            errorMessage = '❌ Erro: Usuário não encontrado\n\n'
                 'O usuário "$userEmail" não está registrado no banco de dados.\n'
                 'Por favor, use uma conta de teste válida ou registre este email no sistema.';
           } else {
@@ -728,15 +721,11 @@ class ChatProvider with ChangeNotifier {
   }
 
   String _formatChanges(List changes) {
-    return changes
-        .asMap()
-        .entries
-        .map((entry) {
-          final i = entry.key;
-          final change = entry.value;
-          return '${i + 1}. **${change['type'].toString().toUpperCase()}** na linha ${change['startLine']}${change['endLine'] != null && change['endLine'] != change['startLine'] ? '-${change['endLine']}' : ''}: ${change['description']}';
-        })
-        .join('\n');
+    return changes.asMap().entries.map((entry) {
+      final i = entry.key;
+      final change = entry.value;
+      return '${i + 1}. **${change['type'].toString().toUpperCase()}** na linha ${change['startLine']}${change['endLine'] != null && change['endLine'] != change['startLine'] ? '-${change['endLine']}' : ''}: ${change['description']}';
+    }).join('\n');
   }
 
   String _applyChanges(String originalCode, List changes) {

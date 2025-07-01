@@ -2,11 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:provider/provider.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'screens/test_screen.dart';
 import 'screens/code_editor_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/login_screen.dart';
 import 'screens/dashboard_screen.dart';
+import 'screens/auth_callback_screen.dart';
 import 'models/test_runner.dart';
 import 'models/code_editor.dart';
 import 'models/chat_provider.dart';
@@ -22,6 +24,11 @@ Future<void> main() async {
   try {
     await dotenv.load(fileName: ".env");
     print("Environment variables loaded successfully");
+
+    await Supabase.initialize(
+      url: dotenv.env['NEXT_PUBLIC_SUPABASE_URL']!,
+      anonKey: dotenv.env['NEXT_PUBLIC_SUPABASE_ANON_KEY']!,
+    );
   } catch (e) {
     print("Failed to load environment variables: $e");
     // Create fallback environment variables for development
@@ -45,9 +52,36 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (context) => AuthService()),
         ChangeNotifierProvider(create: (context) => ChatProvider()),
       ],
-      child: const RecfluxApp(),
+      child: const ProviderConnector(),
     ),
   );
+}
+
+class ProviderConnector extends StatefulWidget {
+  const ProviderConnector({super.key});
+
+  @override
+  State<ProviderConnector> createState() => _ProviderConnectorState();
+}
+
+class _ProviderConnectorState extends State<ProviderConnector> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final codeEditorProvider =
+          Provider.of<CodeEditorProvider>(context, listen: false);
+      authService.setAuthStateChangedCallback(() {
+        codeEditorProvider.refreshOnAuthChange();
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return const RecfluxApp();
+  }
 }
 
 class RecfluxApp extends StatelessWidget {
@@ -77,6 +111,7 @@ class RecfluxApp extends StatelessWidget {
         '/': (context) => const AuthenticationWrapper(),
         '/home': (context) => const MainNavigator(),
         '/login': (context) => const LoginScreen(),
+        '/auth/callback': (context) => const AuthCallbackScreen(),
       },
     );
   }
@@ -170,9 +205,8 @@ class _MainNavigatorState extends State<MainNavigator> {
           BottomNavigationBarItem(icon: Icon(Icons.code), label: 'Editor'),
         ],
         currentIndex: _selectedIndex,
-        selectedItemColor: isDarkMode
-            ? Colors.lightBlue[300]
-            : Theme.of(context).primaryColor,
+        selectedItemColor:
+            isDarkMode ? Colors.lightBlue[300] : Theme.of(context).primaryColor,
         unselectedItemColor: isDarkMode ? Colors.white70 : Colors.grey[700],
         backgroundColor: isDarkMode ? Colors.grey[900] : Colors.white,
         type: BottomNavigationBarType.fixed,
