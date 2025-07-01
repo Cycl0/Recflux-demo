@@ -6,6 +6,7 @@ import 'screens/test_screen.dart';
 import 'screens/code_editor_screen.dart';
 import 'screens/chat_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/dashboard_screen.dart';
 import 'models/test_runner.dart';
 import 'models/code_editor.dart';
 import 'models/chat_provider.dart';
@@ -111,8 +112,9 @@ class _MainNavigatorState extends State<MainNavigator> {
   // Keep the list of screens as instance variables to preserve their state.
   final List<Widget> _screens = [
     const TestScreen(),
-    const CodeEditorScreen(),
+    DashboardScreen(),
     const ChatScreen(),
+    const CodeEditorScreen(),
   ];
 
   void _onItemTapped(int index) {
@@ -160,8 +162,12 @@ class _MainNavigatorState extends State<MainNavigator> {
       bottomNavigationBar: BottomNavigationBar(
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(icon: Icon(Icons.science), label: 'Test'),
-          BottomNavigationBarItem(icon: Icon(Icons.code), label: 'Editor'),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard),
+            label: 'Dashboard',
+          ),
           BottomNavigationBarItem(icon: Icon(Icons.chat), label: 'Chat'),
+          BottomNavigationBarItem(icon: Icon(Icons.code), label: 'Editor'),
         ],
         currentIndex: _selectedIndex,
         selectedItemColor: isDarkMode
