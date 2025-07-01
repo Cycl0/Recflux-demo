@@ -115,9 +115,37 @@ EOF
     chown vagrant:vagrant /home/vagrant/logs.sh
     
     echo "Vagrant VM setup complete!"
-    echo "Next steps:"
-    echo "1. Copy your project files to /home/vagrant/recflux-demo"
-    echo "2. Run: ./start-services.sh"
+    echo "Starting microservices automatically..."
+    
+    # Wait for Docker to be fully ready
+    echo "Waiting for Docker to be ready..."
+    sleep 10
+    
+    # Start the microservices
+    cd /home/vagrant/recflux-demo
+    echo "Starting Docker Compose services..."
+    docker-compose up -d
+    
+    # Wait a moment for services to start
+    sleep 5
+    
+    # Check if services are running
+    echo "Checking service status..."
+    docker-compose ps
+    
+    echo ""
+    echo "🎉 Microservices deployed successfully!"
+    echo ""
+    echo "🌐 Access your services at:"
+    echo "   - Agentic Service: http://localhost:3001/api-docs"
+    echo "   - Accessibility Service: http://localhost:3002/api-docs"
+    echo "   - Code Deploy Service: http://localhost:3003/api-docs"
+    echo "   - Kafka Service: http://localhost:3004/api-docs"
+    echo ""
+    echo "📋 Useful commands:"
+    echo "   - View logs: docker-compose logs -f"
+    echo "   - Stop services: docker-compose down"
+    echo "   - SSH into VM: vagrant ssh"
   SHELL
   
   # Sync the current directory to the VM
