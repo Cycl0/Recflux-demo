@@ -50,4 +50,10 @@ services:
     build:
       context: ./agentic-structured-service
     ports:
-      - "3001:3001" 
+      - "3001:3001"
+
+  code-deploy-service:
+    build:
+      context: ./code-deploy-service
+    ports:
+      - "3003:3003" 

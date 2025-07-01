@@ -52,8 +52,8 @@ class CodeEditorProvider with ChangeNotifier {
   List<CodeFile> get files => _files;
   CodeFile? get currentFile =>
       _currentFileIndex >= 0 && _currentFileIndex < _files.length
-      ? _files[_currentFileIndex]
-      : null;
+          ? _files[_currentFileIndex]
+          : null;
   int get currentFileIndex => _currentFileIndex;
   bool get isLoading => _isLoading;
   String? get error => _error;
