@@ -1,15 +1,41 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const swaggerJsdoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
 const { streamText } = require('ai');
 const { createOpenAI } = require('@ai-sdk/openai');
 const { createClient } = require('@supabase/supabase-js');
 
 const app = express();
+const PORT = process.env.PORT || 3001;
+
+// Swagger configuration
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'Agentic Structured Service API',
+      version: '1.0.0',
+      description: 'AI-powered code editing and generation service with structured output',
+    },
+    servers: [
+      {
+        url: `http://localhost:${PORT}`,
+        description: 'Development server',
+      },
+    ],
+  },
+  apis: ['./server.js'], // Path to the API docs
+};
+
+const specs = swaggerJsdoc(swaggerOptions);
+
 app.use(express.json({ limit: '50mb' }));
 app.use(cors());
 
-const PORT = process.env.PORT || 3001;
+// Serve Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
 // Verify API keys exist on startup
 if (!process.env.OPENROUTER_API_KEY) {
@@ -296,6 +322,97 @@ Regras técnicas:
       }
 };
 
+/**
+ * @swagger
+ * /api/agentic:
+ *   post:
+ *     summary: AI-powered code editing and generation
+ *     description: Perform structured code editing, focusing, or generation using AI with credit-based access
+ *     tags: [AI Code Editing]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - prompt
+ *               - actionType
+ *               - userEmail
+ *             properties:
+ *               prompt:
+ *                 type: string
+ *                 description: The user's request for code modification or generation
+ *                 example: "Add a button that increments a counter"
+ *               actionType:
+ *                 type: string
+ *                 enum: [EDITAR, FOCAR, GERAR]
+ *                 description: Type of action to perform
+ *                 example: "EDITAR"
+ *               currentCode:
+ *                 type: string
+ *                 description: Current code to modify (required for EDITAR and FOCAR)
+ *                 example: "const App = () => { return <div>Hello</div>; };"
+ *               fileName:
+ *                 type: string
+ *                 description: Name of the file being edited (required for EDITAR and FOCAR)
+ *                 example: "App.jsx"
+ *               userEmail:
+ *                 type: string
+ *                 description: User's email for credit verification
+ *                 example: "user@example.com"
+ *     responses:
+ *       200:
+ *         description: AI response stream with structured code changes
+ *         content:
+ *           text/plain:
+ *             schema:
+ *               type: string
+ *               description: Streaming response with JSON-formatted code changes
+ *       400:
+ *         description: Bad request - missing required fields
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Missing required fields: prompt, actionType"
+ *       402:
+ *         description: Insufficient credits
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Insufficient credits"
+ *                 explanation:
+ *                   type: string
+ *                   example: "Você não tem créditos suficientes. Por favor, recarregue para continuar usando o serviço."
+ *       404:
+ *         description: User not found
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "User not found"
+ *       500:
+ *         description: Internal server error
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Internal Server Error"
+ */
 app.post('/api/agentic', creditCheckMiddleware, async (req, res) => {
   console.log('[AGENTIC-STRUCTURED] Microservice endpoint hit after credit check.');
   try {
@@ -376,4 +493,5 @@ SEMPRE responda em português brasileiro.`;
 
 app.listen(PORT, () => {
   console.log(`[AGENTIC-STRUCTURED] Microservice listening on port ${PORT}`);
+  console.log(`API documentation available at http://localhost:${PORT}/api-docs`);
 }); 

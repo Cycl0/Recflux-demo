@@ -40,7 +40,7 @@ services:
     build:
       context: ./kafka-producer-service
     ports:
-      - "3004:3001"
+      - "3004:3004"
     environment:
       KAFKA_BROKERS: "kafka:9092"
     depends_on:

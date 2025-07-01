@@ -1,6 +1,8 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const swaggerJsdoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
 const fs = require('fs-extra');
 const path = require('path');
 const puppeteer = require('puppeteer');
@@ -8,10 +10,97 @@ const puppeteer = require('puppeteer');
 const app = express();
 const port = process.env.PORT || 3003;
 
+// Swagger configuration
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'Code Deploy Service API',
+      version: '1.0.0',
+      description: 'API for deploying React code to temporary environments using Vercel',
+    },
+    servers: [
+      {
+        url: `http://localhost:${port}`,
+        description: 'Development server',
+      },
+    ],
+  },
+  apis: ['./server.js'], // Path to the API docs
+};
+
+const specs = swaggerJsdoc(swaggerOptions);
+
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); // Increase limit for potentially large codebases
 
-// POST /deploy - The main endpoint for deploying React code
+// Serve Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+
+/**
+ * @swagger
+ * /deploy:
+ *   post:
+ *     summary: Deploy React code
+ *     description: Deploy React code to a temporary environment using Vercel and capture a screenshot
+ *     tags: [Deployment]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - reactCode
+ *             properties:
+ *               reactCode:
+ *                 type: string
+ *                 description: The React code to deploy (can include render() call or export statement)
+ *                 example: "const App = () => { const [count, setCount] = React.useState(0); return ( <div> <h1>Hello from Deployed React!</h1> <h2>Count: {count}</h2> <button onClick={() => setCount(count + 1)}>Increment</button> </div> ); }; render(<App />);"
+ *     responses:
+ *       200:
+ *         description: Deployment successful
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 message:
+ *                   type: string
+ *                   description: Success message
+ *                   example: "Deployment successful!"
+ *                 deploymentUrl:
+ *                   type: string
+ *                   description: URL of the deployed application
+ *                   example: "https://your-app.vercel.app"
+ *                 screenshot:
+ *                   type: string
+ *                   description: Base64 encoded screenshot of the deployed site
+ *                   format: base64
+ *       400:
+ *         description: Bad request - reactCode is required
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "reactCode is required"
+ *       500:
+ *         description: Internal server error during deployment
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   description: Error message
+ *                 details:
+ *                   type: string
+ *                   description: Detailed error information
+ */
 app.post('/deploy', async (req, res) => {
   const { reactCode } = req.body;
 
@@ -110,6 +199,7 @@ app.post('/deploy', async (req, res) => {
 
 app.listen(port, () => {
   console.log(`code-deploy-service listening at http://localhost:${port}`);
+  console.log(`API documentation available at http://localhost:${port}/api-docs`);
 }); 
 
 /*

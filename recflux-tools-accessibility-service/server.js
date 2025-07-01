@@ -3,12 +3,38 @@ const { chromium } = require('playwright');
 const { AxeBuilder } = require('@axe-core/playwright');
 const cors = require('cors');
 const axios = require('axios');
+const swaggerJsdoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
 
 const app = express();
 const port = process.env.PORT || 3002;
 
+// Swagger configuration
+const swaggerOptions = {
+  definition: {
+    openapi: '3.0.0',
+    info: {
+      title: 'Accessibility Testing Service API',
+      version: '1.0.0',
+      description: 'API for automated accessibility testing with Playwright and Axe-core',
+    },
+    servers: [
+      {
+        url: `http://localhost:${port}`,
+        description: 'Development server',
+      },
+    ],
+  },
+  apis: ['./server.js'], // Path to the API docs
+};
+
+const specs = swaggerJsdoc(swaggerOptions);
+
 app.use(cors()); // Enable CORS for all routes
 app.use(express.json());
+
+// Serve Swagger UI
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
 /**
  * Analyzes the current page state with Axe and captures screenshots.
@@ -427,7 +453,7 @@ async function runTestFlow(browser, url, resolution, actions = []) {
             })
         };
 
-        await axios.post('http://kafka-producer-service:3001/publish', resultsForKafka);
+        await axios.post('http://kafka-producer-service:3004/publish', resultsForKafka);
         console.log('Successfully published test results to Kafka service.');
     } catch (error) {
         console.error('Failed to publish test results to Kafka service:', error.message);
@@ -447,6 +473,139 @@ async function runTestFlow(browser, url, resolution, actions = []) {
     return results;
 }
 
+/**
+ * @swagger
+ * /test-accessibility:
+ *   post:
+ *     summary: Test accessibility of websites
+ *     description: Perform automated accessibility testing on multiple URLs with screenshots and Axe-core analysis
+ *     tags: [Accessibility Testing]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - urls
+ *               - resolution
+ *             properties:
+ *               urls:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of URLs to test
+ *                 example: ["https://example.com", "https://test.com"]
+ *               resolution:
+ *                 type: object
+ *                 required:
+ *                   - width
+ *                   - height
+ *                 properties:
+ *                   width:
+ *                     type: number
+ *                     description: Viewport width
+ *                     example: 1920
+ *                   height:
+ *                     type: number
+ *                     description: Viewport height
+ *                     example: 1080
+ *               actions:
+ *                 type: array
+ *                 items:
+ *                   type: object
+ *                   properties:
+ *                     action:
+ *                       type: string
+ *                       enum: [wait, type, click, scroll]
+ *                       description: Type of action to perform
+ *                     selector:
+ *                       type: string
+ *                       description: CSS selector or XPath for the element
+ *                     text:
+ *                       type: string
+ *                       description: Text to type (for type action)
+ *                     duration:
+ *                       type: number
+ *                       description: Duration to wait in milliseconds (for wait action)
+ *                     scrollType:
+ *                       type: string
+ *                       enum: [element, by, to]
+ *                       description: Type of scroll (for scroll action)
+ *                     x:
+ *                       type: number
+ *                       description: X coordinate for scroll
+ *                     y:
+ *                       type: number
+ *                       description: Y coordinate for scroll
+ *                 description: Array of actions to perform on each page
+ *                 example: [{ action: "click", selector: "button" }, { action: "wait", duration: 2000 }]
+ *     responses:
+ *       200:
+ *         description: Accessibility test results with screenshots
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: array
+ *               items:
+ *                 type: object
+ *                 properties:
+ *                   url:
+ *                     type: string
+ *                     description: The URL that was tested
+ *                   states:
+ *                     type: array
+ *                     items:
+ *                       type: object
+ *                       properties:
+ *                         action:
+ *                           type: string
+ *                           description: Action performed or 'initial' for initial state
+ *                         accessibilityReport:
+ *                           type: object
+ *                           properties:
+ *                             violations:
+ *                               type: array
+ *                               description: Accessibility violations found
+ *                             passes:
+ *                               type: array
+ *                               description: Accessibility checks that passed
+ *                             timestamp:
+ *                               type: string
+ *                               format: date-time
+ *                         screenshots:
+ *                           type: array
+ *                           items:
+ *                             type: string
+ *                             format: base64
+ *                           description: Base64 encoded screenshots
+ *       400:
+ *         description: Bad request - missing required fields
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Request must include `urls` (array) and `resolution` object."
+ *       500:
+ *         description: Internal server error during testing
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 error:
+ *                   type: string
+ *                   example: "Failed to complete test flow."
+ *                 details:
+ *                   type: string
+ *                   description: Detailed error information
+ *                 stack:
+ *                   type: string
+ *                   description: Error stack trace
+ */
 app.post('/test-accessibility', async (req, res) => {
     const { urls, resolution, actions } = req.body;
 
@@ -528,4 +687,5 @@ app.post('/test-accessibility', async (req, res) => {
 
 app.listen(port, () => {
     console.log(`Microservice listening on port ${port}`);
+    console.log(`API documentation available at http://localhost:${port}/api-docs`);
 }); 
