@@ -1,5 +1,4 @@
 /** @type {import('next').NextConfig} */
-const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin');
 
 const nextConfig = {
   reactStrictMode: true,
@@ -15,14 +14,13 @@ const nextConfig = {
       config.resolve.fallback = {
         fs: false,
         path: false,
+        os: false,
+        crypto: false,
+        stream: false,
+        util: false,
+        buffer: false,
+        process: false,
       };
-
-      config.plugins.push(
-        new MonacoWebpackPlugin({
-          languages: ['javascript', 'html', 'css'],
-          filename: 'static/[name].worker.js',
-        })
-      );
     }
 
     return config;
