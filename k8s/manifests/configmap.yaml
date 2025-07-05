@@ -3,4 +3,8 @@ kind: ConfigMap
 metadata:
   name: app-config
 data:
-  api_url: "https://${API_HOSTNAME}" 
+  api_url: "http://api.4.156.13.98.nip.io"
+  AGENTIC_STRUCTURED_URL: "http://agentic-structured-service:3001/api/agentic"
+  CODE_DEPLOY_URL: "http://code-deploy-service:3003/deploy"
+  KAFKA_PRODUCER_URL: "http://kafka-producer-service:3004"
+  ACCESSIBILITY_SERVICE_URL: "http://recflux-tools-accessibility-service:3002" 

@@ -1,28 +1,22 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: code-deploy-service
+  name: recflux-tools-accessibility-service
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: code-deploy-service
+      app: recflux-tools-accessibility-service
   template:
     metadata:
       labels:
-        app: code-deploy-service
+        app: recflux-tools-accessibility-service
     spec:
       containers:
-      - name: code-deploy-service
-        image: code-deploy-service:latest
+      - name: recflux-tools-accessibility-service
+        image: recflux-tools-accessibility-service:latest
         ports:
-        - containerPort: 3003
-        env:
-        - name: VERCEL_TOKEN
-          valueFrom:
-            secretKeyRef:
-              name: app-secrets
-              key: VERCEL_TOKEN
+        - containerPort: 3002
         resources:
           requests:
             memory: "256Mi"
@@ -34,12 +28,12 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: code-deploy-service
+  name: recflux-tools-accessibility-service
 spec:
   selector:
-    app: code-deploy-service
+    app: recflux-tools-accessibility-service
   ports:
   - protocol: TCP
-    port: 3003
-    targetPort: 3003
+    port: 3002
+    targetPort: 3002
   type: ClusterIP 
