@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: code-deploy-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: code-deploy-service
+  template:
+    metadata:
+      labels:
+        app: code-deploy-service
+    spec:
+      containers:
+      - name: code-deploy-service
+        image: ${CONTAINER_REGISTRY}/code-deploy-service:${IMAGE_TAG}
+        ports:
+        - containerPort: 3003
+        env:
+        - name: CORS_ORIGIN
+          value: "*"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: code-deploy-service
+spec:
+  selector:
+    app: code-deploy-service
+  ports:
+  - port: 3003
+    targetPort: 3003
+  type: ClusterIP 

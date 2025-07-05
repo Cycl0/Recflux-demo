@@ -1,0 +1,36 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kafka-producer-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kafka-producer-service
+  template:
+    metadata:
+      labels:
+        app: kafka-producer-service
+    spec:
+      containers:
+      - name: kafka-producer-service
+        image: ${CONTAINER_REGISTRY}/kafka-producer-service:${IMAGE_TAG}
+        ports:
+        - containerPort: 3004
+        env:
+        - name: KAFKA_BROKERS
+          value: "kafka:9092"
+        - name: CORS_ORIGIN
+          value: "*"
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-producer-service
+spec:
+  selector:
+    app: kafka-producer-service
+  ports:
+  - port: 3004
+    targetPort: 3004
+  type: ClusterIP 

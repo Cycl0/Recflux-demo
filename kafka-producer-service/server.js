@@ -58,10 +58,10 @@ const topic = 'accessibility-test-results';
 // Try to initialize Kafka
 try {
   kafka = new Kafka({
-    clientId: 'kafka-service',
-    brokers: kafkaBrokers,
-  });
-  
+  clientId: 'kafka-service',
+  brokers: kafkaBrokers,
+});
+
   producer = kafka.producer();
   consumer = kafka.consumer({ groupId: 'api-consumer-group' });
   
@@ -69,22 +69,22 @@ try {
   const connectToKafka = async () => {
     try {
       console.log('Connecting to Kafka producer...');
-      await producer.connect();
+  await producer.connect();
       console.log('Kafka producer connected successfully');
       
       console.log('Connecting to Kafka consumer...');
-      await consumer.connect();
+  await consumer.connect();
       console.log('Kafka consumer connected successfully');
       
       console.log(`Subscribing to topic: ${topic}`);
-      await consumer.subscribe({ topic, fromBeginning: true });
+  await consumer.subscribe({ topic, fromBeginning: true });
       console.log(`Subscribed to topic: ${topic}`);
-      
+
       // Start consuming messages
-      await consumer.run({
-        eachMessage: async ({ message }) => {
-          try {
-            const result = JSON.parse(message.value.toString());
+  await consumer.run({
+    eachMessage: async ({ message }) => {
+      try {
+        const result = JSON.parse(message.value.toString());
             console.log(`Received message from Kafka for URL: ${result.url}`);
             
             // Store in direct results for redundancy
@@ -98,11 +98,11 @@ try {
             }
             
             console.log(`Total results in memory: ${directResults.length}`);
-          } catch (e) {
+      } catch (e) {
             console.error('Error processing Kafka message:', e);
-          }
-        },
-      });
+      }
+    },
+  });
     } catch (error) {
       console.error('Failed to connect to Kafka:', error.message);
       console.log('Will continue with direct storage only');
@@ -183,10 +183,10 @@ app.post('/publish', async (req, res) => {
     // Try to publish to Kafka if available
     if (producer) {
       try {
-        await producer.send({
-          topic: topic,
-          messages: [{ value: JSON.stringify(message) }],
-        });
+    await producer.send({
+      topic: topic,
+      messages: [{ value: JSON.stringify(message) }],
+    });
         console.log('Message also published to Kafka successfully');
       } catch (kafkaError) {
         console.error('Failed to publish to Kafka:', kafkaError.message);
@@ -293,11 +293,11 @@ const gracefulShutdown = async () => {
   console.log('Shutting down server...');
   try {
     if (producer) {
-      await producer.disconnect();
+    await producer.disconnect();
       console.log('Kafka producer disconnected');
     }
     if (consumer) {
-      await consumer.disconnect();
+    await consumer.disconnect();
       console.log('Kafka consumer disconnected');
     }
   } catch (e) {

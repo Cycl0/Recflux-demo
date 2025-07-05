@@ -2,21 +2,28 @@
 const MonacoWebpackPlugin = require('monaco-editor-webpack-plugin');
 
 const nextConfig = {
-  webpack: (config) => {
-    config.resolve.fallback = { fs: false, path: false };
+  reactStrictMode: true,
+  output: 'standalone',
+  experimental: {
+    instrumentationHook: true,
+  },
+  images: {
+    domains: ['lh3.googleusercontent.com'],
+  },
+  webpack: (config, { isServer }) => {
+    if (!isServer) {
+      config.resolve.fallback = {
+        fs: false,
+        path: false,
+      };
 
-    if (typeof window === 'undefined') {
-      // server
-      return config;
+      config.plugins.push(
+        new MonacoWebpackPlugin({
+          languages: ['javascript', 'html', 'css'],
+          filename: 'static/[name].worker.js',
+        })
+      );
     }
-
-    // client
-    config.plugins.push(
-      new MonacoWebpackPlugin({
-        languages: ['javascript', 'html', 'css'],
-        filename: 'static/[name].worker.js',
-      })
-    );
 
     return config;
   },

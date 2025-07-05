@@ -1,0 +1,113 @@
+name: Deploy to Azure Kubernetes Service
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+env:
+  AZURE_CONTAINER_REGISTRY: ${{ secrets.AZURE_CONTAINER_REGISTRY }}
+  RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+  CLUSTER_NAME: ${{ secrets.AKS_CLUSTER_NAME }}
+  APP_HOSTNAME: ${{ secrets.APP_HOSTNAME }}
+  API_HOSTNAME: ${{ secrets.API_HOSTNAME }}
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Log in to Azure
+        run: |
+          az login --username ${{ secrets.AZURE_USERNAME }} --password ${{ secrets.AZURE_PASSWORD }}
+        shell: bash
+
+      - name: Log in to Azure Container Registry
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Set image tags
+        run: echo "IMAGE_TAG=$(date +'%Y%m%d%H%M%S')-${GITHUB_SHA::8}" >> $GITHUB_ENV
+
+      # Build and push microservices
+      - name: Build and push recflux-tools-accessibility-service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./recflux-tools-accessibility-service
+          push: true
+          tags: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/recflux-tools-accessibility-service:${{ env.IMAGE_TAG }}
+          cache-from: type=registry,ref=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/recflux-tools-accessibility-service:latest
+          cache-to: type=inline
+
+      - name: Build and push kafka-producer-service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./kafka-producer-service
+          push: true
+          tags: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/kafka-producer-service:${{ env.IMAGE_TAG }}
+          cache-from: type=registry,ref=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/kafka-producer-service:latest
+          cache-to: type=inline
+
+      - name: Build and push agentic-structured-service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./agentic-structured-service
+          push: true
+          tags: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/agentic-structured-service:${{ env.IMAGE_TAG }}
+          cache-from: type=registry,ref=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/agentic-structured-service:latest
+          cache-to: type=inline
+
+      - name: Build and push code-deploy-service
+        uses: docker/build-push-action@v4
+        with:
+          context: ./code-deploy-service
+          push: true
+          tags: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/code-deploy-service:${{ env.IMAGE_TAG }}
+          cache-from: type=registry,ref=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/code-deploy-service:latest
+          cache-to: type=inline
+
+      - name: Build and push Next.js app
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          file: ./Dockerfile.nextjs
+          push: true
+          tags: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/nextjs-app:${{ env.IMAGE_TAG }}
+          cache-from: type=registry,ref=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/nextjs-app:latest
+          cache-to: type=inline
+
+      # Set up kubectl
+      - name: Set up kubeconfig
+        uses: azure/aks-set-context@v3
+        with:
+          resource-group: ${{ env.RESOURCE_GROUP }}
+          cluster-name: ${{ env.CLUSTER_NAME }}
+
+      # Apply Kubernetes manifests
+      - name: Deploy to AKS
+        run: |
+          # Replace placeholders in manifests
+          find k8s/manifests -type f -name "*.yaml" -exec sed -i "s|\${CONTAINER_REGISTRY}|${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io|g" {} \;
+          find k8s/manifests -type f -name "*.yaml" -exec sed -i "s|\${IMAGE_TAG}|${{ env.IMAGE_TAG }}|g" {} \;
+          find k8s/manifests -type f -name "*.yaml" -exec sed -i "s|\${APP_HOSTNAME}|${{ env.APP_HOSTNAME }}|g" {} \;
+          find k8s/manifests -type f -name "*.yaml" -exec sed -i "s|\${API_HOSTNAME}|${{ env.API_HOSTNAME }}|g" {} \;
+          
+          # Apply manifests using kustomize
+          kubectl apply -k k8s/manifests
+
+      # Verify deployment
+      - name: Verify deployment
+        run: |
+          kubectl get pods
+          kubectl get services
+          kubectl get ingress 

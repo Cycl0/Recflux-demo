@@ -1,24 +1,82 @@
-Welcome to the NextJS 13 base template bootstrapped using the `create-next-app`. This template supports TypeScript, but you can use normal JavaScript as well.
+# Recflux Demo
 
-## Getting Started
+Recflux Demo is a microservices-based application that includes various services for AI-powered code generation, chat, and deployment.
 
-Hit the run button to start the development server.
+## Project Structure
 
-You can start editing the page by modifying `pages/index.tsx`. The page auto-updates as you edit the file.
+- **agentic-structured-service**: Service for structured AI interactions
+- **code-deploy-service**: Service for deploying generated code
+- **kafka-producer-service**: Service for producing Kafka messages
+- **recflux-tools-accessibility-service**: Service for accessibility tools
+- **app**: Next.js frontend application
 
-[Route Handlers](https://nextjs.org/docs/app/building-your-application/routing/route-handlers) allow you to create custom request handlers for a given route using the Web Request and Response APIs.
+## Local Development
 
-The `app/api` directory is mapped to `/api/*`. Folders in this directory with files named `route.ts` are treated as [Route handlers](https://nextjs.org/docs/app/building-your-application/routing/route-handlers) instead of pages.
+To run the application locally:
 
-## Learn More
+```bash
+docker-compose up -d
+```
 
-To learn more about Next.js, take a look at the following resources:
+This will start all the services defined in the `docker-compose.yml` file.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## Kubernetes Deployment
 
-## Productionizing your Next App
+This project is set up for deployment to Azure Kubernetes Service (AKS) using GitHub Actions for CI/CD.
 
-To make your next App run smoothly in production make sure to deploy your project with [Repl Deployments](https://docs.replit.com/hosting/deployments/about-deployments)!
+### Prerequisites
 
-You can also produce a production build by running `npm run build` and [changing the run command](https://docs.replit.com/programming-ide/configuring-repl#run) to `npm run start`.
+See [azure-setup.md](azure-setup.md) for detailed instructions on setting up the required Azure resources.
+
+### Deployment Architecture
+
+The application is deployed to AKS with the following components:
+
+- **Kubernetes Manifests**: Located in the `k8s/manifests` directory
+- **CI/CD Pipeline**: GitHub Actions workflow in `.github/workflows/deploy-to-aks.yml`
+- **Ingress**: Azure Application Gateway for routing external traffic
+
+### Kubernetes Resources
+
+- **Deployments**: For each microservice and the frontend application
+- **Services**: For internal communication between services
+- **Ingress**: For external access to the application
+- **ConfigMap**: For environment-specific configuration
+
+### CI/CD Pipeline
+
+The GitHub Actions workflow handles:
+
+1. Building Docker images for each service
+2. Pushing images to Azure Container Registry
+3. Deploying to AKS using Kustomize
+
+### Monitoring and Troubleshooting
+
+To view the status of your deployment:
+
+```bash
+# Get kubectl credentials
+az aks get-credentials --resource-group recflux-demo-rg --name recflux-aks
+
+# Check pod status
+kubectl get pods
+
+# View service details
+kubectl get services
+
+# Check ingress configuration
+kubectl get ingress
+```
+
+## Environment Variables
+
+The following environment variables are used in the deployment:
+
+- `KAFKA_BROKERS`: Kafka broker addresses
+- `CORS_ORIGIN`: CORS configuration
+- `NEXT_PUBLIC_API_URL`: URL for the API services
+
+## License
+
+This project is proprietary and confidential.
