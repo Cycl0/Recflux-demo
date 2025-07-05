@@ -18,6 +18,9 @@ Vagrant.configure("2") do |config|
   config.vm.network "forwarded_port", guest: 29092, host: 29092 # Kafka External
   config.vm.network "forwarded_port", guest: 2181, host: 2181  # Zookeeper
   
+  # Add private network for Android access - use a static IP
+  config.vm.network "private_network", ip: "192.168.56.10"
+  
   # VM resources
   config.vm.provider "virtualbox" do |vb|
     vb.memory = "4096"  # 4GB RAM
@@ -80,12 +83,22 @@ Vagrant.configure("2") do |config|
 #!/bin/bash
 cd /home/vagrant/recflux-demo
 echo "Starting all microservices..."
-docker-compose up -d
+
+# Update docker-compose.yml to use the VM's IP address for Kafka
+VM_IP="192.168.56.10"
+sed -i "s/KAFKA_ADVERTISED_LISTENERS: PLAINTEXT:\\/\\/kafka:9092,PLAINTEXT_HOST:\\/\\/localhost:29092/KAFKA_ADVERTISED_LISTENERS: PLAINTEXT:\\/\\/kafka:9092,PLAINTEXT_HOST:\\/\\/${VM_IP}:29092/g" docker-compose.yml
+
+# Set environment variable for Kafka producer service
+echo "KAFKA_BROKERS=kafka:9092" > .env
+
+# Start services
+docker-compose up -d --build
+
 echo "Services started! Available at:"
-echo "- Agentic Service: http://localhost:3001/api-docs"
-echo "- Accessibility Service: http://localhost:3002/api-docs"
-echo "- Code Deploy Service: http://localhost:3003/api-docs"
-echo "- Kafka Service: http://localhost:3004/api-docs"
+echo "- Agentic Service: http://${VM_IP}:3001/api-docs"
+echo "- Accessibility Service: http://${VM_IP}:3002/api-docs"
+echo "- Code Deploy Service: http://${VM_IP}:3003/api-docs"
+echo "- Kafka Service: http://${VM_IP}:3004/api-docs"
 EOF
     
     chmod +x /home/vagrant/start-services.sh
@@ -121,10 +134,18 @@ EOF
     echo "Waiting for Docker to be ready..."
     sleep 10
     
-    # Start the microservices
+    # Start the microservices with the VM IP
     cd /home/vagrant/recflux-demo
+    
+    # Update docker-compose.yml to use the VM's IP address for Kafka
+    VM_IP="192.168.56.10"
+    sed -i "s/KAFKA_ADVERTISED_LISTENERS: PLAINTEXT:\\/\\/kafka:9092,PLAINTEXT_HOST:\\/\\/localhost:29092/KAFKA_ADVERTISED_LISTENERS: PLAINTEXT:\\/\\/kafka:9092,PLAINTEXT_HOST:\\/\\/${VM_IP}:29092/g" docker-compose.yml
+    
+    # Create environment file for Kafka producer service
+    echo "KAFKA_BROKERS=kafka:9092" > .env
+    
     echo "Starting Docker Compose services..."
-    docker-compose up -d
+    docker-compose up -d --build
     
     # Wait a moment for services to start
     sleep 5
@@ -137,10 +158,10 @@ EOF
     echo "🎉 Microservices deployed successfully!"
     echo ""
     echo "🌐 Access your services at:"
-    echo "   - Agentic Service: http://localhost:3001/api-docs"
-    echo "   - Accessibility Service: http://localhost:3002/api-docs"
-    echo "   - Code Deploy Service: http://localhost:3003/api-docs"
-    echo "   - Kafka Service: http://localhost:3004/api-docs"
+    echo "   - Agentic Service: http://${VM_IP}:3001/api-docs"
+    echo "   - Accessibility Service: http://${VM_IP}:3002/api-docs"
+    echo "   - Code Deploy Service: http://${VM_IP}:3003/api-docs"
+    echo "   - Kafka Service: http://${VM_IP}:3004/api-docs"
     echo ""
     echo "📋 Useful commands:"
     echo "   - View logs: docker-compose logs -f"

@@ -223,7 +223,7 @@ class ChatProvider with ChangeNotifier {
               data = {'explanation': textWithoutCodeBlock.trim()};
 
               // Copy all keys from extractedData to data
-              extractedData!.forEach((key, value) {
+              extractedData.forEach((key, value) {
                 data[key] = value;
               });
 
@@ -273,7 +273,7 @@ class ChatProvider with ChangeNotifier {
                     {
                       'type': 'replace',
                       'startLine': 1,
-                      'endLine': selectedFile.content?.split('\n').length ?? 1,
+                      'endLine': selectedFile.content.split('\n').length ?? 1,
                       'code': rawCode,
                       'description': 'Code replacement',
                     },
@@ -313,7 +313,6 @@ class ChatProvider with ChangeNotifier {
           // Otherwise check if we have a code field that wasn't processed yet
           else if (data['code'] != null &&
               data['code'] is String &&
-              diffData == null &&
               selectedFile != null) {
             print('Found unprocessed code field, creating diffData');
             diffData = {
@@ -323,7 +322,7 @@ class ChatProvider with ChangeNotifier {
                 {
                   'type': 'replace',
                   'startLine': 1,
-                  'endLine': selectedFile.content?.split('\n').length ?? 1,
+                  'endLine': selectedFile.content.split('\n').length ?? 1,
                   'code': data['code'],
                   'description': 'Code replacement',
                 },
@@ -345,7 +344,7 @@ class ChatProvider with ChangeNotifier {
           if (data['code'] != null && data['code'] is String) {
             print('Found direct code field in top-level JSON');
             responseContent =
-                '${prefix}${data['explanation'] ?? 'Código gerado com sucesso.'}';
+                '$prefix${data['explanation'] ?? 'Código gerado com sucesso.'}';
 
             // Create diff data for direct code replacement
             if (selectedFile != null) {
@@ -356,7 +355,7 @@ class ChatProvider with ChangeNotifier {
                   {
                     'type': 'replace',
                     'startLine': 1,
-                    'endLine': selectedFile.content?.split('\n').length ?? 1,
+                    'endLine': selectedFile.content.split('\n').length ?? 1,
                     'code': data['code'],
                     'description': 'Code replacement',
                   },
@@ -419,7 +418,7 @@ class ChatProvider with ChangeNotifier {
                         'type': 'replace',
                         'startLine': 1,
                         'endLine':
-                            selectedFile?.content?.split('\n').length ?? 1,
+                            selectedFile?.content.split('\n').length ?? 1,
                         'code': jsonData['code'],
                         'description': 'Code replacement',
                       },
@@ -430,7 +429,7 @@ class ChatProvider with ChangeNotifier {
                   // Format the response for direct code - don't include the code in the chat
                   // since we'll show it in the diff viewer
                   responseContent =
-                      '${prefix}${jsonData['explanation'] ?? 'Código gerado com sucesso.'}';
+                      '$prefix${jsonData['explanation'] ?? 'Código gerado com sucesso.'}';
                 }
                 // Check for changes array as fallback
                 else if (jsonData['changes'] != null &&
@@ -453,7 +452,7 @@ class ChatProvider with ChangeNotifier {
                         jsonData['changes'][0]['startLine'] == 1 &&
                         (jsonData['changes'][0]['endLine'] == 999 ||
                             jsonData['changes'][0]['endLine'] >
-                                (selectedFile?.content?.split('\n').length ??
+                                (selectedFile?.content.split('\n').length ??
                                     1))) {
                       print('Found replace all change, using code directly');
                       final code = jsonData['changes'][0]['code'];
@@ -497,7 +496,7 @@ class ChatProvider with ChangeNotifier {
                             'type': 'replace',
                             'startLine': 1,
                             'endLine':
-                                selectedFile?.content?.split('\n').length ?? 1,
+                                selectedFile?.content.split('\n').length ?? 1,
                             'code': jsonData['code'],
                             'description': 'Code replacement',
                           },
@@ -510,7 +509,7 @@ class ChatProvider with ChangeNotifier {
 
                   // Format the response with changes details
                   responseContent =
-                      '${prefix}${jsonData['explanation'] ?? 'Mudanças aplicadas.'}';
+                      '$prefix${jsonData['explanation'] ?? 'Mudanças aplicadas.'}';
                 }
               } catch (e) {
                 print('Error parsing JSON from code block: $e');
@@ -534,7 +533,7 @@ class ChatProvider with ChangeNotifier {
                   data['changes'][0]['startLine'] == 1 &&
                   (data['changes'][0]['endLine'] == 999 ||
                       data['changes'][0]['endLine'] >
-                          (selectedFile.content?.split('\n').length ?? 1))) {
+                          (selectedFile.content.split('\n').length ?? 1))) {
                 print('Found replace all change, using code directly');
                 final code = data['changes'][0]['code'];
                 if (code != null && code is String) {
@@ -575,7 +574,7 @@ class ChatProvider with ChangeNotifier {
                 {
                   'type': 'replace',
                   'startLine': 1,
-                  'endLine': selectedFile.content?.split('\n').length ?? 1,
+                  'endLine': selectedFile.content.split('\n').length ?? 1,
                   'code': data['code'],
                   'description': 'Code replacement',
                 },

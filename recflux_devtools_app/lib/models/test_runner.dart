@@ -1,5 +1,5 @@
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb, ChangeNotifier;
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../utils/config_utils.dart';
@@ -173,19 +173,33 @@ class TestRunner with ChangeNotifier {
       });
 
       final String host = ConfigUtils.getApiHost();
-      print('<<<<<< [DEBUG] Using host: "$host" on port: $port >>>>>>');
-      final response = await http.post(
-        Uri.parse('http://$host:$port/test-accessibility'),
+      final testUrl = 'http://$host:$port/test-accessibility';
+      print('<<<<<< [DEBUG] Sending test request to: $testUrl >>>>>>');
+      print('Request body: $requestBody');
+
+      final response = await http
+          .post(
+        Uri.parse(testUrl),
         headers: {'Content-Type': 'application/json'},
         body: requestBody,
-      );
+      )
+          .timeout(const Duration(seconds: 30), onTimeout: () {
+        throw TimeoutException('Request timed out after 30 seconds');
+      });
+
+      print('Response status code: ${response.statusCode}');
 
       if (response.statusCode == 200) {
         // Log the raw response body to debug the data structure
-        print('Server Response: ${response.body}');
+        final responseBody = response.body;
+        print('Server Response length: ${responseBody.length}');
+
+        if (responseBody.isEmpty) {
+          throw Exception('Empty response from server');
+        }
 
         // Add more detailed logging
-        final List<dynamic> data = jsonDecode(response.body);
+        final List<dynamic> data = jsonDecode(responseBody);
         print('Response data length: ${data.length}');
 
         if (data.isNotEmpty) {
@@ -222,10 +236,23 @@ class TestRunner with ChangeNotifier {
       } else {
         // Log the raw error response body
         print('Server Error Response: ${response.body}');
-        final errorData = jsonDecode(response.body);
-        _error = 'Test failed: ${errorData['error']} - ${errorData['details']}';
+        String errorMessage =
+            'Test failed with status code: ${response.statusCode}';
+
+        try {
+          final errorData = jsonDecode(response.body);
+          errorMessage =
+              'Test failed: ${errorData['error'] ?? 'Unknown error'} - ${errorData['details'] ?? ''}';
+        } catch (e) {
+          print('Failed to parse error response: $e');
+          errorMessage =
+              'Test failed with status code ${response.statusCode}: ${response.body}';
+        }
+
+        _error = errorMessage;
       }
     } catch (e) {
+      print('Error in runTest: $e');
       _error = 'An error occurred: $e';
     } finally {
       _isLoading = false;

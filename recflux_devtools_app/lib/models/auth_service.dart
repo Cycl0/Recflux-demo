@@ -41,18 +41,43 @@ class AuthService with ChangeNotifier {
   }
 
   void _initGoogleSignIn() {
-    final clientId = dotenv.env['NEXT_PUBLIC_GOOGLE_CLIENT_ID'];
-    if (clientId != null && clientId.isNotEmpty && kIsWeb) {
-      _googleSignIn = GoogleSignIn(
-        scopes: ['email', 'profile'],
-        clientId: clientId,
-      );
-      print('Initialized Google Sign-In for web with clientId');
-    } else if (!kIsWeb) {
-      _googleSignIn = GoogleSignIn(scopes: ['email', 'profile']);
+    if (kIsWeb) {
+      // For web, use the web client ID
+      final clientId = dotenv.env['NEXT_PUBLIC_GOOGLE_CLIENT_ID'];
+      if (clientId != null && clientId.isNotEmpty) {
+        _googleSignIn = GoogleSignIn(
+          scopes: ['email', 'profile', 'openid'],
+          clientId: clientId,
+        );
+        print('Initialized Google Sign-In for web with clientId');
+      } else {
+        print(
+            'Web client ID not configured. Google Sign-In will be disabled on web.');
+      }
     } else {
-      print(
-          'Google Sign-In client ID not configured. Google Sign-In will be disabled.');
+      // For Android, use the Android-specific client ID if available
+      final androidClientId =
+          dotenv.env['NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID'];
+      final serverClientId = dotenv.env['NEXT_PUBLIC_GOOGLE_CLIENT_ID'];
+
+      if (androidClientId != null && androidClientId.isNotEmpty) {
+        _googleSignIn = GoogleSignIn(
+          scopes: ['email', 'profile', 'openid'],
+          serverClientId: serverClientId,
+          forceCodeForRefreshToken: true,
+        );
+        print(
+            'Initialized Google Sign-In for Android with serverClientId: $serverClientId');
+      } else {
+        // Fallback to regular client ID or default configuration
+        _googleSignIn = GoogleSignIn(
+          scopes: ['email', 'profile', 'openid'],
+          serverClientId: serverClientId,
+          forceCodeForRefreshToken: true,
+        );
+        print(
+            'Using default Google Sign-In configuration for Android with serverClientId: $serverClientId');
+      }
     }
   }
 
@@ -117,7 +142,7 @@ class AuthService with ChangeNotifier {
               user.email?.split('@')[0] ?? 'user_${user.id.substring(0, 8)}',
         };
 
-        if (user.appMetadata?['provider'] == 'google') {
+        if (user.appMetadata['provider'] == 'google') {
           userData['google_id'] = user.id;
         }
 
@@ -160,10 +185,16 @@ class AuthService with ChangeNotifier {
     }
 
     try {
+      // For direct Google Sign-In through the native SDK
       final GoogleSignInAccount? googleUser = await _googleSignIn!.signIn();
       if (googleUser == null) {
+        print('Google Sign-In was canceled by user');
         return false;
       }
+
+      print('Google Sign-In successful for: ${googleUser.email}');
+      print('Display name: ${googleUser.displayName}');
+      print('Server auth code available: ${googleUser.serverAuthCode != null}');
 
       final GoogleSignInAuthentication googleAuth =
           await googleUser.authentication;
@@ -172,39 +203,85 @@ class AuthService with ChangeNotifier {
           'Google auth - idToken: ${googleAuth.idToken != null ? "present" : "null"}');
       print(
           'Google auth - accessToken: ${googleAuth.accessToken != null ? "present" : "null"}');
+      print(
+          'Google auth - serverAuthCode: ${googleUser.serverAuthCode != null ? "present" : "null"}');
 
-      AuthResponse response;
-
-      if (googleAuth.idToken != null) {
-        // Try with idToken first
-        response = await _supabase.auth.signInWithIdToken(
-          provider: OAuthProvider.google,
-          idToken: googleAuth.idToken!,
-          accessToken: googleAuth.accessToken,
+      // For web, use the standard OAuth flow
+      if (kIsWeb) {
+        await _supabase.auth.signInWithOAuth(
+          OAuthProvider.google,
+          redirectTo: '${Uri.base.origin}/auth/callback',
         );
-      } else if (googleAuth.accessToken != null) {
-        // For web, we'll use the OAuth flow which will redirect
-        if (kIsWeb) {
-          await _supabase.auth.signInWithOAuth(
-            OAuthProvider.google,
-            redirectTo: '${Uri.base.origin}/auth/callback',
-          );
-          return true; // The redirect will handle the rest
-        } else {
-          throw Exception(
-              'Access token authentication not supported on mobile');
-        }
-      } else {
-        throw Exception('No authentication tokens received from Google');
+        return true; // The redirect will handle the rest
       }
 
-      if (response.user != null) {
+      // For Android, use the idToken if available (preferred)
+      if (googleAuth.idToken != null) {
+        try {
+          print('Attempting to sign in with idToken');
+          final response = await _supabase.auth.signInWithIdToken(
+            provider: OAuthProvider.google,
+            idToken: googleAuth.idToken!,
+            accessToken: googleAuth.accessToken,
+          );
+
+          if (response.user != null) {
+            print(
+                'Successfully signed in with Google idToken: ${response.user!.email}');
+            return true;
+          } else {
+            print('Failed to sign in with idToken - no user returned');
+          }
+        } catch (e) {
+          print('Error signing in with Google idToken: $e');
+          // Fall back to OAuth flow if idToken authentication fails
+        }
+      } else if (googleAuth.accessToken != null) {
+        // Try using the access token if idToken is not available
+        try {
+          print('Attempting to sign in with accessToken since idToken is null');
+
+          // Try to exchange the accessToken for a session
+          final response = await _supabase.auth.signInWithOAuth(
+            OAuthProvider.google,
+            redirectTo: 'com.example.recflux_test://login-callback',
+            queryParams: {
+              'access_token': googleAuth.accessToken!,
+              'skip_browser': 'true',
+            },
+          );
+
+          print('OAuth sign-in with accessToken initiated');
+          return true;
+        } catch (e) {
+          print('Error signing in with Google accessToken: $e');
+        }
+      }
+
+      // Fall back to OAuth flow with deep link for mobile
+      print('Falling back to OAuth flow with deep link for mobile');
+
+      // Make sure to use the correct redirect URL format that matches AndroidManifest.xml
+      const redirectUrl = 'com.example.recflux_test://login-callback';
+      print('Using redirect URL: $redirectUrl');
+
+      // Use signInWithOAuth with the correct redirect URL
+      try {
+        final authResponse = await _supabase.auth.signInWithOAuth(
+          OAuthProvider.google,
+          redirectTo: redirectUrl,
+          queryParams: {
+            'skip_browser': 'true',
+            'access_type': 'offline',
+          },
+        );
+
+        // The deep link will be handled by app_links in main.dart
         print(
-            'Successfully signed in with Google via Supabase: ${response.user!.email}');
+            'OAuth sign-in initiated - waiting for app_links to handle the callback');
         return true;
-      } else {
-        print(
-            'Failed to sign in with Google via Supabase - no user in response');
+      } catch (e) {
+        print('Error initiating OAuth flow: $e');
         return false;
       }
     } catch (error) {

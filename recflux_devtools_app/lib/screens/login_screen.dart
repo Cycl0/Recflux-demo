@@ -77,9 +77,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
               // Login button
               ElevatedButton(
-                onPressed: _isLoading
-                    ? null
-                    : () => _loginWithEmailPassword(context),
+                onPressed:
+                    _isLoading ? null : () => _loginWithEmailPassword(context),
                 style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: Theme.of(context).primaryColor,
@@ -110,8 +109,8 @@ class _LoginScreenState extends State<LoginScreen> {
               const SizedBox(height: 16),
 
               // Divider
-              Row(
-                children: const [
+              const Row(
+                children: [
                   Expanded(child: Divider()),
                   Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16),
@@ -153,9 +152,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       minimumSize: const Size(double.infinity, 50),
                     ),
-                    onPressed: _isLoading
-                        ? null
-                        : () => _loginWithGoogle(context),
+                    onPressed:
+                        _isLoading ? null : () => _loginWithGoogle(context),
                   ),
                 ],
               ),

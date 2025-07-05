@@ -453,6 +453,7 @@ async function runTestFlow(browser, url, resolution, actions = []) {
             })
         };
 
+        console.log('Publishing test results to Kafka service...');
         await axios.post('http://kafka-producer-service:3004/publish', resultsForKafka);
         console.log('Successfully published test results to Kafka service.');
     } catch (error) {
@@ -630,12 +631,13 @@ app.post('/test-accessibility', async (req, res) => {
             timeout: 180000 // 3 minutes timeout for browser launch
         });
         
-        const allResults = [];
-        for (const url of urls) {
+        const testPromises = urls.map(url => {
             console.log(`Starting test flow for URL: ${url}`);
-            const states = await runTestFlow(browser, url, resolution, actions);
-            allResults.push({ url, states });
-        }
+            return runTestFlow(browser, url, resolution, actions)
+                .then(states => ({ url, states }));
+        });
+
+        const allResults = await Promise.all(testPromises);
         
         // Log final response structure
         console.log(`All results count: ${allResults.length}`);
@@ -665,6 +667,7 @@ app.post('/test-accessibility', async (req, res) => {
             }
         }
         
+        // Send the response only after all test flows are complete
         res.status(200).json(allResults);
     } catch (error) {
         console.error('An error occurred during the test flow:', error);

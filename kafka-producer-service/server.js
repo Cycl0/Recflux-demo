@@ -28,43 +28,95 @@ const swaggerOptions = {
 
 const specs = swaggerJsdoc(swaggerOptions);
 
-app.use(cors());
+// Enable CORS with more specific options
+app.use(cors({
+  origin: '*', // Allow all origins
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
+}));
+
+// Increase JSON limit for larger payloads
 app.use(express.json({ limit: '500mb' }));
 
 // Serve Swagger UI
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
-const kafkaBrokers = process.env.KAFKA_BROKERS ? process.env.KAFKA_BROKERS.split(',') : ['localhost:9092'];
-const kafka = new Kafka({
-  clientId: 'kafka-service',
-  brokers: kafkaBrokers,
-});
+// Use environment variable for Kafka brokers or default to kafka:9092 (Docker service name)
+const kafkaBrokers = process.env.KAFKA_BROKERS ? process.env.KAFKA_BROKERS.split(',') : ['kafka:9092'];
+console.log(`Using Kafka brokers: ${kafkaBrokers.join(', ')}`);
 
-const producer = kafka.producer();
-const consumer = kafka.consumer({ groupId: 'api-consumer-group' });
+// Store results directly in memory as a fallback
+let directResults = [];
+
+// Initialize Kafka client
+let kafka;
+let producer;
+let consumer;
 const topic = 'accessibility-test-results';
-let results = []; // In-memory store for results
 
-const run = async () => {
-  // Connect producer and consumer
-  await producer.connect();
-  await consumer.connect();
-  await consumer.subscribe({ topic, fromBeginning: true });
-
-  await consumer.run({
-    eachMessage: async ({ message }) => {
-      try {
-        const result = JSON.parse(message.value.toString());
-        results.push(result);
-        console.log('Stored message from Kafka:', result);
-      } catch (e) {
-        console.error('Error parsing or storing message', e);
-      }
-    },
+// Try to initialize Kafka
+try {
+  kafka = new Kafka({
+    clientId: 'kafka-service',
+    brokers: kafkaBrokers,
   });
-};
-
-run().catch(e => console.error('[kafka-service] Error:', e.message, e));
+  
+  producer = kafka.producer();
+  consumer = kafka.consumer({ groupId: 'api-consumer-group' });
+  
+  // Connect to Kafka asynchronously
+  const connectToKafka = async () => {
+    try {
+      console.log('Connecting to Kafka producer...');
+      await producer.connect();
+      console.log('Kafka producer connected successfully');
+      
+      console.log('Connecting to Kafka consumer...');
+      await consumer.connect();
+      console.log('Kafka consumer connected successfully');
+      
+      console.log(`Subscribing to topic: ${topic}`);
+      await consumer.subscribe({ topic, fromBeginning: true });
+      console.log(`Subscribed to topic: ${topic}`);
+      
+      // Start consuming messages
+      await consumer.run({
+        eachMessage: async ({ message }) => {
+          try {
+            const result = JSON.parse(message.value.toString());
+            console.log(`Received message from Kafka for URL: ${result.url}`);
+            
+            // Store in direct results for redundancy
+            const existingIndex = directResults.findIndex(r => r.url === result.url);
+            if (existingIndex >= 0) {
+              console.log(`Updating existing result for URL: ${result.url}`);
+              directResults[existingIndex] = result;
+            } else {
+              console.log(`Adding new result for URL: ${result.url}`);
+              directResults.push(result);
+            }
+            
+            console.log(`Total results in memory: ${directResults.length}`);
+          } catch (e) {
+            console.error('Error processing Kafka message:', e);
+          }
+        },
+      });
+    } catch (error) {
+      console.error('Failed to connect to Kafka:', error.message);
+      console.log('Will continue with direct storage only');
+    }
+  };
+  
+  // Start connection process but don't wait for it
+  connectToKafka().catch(e => {
+    console.error('Kafka connection failed:', e.message);
+  });
+} catch (error) {
+  console.error('Error initializing Kafka client:', error.message);
+  console.log('Will operate in direct storage mode only');
+}
 
 /**
  * @swagger
@@ -116,14 +168,40 @@ run().catch(e => console.error('[kafka-service] Error:', e.message, e));
 app.post('/publish', async (req, res) => {
   try {
     const message = req.body;
-    await producer.send({
-      topic: topic,
-      messages: [{ value: JSON.stringify(message) }],
+    console.log(`Received publish request for URL: ${message.url}`);
+    
+    // Always store directly in memory first for reliability
+    const existingIndex = directResults.findIndex(r => r.url === message.url);
+    if (existingIndex >= 0) {
+      console.log(`Updating existing direct result for URL: ${message.url}`);
+      directResults[existingIndex] = message;
+    } else {
+      console.log(`Adding new direct result for URL: ${message.url}`);
+      directResults.push(message);
+    }
+    
+    // Try to publish to Kafka if available
+    if (producer) {
+      try {
+        await producer.send({
+          topic: topic,
+          messages: [{ value: JSON.stringify(message) }],
+        });
+        console.log('Message also published to Kafka successfully');
+      } catch (kafkaError) {
+        console.error('Failed to publish to Kafka:', kafkaError.message);
+        console.log('Continuing with direct storage only');
+      }
+    }
+    
+    console.log(`Total results in memory: ${directResults.length}`);
+    res.status(200).json({ 
+      status: 'success', 
+      message: 'Message stored successfully',
+      resultsCount: directResults.length
     });
-    console.log('Message published successfully:', message);
-    res.status(200).json({ status: 'success', message: 'Message published' });
   } catch (error) {
-    console.error('Failed to publish message:', error);
+    console.error('Failed to process publish request:', error);
     res.status(500).json({ status: 'error', message: 'Failed to publish message' });
   }
 });
@@ -172,14 +250,56 @@ app.post('/publish', async (req, res) => {
  *                           type: array
  */
 app.get('/results', (req, res) => {
-  res.status(200).json(results);
+  console.log(`Returning ${directResults.length} results from direct storage`);
+  res.status(200).json(directResults);
+});
+
+// Add a debug endpoint to check service status
+app.get('/status', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    resultsCount: directResults.length,
+    kafkaEnabled: !!producer,
+    kafkaBrokers: kafkaBrokers
+  });
+});
+
+// Add a test endpoint to add dummy data
+app.post('/test-data', (req, res) => {
+  const testData = {
+    url: "https://example.com/test",
+    resolution: { width: 1920, height: 1080 },
+    actions: [{ action: "click", selector: "button" }],
+    states: [{
+      action: "initial",
+      accessibilityReport: {
+        violations: [
+          { id: "test-violation", impact: "critical", help: "Test violation" }
+        ],
+        passes: [
+          { id: "test-pass", impact: "minor", help: "Test pass" }
+        ],
+        incomplete: []
+      }
+    }]
+  };
+  
+  directResults.push(testData);
+  console.log(`Added test data. Total results: ${directResults.length}`);
+  res.status(200).json({ status: 'success', message: 'Test data added', resultsCount: directResults.length });
 });
 
 const gracefulShutdown = async () => {
-  console.log('Closing Kafka connections...');
+  console.log('Shutting down server...');
   try {
-    await producer.disconnect();
-    await consumer.disconnect();
+    if (producer) {
+      await producer.disconnect();
+      console.log('Kafka producer disconnected');
+    }
+    if (consumer) {
+      await consumer.disconnect();
+      console.log('Kafka consumer disconnected');
+    }
   } catch (e) {
     console.error('Error during graceful shutdown', e);
   }
@@ -189,6 +309,6 @@ process.on('SIGTERM', gracefulShutdown);
 process.on('SIGINT', gracefulShutdown);
 
 app.listen(port, () => {
-  console.log(`Kafka service (producer/consumer) listening on port ${port}`);
+  console.log(`Service listening on port ${port}`);
   console.log(`API documentation available at http://localhost:${port}/api-docs`);
 }); 

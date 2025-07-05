@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import '../utils/config_utils.dart';
 
 class Project {
   final String id;
@@ -41,7 +42,7 @@ class CodeFile {
     required this.content,
     required this.projectId,
     DateTime? lastModified,
-  }) : this.lastModified = lastModified ?? DateTime.now();
+  }) : lastModified = lastModified ?? DateTime.now();
 
   factory CodeFile.fromVersion(
       Map<String, dynamic> metadata, Map<String, dynamic> version) {
@@ -392,7 +393,10 @@ class CodeEditorProvider with ChangeNotifier {
     notifyListeners();
 
     try {
-      final urlString = 'http://localhost:3003/deploy';
+      final apiHost = ConfigUtils.getApiHost();
+      final urlString = 'http://$apiHost:3003/deploy';
+      print('Deploying code to: $urlString');
+
       final url = Uri.parse(urlString);
       final response = await http.post(
         url,
@@ -404,11 +408,14 @@ class CodeEditorProvider with ChangeNotifier {
         final responseData = json.decode(response.body);
         _deploymentUrl = responseData['deploymentUrl'];
         _screenshot = responseData['screenshot'];
+        print('Deployment successful: $_deploymentUrl');
       } else {
         _error = 'Deployment failed: ${response.body}';
+        print('Deployment failed: ${response.statusCode} - ${response.body}');
       }
     } catch (e) {
       _error = 'An error occurred during deployment: $e';
+      print('Deployment error: $e');
     } finally {
       _isDeploying = false;
       notifyListeners();

@@ -41,7 +41,6 @@ dependencies:
   flutter_dotenv: ^5.0.0
   google_fonts: ^6.2.1
   cupertino_icons: ^1.0.6
-  firebase_auth: ^5.1.1
   firebase_core: ^3.1.1
   
   # New code editor
@@ -56,6 +55,8 @@ dependencies:
 
   kafkabr: ^1.1.1
   supabase_flutter: ^2.5.0
+  app_links: ^6.4.0
+  url_strategy: ^0.3.0
 
 dev_dependencies:
   flutter_test:

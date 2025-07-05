@@ -7,7 +7,6 @@ import 'package:markdown/markdown.dart' as markdown;
 import '../models/chat_provider.dart';
 import '../models/code_editor.dart';
 import 'package:flutter_syntax_view/flutter_syntax_view.dart';
-import '../utils/language_utils.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});

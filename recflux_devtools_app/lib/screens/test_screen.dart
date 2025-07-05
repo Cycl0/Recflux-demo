@@ -349,7 +349,7 @@ class ActionCard extends StatelessWidget {
                         helperText: action.scrollType == 'by'
                             ? 'Pixels right'
                             : 'X position',
-                        helperStyle: TextStyle(fontSize: 10),
+                        helperStyle: const TextStyle(fontSize: 10),
                       ),
                     ),
                   ),
@@ -366,7 +366,7 @@ class ActionCard extends StatelessWidget {
                         helperText: action.scrollType == 'by'
                             ? 'Pixels down'
                             : 'Y position',
-                        helperStyle: TextStyle(fontSize: 10),
+                        helperStyle: const TextStyle(fontSize: 10),
                       ),
                     ),
                   ),

@@ -2,8 +2,11 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import '../utils/config_utils.dart';
 
 class DashboardScreen extends StatefulWidget {
+  const DashboardScreen({super.key});
+
   @override
   _DashboardScreenState createState() => _DashboardScreenState();
 }
@@ -17,8 +20,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
+    print('Initializing DashboardScreen');
     _fetchResults();
-    _timer = Timer.periodic(Duration(seconds: 5), (timer) => _fetchResults());
+    _timer =
+        Timer.periodic(const Duration(seconds: 5), (timer) => _fetchResults());
   }
 
   Future<void> _fetchResults() async {
@@ -28,18 +33,37 @@ class _DashboardScreenState extends State<DashboardScreen> {
       _error = null;
     });
     try {
-      final response =
-          await http.get(Uri.parse('http://localhost:3004/results'));
+      final apiHost = ConfigUtils.getApiHost();
+      final port = ConfigUtils.defaultDashboardPort;
+      final url = 'http://$apiHost:$port/results';
+      print('Fetching dashboard results from: $url');
+
+      final response = await http.get(
+        Uri.parse(url),
+        headers: {'Content-Type': 'application/json'},
+      ).timeout(const Duration(seconds: 10));
+
+      print('Dashboard response status code: ${response.statusCode}');
       if (response.statusCode == 200) {
+        final responseBody = response.body;
+        print('Dashboard response body length: ${responseBody.length}');
+        if (responseBody.isEmpty) {
+          print('Warning: Empty response body from dashboard');
+        }
+
         if (mounted) {
+          final decodedResults = jsonDecode(responseBody);
+          print('Decoded results count: ${decodedResults.length}');
           setState(() {
-            _results = jsonDecode(response.body);
+            _results = decodedResults;
           });
         }
       } else {
-        throw Exception('Failed to load results: ${response.statusCode}');
+        throw Exception(
+            'Failed to load results: ${response.statusCode}, body: ${response.body}');
       }
     } catch (e) {
+      print('Error in _fetchResults: $e');
       if (mounted) {
         setState(() {
           _error = 'Error fetching results: $e';
@@ -64,7 +88,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Accessibility Dashboard'),
+        title: const Text('Accessibility Dashboard'),
         elevation: 0,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         titleTextStyle: Theme.of(context)
@@ -73,7 +97,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ?.copyWith(fontWeight: FontWeight.bold),
         actions: [
           IconButton(
-            icon: Icon(Icons.refresh),
+            icon: const Icon(Icons.refresh),
             onPressed: _fetchResults,
             tooltip: 'Refresh',
           ),
@@ -85,7 +109,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildBody() {
     if (_isLoading) {
-      return Center(child: CircularProgressIndicator());
+      return const Center(child: CircularProgressIndicator());
     }
 
     if (_error != null) {
@@ -95,16 +119,16 @@ class _DashboardScreenState extends State<DashboardScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(Icons.error_outline, color: Colors.red, size: 50),
-              SizedBox(height: 16),
+              const Icon(Icons.error_outline, color: Colors.red, size: 50),
+              const SizedBox(height: 16),
               Text(_error!,
                   textAlign: TextAlign.center,
                   style: Theme.of(context).textTheme.titleMedium),
-              SizedBox(height: 20),
+              const SizedBox(height: 20),
               ElevatedButton.icon(
                 onPressed: _fetchResults,
-                icon: Icon(Icons.refresh),
-                label: Text('Retry'),
+                icon: const Icon(Icons.refresh),
+                label: const Text('Retry'),
               )
             ],
           ),
@@ -117,8 +141,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.inbox_outlined, size: 50, color: Colors.grey),
-            SizedBox(height: 16),
+            const Icon(Icons.inbox_outlined, size: 50, color: Colors.grey),
+            const SizedBox(height: 16),
             Text('No test results received yet.',
                 style: Theme.of(context).textTheme.titleMedium),
           ],
@@ -140,7 +164,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
 class TestResultCard extends StatelessWidget {
   final Map<String, dynamic> result;
 
-  const TestResultCard({Key? key, required this.result}) : super(key: key);
+  const TestResultCard({super.key, required this.result});
 
   Color _getImpactColor(String? impact) {
     switch (impact) {
@@ -182,10 +206,10 @@ class TestResultCard extends StatelessWidget {
 
     if (states.isEmpty || states.first is! Map<String, dynamic>) {
       return Card(
-          margin: EdgeInsets.symmetric(vertical: 8.0),
+          margin: const EdgeInsets.symmetric(vertical: 8.0),
           child: ListTile(
               title: Text(url),
-              subtitle: Text('No valid state data available')));
+              subtitle: const Text('No valid state data available')));
     }
 
     final firstState = states.first as Map<String, dynamic>;
@@ -197,7 +221,7 @@ class TestResultCard extends StatelessWidget {
     final incomplete = report['incomplete'] as List<dynamic>? ?? [];
 
     return Card(
-      margin: EdgeInsets.symmetric(vertical: 8.0),
+      margin: const EdgeInsets.symmetric(vertical: 8.0),
       elevation: 2.0,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12.0)),
       clipBehavior: Clip.antiAlias,
@@ -219,7 +243,7 @@ class TestResultCard extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(16.0, 0, 16.0, 12.0),
               child: OutlinedButton.icon(
                 style: OutlinedButton.styleFrom(
-                  padding: EdgeInsets.symmetric(vertical: 12.0),
+                  padding: const EdgeInsets.symmetric(vertical: 12.0),
                 ),
                 onPressed: () {
                   Navigator.of(context).push(MaterialPageRoute(
@@ -228,11 +252,11 @@ class TestResultCard extends StatelessWidget {
                     ),
                   ));
                 },
-                icon: Icon(Icons.image_outlined),
+                icon: const Icon(Icons.image_outlined),
                 label: Text('View Screenshots (${screenshots.length})'),
               ),
             ),
-          Divider(height: 1),
+          const Divider(height: 1),
           _buildViolationsList(context, violations),
         ],
       ),
@@ -259,7 +283,7 @@ class TestResultCard extends StatelessWidget {
     return Column(
       children: [
         Icon(icon, color: color, size: 28),
-        SizedBox(height: 4),
+        const SizedBox(height: 4),
         Text(
           count.toString(),
           style: Theme.of(context)
@@ -267,7 +291,7 @@ class TestResultCard extends StatelessWidget {
               .titleLarge
               ?.copyWith(color: color, fontWeight: FontWeight.bold),
         ),
-        SizedBox(height: 2),
+        const SizedBox(height: 2),
         Text(title, style: Theme.of(context).textTheme.bodySmall),
       ],
     );
@@ -281,8 +305,8 @@ class TestResultCard extends StatelessWidget {
         child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.celebration, color: Colors.green),
-            SizedBox(width: 8),
+            const Icon(Icons.celebration, color: Colors.green),
+            const SizedBox(width: 8),
             Text('No violations found. Great job!',
                 style: TextStyle(color: Colors.green.shade800)),
           ],
@@ -300,10 +324,10 @@ class TestResultCard extends StatelessWidget {
         ),
         ListView.separated(
           shrinkWrap: true,
-          physics: NeverScrollableScrollPhysics(),
+          physics: const NeverScrollableScrollPhysics(),
           itemCount: violations.length,
           separatorBuilder: (context, index) =>
-              Divider(height: 1, indent: 16, endIndent: 16),
+              const Divider(height: 1, indent: 16, endIndent: 16),
           itemBuilder: (context, index) {
             final violation = violation_as_map(violations[index]);
             final help = violation['help']?.toString() ?? 'No details';
@@ -335,8 +359,7 @@ class TestResultCard extends StatelessWidget {
 class ScreenshotViewer extends StatelessWidget {
   final List<String> screenshots;
 
-  const ScreenshotViewer({Key? key, required this.screenshots})
-      : super(key: key);
+  const ScreenshotViewer({super.key, required this.screenshots});
 
   @override
   Widget build(BuildContext context) {
@@ -354,7 +377,7 @@ class ScreenshotViewer extends StatelessWidget {
               final imageBytes = base64Decode(base64String);
               return InteractiveViewer(
                 panEnabled: true,
-                boundaryMargin: EdgeInsets.all(20),
+                boundaryMargin: const EdgeInsets.all(20),
                 minScale: 0.1,
                 maxScale: 5,
                 child: Center(

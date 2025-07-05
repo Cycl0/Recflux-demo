@@ -22,7 +22,7 @@ services:
       KAFKA_BROKER_ID: 1
       KAFKA_ZOOKEEPER_CONNECT: 'zookeeper:2181'
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://192.168.56.10:29092
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
@@ -35,6 +35,9 @@ services:
       - "3002:3002"
     depends_on:
       - kafka-producer-service
+    environment:
+      # Use internal Docker network for communication between services
+      KAFKA_PRODUCER_URL: "http://kafka-producer-service:3004"
 
   kafka-producer-service:
     build:
@@ -43,17 +46,28 @@ services:
       - "3004:3004"
     environment:
       KAFKA_BROKERS: "kafka:9092"
+      # Enable CORS for all origins
+      CORS_ORIGIN: "*"
     depends_on:
       - kafka
+    volumes:
+      # Mount the updated server.js file
+      - ./kafka-producer-service:/app
 
   agentic-structured-service:
     build:
       context: ./agentic-structured-service
     ports:
       - "3001:3001"
+    environment:
+      # Enable CORS for all origins
+      CORS_ORIGIN: "*"
 
   code-deploy-service:
     build:
       context: ./code-deploy-service
     ports:
-      - "3003:3003" 
+      - "3003:3003"
+    environment:
+      # Enable CORS for all origins
+      CORS_ORIGIN: "*" 

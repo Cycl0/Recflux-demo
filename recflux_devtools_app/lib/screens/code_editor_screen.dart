@@ -18,7 +18,7 @@ import '../models/code_editor.dart';
 import '../utils/language_utils.dart';
 
 class CodeEditorScreen extends StatefulWidget {
-  const CodeEditorScreen({Key? key}) : super(key: key);
+  const CodeEditorScreen({super.key});
 
   @override
   _CodeEditorScreenState createState() => _CodeEditorScreenState();
@@ -27,7 +27,7 @@ class CodeEditorScreen extends StatefulWidget {
 class _CodeEditorScreenState extends State<CodeEditorScreen> {
   final Map<String, CodeController> _controllers = {};
   final TextEditingController _newFileNameController = TextEditingController();
-  String _newFileLanguage = 'javascript';
+  final String _newFileLanguage = 'javascript';
   CodeEditorProvider? _codeEditorProvider;
 
   @override
@@ -82,7 +82,9 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
   @override
   void dispose() {
     _codeEditorProvider?.removeListener(_onProviderChange);
-    _controllers.values.forEach((controller) => controller.dispose());
+    for (var controller in _controllers.values) {
+      controller.dispose();
+    }
     _newFileNameController.dispose();
     super.dispose();
   }
@@ -217,8 +219,9 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
               GestureDetector(
                 onLongPress: () {
                   // Clear all controllers to force refresh
-                  _controllers.values
-                      .forEach((controller) => controller.dispose());
+                  for (var controller in _controllers.values) {
+                    controller.dispose();
+                  }
                   _controllers.clear();
                   codeEditor.refreshAllProjects();
                   ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
@@ -228,8 +231,9 @@ class _CodeEditorScreenState extends State<CodeEditorScreen> {
                   icon: const Icon(Icons.refresh),
                   onPressed: () {
                     // Clear all controllers to force refresh
-                    _controllers.values
-                        .forEach((controller) => controller.dispose());
+                    for (var controller in _controllers.values) {
+                      controller.dispose();
+                    }
                     _controllers.clear();
                     codeEditor.refreshCurrentProject();
                     ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
