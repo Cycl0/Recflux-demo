@@ -11,4 +11,5 @@ resources:
   - nextjs-app.yaml
   - configmap.yaml
   - api-ingress.yaml
-  - persistent-volume.yaml 
+  - persistent-volume.yaml
+  - app-secrets.yaml 

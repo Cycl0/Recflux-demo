@@ -38,6 +38,18 @@ services:
     environment:
       # Use internal Docker network for communication between services
       KAFKA_PRODUCER_URL: "http://kafka-producer-service:3004"
+      THUMBNAIL_API_KEY: ""
+      OPENROUTER_API_KEY: ""
+      OPENAI_API_KEY: ""
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ""
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID: ""
+      NEXT_PUBLIC_SUPABASE_URL: ""
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+      STRIPE_SECRET_KEY: ""
+      STRIPE_WEBHOOK_SECRET: ""
+      SUPABASE_SERVICE_ROLE_KEY: ""
+      KAFKA_BROKERS: "kafka:9092"
+      VERCEL_TOKEN: ""
 
   kafka-producer-service:
     build:
@@ -48,6 +60,17 @@ services:
       KAFKA_BROKERS: "kafka:9092"
       # Enable CORS for all origins
       CORS_ORIGIN: "*"
+      THUMBNAIL_API_KEY: ""
+      OPENROUTER_API_KEY: ""
+      OPENAI_API_KEY: ""
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ""
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID: ""
+      NEXT_PUBLIC_SUPABASE_URL: ""
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+      STRIPE_SECRET_KEY: ""
+      STRIPE_WEBHOOK_SECRET: ""
+      SUPABASE_SERVICE_ROLE_KEY: ""
+      VERCEL_TOKEN: ""
     depends_on:
       - kafka
     volumes:
@@ -62,6 +85,18 @@ services:
     environment:
       # Enable CORS for all origins
       CORS_ORIGIN: "*"
+      THUMBNAIL_API_KEY: ""
+      OPENROUTER_API_KEY: ""
+      OPENAI_API_KEY: ""
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ""
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID: ""
+      NEXT_PUBLIC_SUPABASE_URL: ""
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+      STRIPE_SECRET_KEY: ""
+      STRIPE_WEBHOOK_SECRET: ""
+      SUPABASE_SERVICE_ROLE_KEY: ""
+      KAFKA_BROKERS: "kafka:9092"
+      VERCEL_TOKEN: ""
 
   code-deploy-service:
     build:
@@ -71,3 +106,15 @@ services:
     environment:
       # Enable CORS for all origins
       CORS_ORIGIN: "*" 
+      THUMBNAIL_API_KEY: ""
+      OPENROUTER_API_KEY: ""
+      OPENAI_API_KEY: ""
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID: ""
+      NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID: ""
+      NEXT_PUBLIC_SUPABASE_URL: ""
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: ""
+      STRIPE_SECRET_KEY: ""
+      STRIPE_WEBHOOK_SECRET: ""
+      SUPABASE_SERVICE_ROLE_KEY: ""
+      KAFKA_BROKERS: "kafka:9092"
+      VERCEL_TOKEN: "" 

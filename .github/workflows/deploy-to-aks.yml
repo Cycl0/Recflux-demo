@@ -85,6 +85,21 @@ jobs:
           tags: ${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/nextjs-app:${{ env.IMAGE_TAG }}
           cache-from: type=registry,ref=${{ env.AZURE_CONTAINER_REGISTRY }}.azurecr.io/nextjs-app:latest
           cache-to: type=inline
+          build-args: |
+            NEXT_PUBLIC_SUPABASE_URL=${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}
+            NEXT_PUBLIC_SUPABASE_ANON_KEY=${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}
+            STRIPE_SECRET_KEY=${{ secrets.STRIPE_SECRET_KEY }}
+            STRIPE_PUBLISHABLE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }}
+            NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY=${{ secrets.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY }}
+            STRIPE_WEBHOOK_SECRET=${{ secrets.STRIPE_WEBHOOK_SECRET }}
+            THUMBNAIL_API_KEY=${{ secrets.THUMBNAIL_API_KEY }}
+            OPENROUTER_API_KEY=${{ secrets.OPENROUTER_API_KEY }}
+            OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+            NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}
+            NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID=${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID }}
+            SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+            KAFKA_BROKERS=${{ secrets.KAFKA_BROKERS }}
+            VERCEL_TOKEN=${{ secrets.VERCEL_TOKEN }}
 
       # Set up kubectl
       - name: Set up kubeconfig
