@@ -16,8 +16,11 @@ import 'models/test_runner.dart';
 import 'models/code_editor.dart';
 import 'models/chat_provider.dart';
 import 'models/auth_service.dart';
+import 'models/microservice_provider.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'utils/config_utils.dart';
+import 'services/service_manager.dart';
+import 'config/service_config.dart';
 
 Future<void> main() async {
   // Ensure Flutter is initialized
@@ -63,6 +66,21 @@ Future<void> main() async {
     "For Google Sign-In on Android, make sure to add 'com.example.recflux_test://login-callback' as an authorized redirect URI in Google Cloud Console",
   );
 
+  // Initialize microservices
+  ServiceManager().initialize(
+    agenticServiceUrl: ServiceConfig.finalAgenticServiceUrl,
+    codeDeployServiceUrl: ServiceConfig.finalCodeDeployServiceUrl,
+    kafkaServiceUrl: ServiceConfig.finalKafkaServiceUrl,
+    accessibilityServiceUrl: ServiceConfig.finalAccessibilityServiceUrl,
+  );
+
+  print('Microservices initialized:');
+  print('- Agentic Service: ${ServiceConfig.finalAgenticServiceUrl}');
+  print('- Code Deploy Service: ${ServiceConfig.finalCodeDeployServiceUrl}');
+  print('- Kafka Service: ${ServiceConfig.finalKafkaServiceUrl}');
+  print(
+      '- Accessibility Service: ${ServiceConfig.finalAccessibilityServiceUrl}');
+
   runApp(
     MultiProvider(
       providers: [
@@ -70,6 +88,7 @@ Future<void> main() async {
         ChangeNotifierProvider(create: (context) => CodeEditorProvider()),
         ChangeNotifierProvider(create: (context) => AuthService()),
         ChangeNotifierProvider(create: (context) => ChatProvider()),
+        ChangeNotifierProvider(create: (context) => MicroserviceProvider()),
       ],
       child: const ProviderConnector(),
     ),

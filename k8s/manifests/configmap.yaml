@@ -7,7 +7,7 @@ data:
   AGENTIC_STRUCTURED_URL: "http://agentic-structured-service:3001/api/agentic"
   CODE_DEPLOY_URL: "http://code-deploy-service:3003/deploy"
   KAFKA_PRODUCER_URL: "http://kafka-producer-service:3004"
-  ACCESSIBILITY_SERVICE_URL: "http://recflux-tools-accessibility-service:3002"
+  ACCESSIBILITY_SERVICE_URL: "http://recflux-tools-accessibility-service:3002" 
   # Image tag configurations
   AGENTIC_STRUCTURED_TAG: "20250706023640-4216695c"
   KAFKA_PRODUCER_TAG: "20250706023640-4216695c"

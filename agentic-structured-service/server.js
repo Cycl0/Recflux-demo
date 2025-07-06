@@ -32,10 +32,20 @@ const swaggerOptions = {
 const specs = swaggerJsdoc(swaggerOptions);
 
 app.use(express.json({ limit: '50mb' }));
-app.use(cors());
+app.use(cors({
+  origin: '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true
+}));
 
 // Serve Swagger UI
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'healthy', service: 'agentic-structured-service' });
+});
 
 // Verify API keys exist on startup
 if (!process.env.OPENROUTER_API_KEY) {
