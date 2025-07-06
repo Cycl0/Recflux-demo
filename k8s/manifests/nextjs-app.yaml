@@ -12,6 +12,8 @@ spec:
       labels:
         app: nextjs-app
     spec:
+      imagePullSecrets:
+      - name: acr-auth
       containers:
       - name: nextjs-app
         image: recfluxdemoacr.azurecr.io/nextjs-app:latest

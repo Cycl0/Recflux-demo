@@ -12,6 +12,8 @@ spec:
       labels:
         app: recflux-tools-accessibility-service
     spec:
+      imagePullSecrets:
+      - name: acr-auth
       containers:
       - name: recflux-tools-accessibility-service
         image: recfluxdemoacr.azurecr.io/recflux-tools-accessibility-service:latest

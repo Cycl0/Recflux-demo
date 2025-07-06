@@ -12,6 +12,8 @@ spec:
       labels:
         app: agentic-structured-service
     spec:
+      imagePullSecrets:
+      - name: acr-auth
       containers:
       - name: agentic-structured-service
         image: recfluxdemoacr.azurecr.io/agentic-structured-service:latest

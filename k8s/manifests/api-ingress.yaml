@@ -7,7 +7,7 @@ metadata:
     appgw.ingress.kubernetes.io/ssl-redirect: "true"
 spec:
   rules:
-  - host: ${API_HOSTNAME}
+  - host: api.4.156.13.98.nip.io
     http:
       paths:
       - path: /accessibility

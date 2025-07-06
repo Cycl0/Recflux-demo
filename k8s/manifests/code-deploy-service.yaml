@@ -12,6 +12,8 @@ spec:
       labels:
         app: code-deploy-service
     spec:
+      imagePullSecrets:
+      - name: acr-auth
       containers:
       - name: code-deploy-service
         image: recfluxdemoacr.azurecr.io/code-deploy-service:latest

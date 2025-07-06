@@ -12,6 +12,8 @@ spec:
       labels:
         app: kafka-producer-service
     spec:
+      imagePullSecrets:
+      - name: acr-auth
       containers:
       - name: kafka-producer-service
         image: recfluxdemoacr.azurecr.io/kafka-producer-service:latest
