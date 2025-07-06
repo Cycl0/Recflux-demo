@@ -101,6 +101,15 @@ jobs:
             KAFKA_BROKERS=${{ secrets.KAFKA_BROKERS }}
             VERCEL_TOKEN=${{ secrets.VERCEL_TOKEN }}
 
+      - name: Debug secrets
+        run: |
+          echo "Supabase URL length: $(echo -n "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" | wc -c)"
+          echo "Service Role Key length: $(echo -n "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" | wc -c)"
+          echo "Anon Key length: $(echo -n "${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" | wc -c)"
+          echo "OpenAI Key length: $(echo -n "${{ secrets.OPENAI_API_KEY }}" | wc -c)"
+          echo "Stripe Secret Key length: $(echo -n "${{ secrets.STRIPE_SECRET_KEY }}" | wc -c)"
+          echo "Stripe Secret Key starts with: $(echo -n "${{ secrets.STRIPE_SECRET_KEY }}" | cut -c1-7)"
+
       # Set up kubectl
       - name: Set up kubeconfig
         uses: azure/aks-set-context@v3
@@ -111,6 +120,11 @@ jobs:
       # Create Kubernetes secrets
       - name: Create Kubernetes secrets
         run: |
+          # Debug what we're about to write
+          echo "About to create secret with:"
+          echo "STRIPE_SECRET_KEY length: $(echo -n "${{ secrets.STRIPE_SECRET_KEY }}" | wc -c)"
+          echo "STRIPE_SECRET_KEY starts with: $(echo -n "${{ secrets.STRIPE_SECRET_KEY }}" | cut -c1-7)"
+          
           # Create a temporary file with the secret data
           cat <<EOF > secret-data.yaml
           apiVersion: v1
@@ -135,6 +149,10 @@ jobs:
           
           # Apply the secret
           kubectl apply -f secret-data.yaml
+          
+          # Verify what was created
+          echo "Secret created. Verifying STRIPE_SECRET_KEY:"
+          kubectl get secret app-secrets -o jsonpath='{.data.STRIPE_SECRET_KEY}' | base64 -d | wc -c
           
           # Clean up
           rm secret-data.yaml
