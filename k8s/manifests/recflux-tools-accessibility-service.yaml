@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: recflux-tools-accessibility-service
-        image: ${CONTAINER_REGISTRY}/recflux-tools-accessibility-service:${IMAGE_TAG}
+        image: recfluxdemoacr.azurecr.io/recflux-tools-accessibility-service:latest
         ports:
         - containerPort: 3002
         env:

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: nextjs-app
-        image: nextjs-app:latest
+        image: recfluxdemoacr.azurecr.io/nextjs-app:latest
         ports:
         - containerPort: 3000
         env:

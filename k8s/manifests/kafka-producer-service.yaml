@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: kafka-producer-service
-        image: kafka-producer-service:latest
+        image: recfluxdemoacr.azurecr.io/kafka-producer-service:latest
         ports:
         - containerPort: 3004
         env:

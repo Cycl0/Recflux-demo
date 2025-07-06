@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: agentic-structured-service
-        image: ${CONTAINER_REGISTRY}/agentic-structured-service:${IMAGE_TAG}
+        image: recfluxdemoacr.azurecr.io/agentic-structured-service:latest
         ports:
         - containerPort: 3001
         env:

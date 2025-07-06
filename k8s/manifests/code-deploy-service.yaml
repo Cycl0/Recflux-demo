@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: code-deploy-service
-        image: code-deploy-service:latest
+        image: recfluxdemoacr.azurecr.io/code-deploy-service:latest
         ports:
         - containerPort: 3003
         env:
