@@ -108,6 +108,37 @@ jobs:
           resource-group: ${{ env.RESOURCE_GROUP }}
           cluster-name: ${{ env.CLUSTER_NAME }}
 
+      # Create Kubernetes secrets
+      - name: Create Kubernetes secrets
+        run: |
+          # Create a temporary file with the secret data
+          cat <<EOF > secret-data.yaml
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: app-secrets
+          type: Opaque
+          stringData:
+            KAFKA_BROKERS: "${{ secrets.KAFKA_BROKERS }}"
+            NEXT_PUBLIC_GOOGLE_CLIENT_ID: "${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}"
+            NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID: "${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID }}"
+            NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}"
+            NEXT_PUBLIC_SUPABASE_URL: "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}"
+            OPENAI_API_KEY: "${{ secrets.OPENAI_API_KEY }}"
+            OPENROUTER_API_KEY: "${{ secrets.OPENROUTER_API_KEY }}"
+            STRIPE_SECRET_KEY: "${{ secrets.STRIPE_SECRET_KEY }}"
+            STRIPE_WEBHOOK_SECRET: "${{ secrets.STRIPE_WEBHOOK_SECRET }}"
+            SUPABASE_SERVICE_ROLE_KEY: "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
+            THUMBNAIL_API_KEY: "${{ secrets.THUMBNAIL_API_KEY }}"
+            VERCEL_TOKEN: "${{ secrets.VERCEL_TOKEN }}"
+          EOF
+          
+          # Apply the secret
+          kubectl apply -f secret-data.yaml
+          
+          # Clean up
+          rm secret-data.yaml
+
       # Apply Kubernetes manifests
       - name: Deploy to AKS
         run: |
