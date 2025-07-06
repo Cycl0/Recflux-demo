@@ -108,13 +108,6 @@ jobs:
           resource-group: ${{ env.RESOURCE_GROUP }}
           cluster-name: ${{ env.CLUSTER_NAME }}
 
-      - name: Debug secrets
-        run: |
-          echo "Supabase URL length: $(echo -n "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" | wc -c)"
-          echo "Service Role Key length: $(echo -n "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" | wc -c)"
-          echo "Anon Key length: $(echo -n "${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" | wc -c)"
-          echo "OpenAI Key length: $(echo -n "${{ secrets.OPENAI_API_KEY }}" | wc -c)"
-
       # Create Kubernetes secrets
       - name: Create Kubernetes secrets
         run: |
@@ -145,6 +138,14 @@ jobs:
           
           # Clean up
           rm secret-data.yaml
+
+      - name: Restart deployments to pick up new secrets
+        run: |
+          kubectl rollout restart deployment agentic-structured-service
+          kubectl rollout restart deployment nextjs-app
+          kubectl rollout restart deployment kafka-producer-service
+          kubectl rollout restart deployment code-deploy-service
+          kubectl rollout restart deployment recflux-tools-accessibility-service
 
       # Apply Kubernetes manifests
       - name: Deploy to AKS
