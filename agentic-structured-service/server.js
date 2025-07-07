@@ -47,6 +47,19 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'healthy', service: 'agentic-structured-service' });
 });
 
+// Root path handler - forwards to /api/agentic
+app.post('/', (req, res) => {
+  console.log('[AGENTIC-STRUCTURED] Root path hit, forwarding to /api/agentic');
+  req.url = '/api/agentic';
+  app._router.handle(req, res);
+});
+
+// Health check at /api/agentic/health
+app.get('/api/agentic/health', (req, res) => {
+  console.log('[AGENTIC-STRUCTURED] Health check at /api/agentic/health');
+  res.status(200).json({ status: 'healthy', service: 'agentic-structured-service' });
+});
+
 // Verify API keys exist on startup
 if (!process.env.OPENROUTER_API_KEY) {
   console.error('[AGENTIC-STRUCTURED] FATAL: OPENROUTER_API_KEY is not defined.');
