@@ -44,7 +44,8 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'healthy', service: 'agentic-structured-service' });
+  console.log('[AGENTIC-STRUCTURED] Health check at /health');
+  res.status(200).json({ status: 'healthy', service: 'agentic-structured-service', timestamp: new Date().toISOString() });
 });
 
 // Root path handler - forwards to /api/agentic

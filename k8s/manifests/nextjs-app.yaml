@@ -128,6 +128,16 @@ metadata:
   name: nextjs-app-ingress
   annotations:
     kubernetes.io/ingress.class: azure/application-gateway
+    appgw.ingress.kubernetes.io/backend-path-prefix: "/"
+    appgw.ingress.kubernetes.io/backend-protocol: "http"
+    appgw.ingress.kubernetes.io/ssl-redirect: "false"
+    appgw.ingress.kubernetes.io/connection-draining: "true"
+    appgw.ingress.kubernetes.io/connection-draining-timeout: "30"
+    appgw.ingress.kubernetes.io/request-timeout: "60"
+    appgw.ingress.kubernetes.io/backend-health-probe-path: "/api/health"
+    appgw.ingress.kubernetes.io/backend-health-probe-status: "200"
+    appgw.ingress.kubernetes.io/backend-health-probe-interval: "30"
+    appgw.ingress.kubernetes.io/backend-health-probe-timeout: "20"
 spec:
   rules:
   - host: app.4.156.13.98.nip.io

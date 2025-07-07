@@ -42,6 +42,17 @@ app.use(express.json({ limit: '500mb' }));
 // Serve Swagger UI
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  console.log('[KAFKA-PRODUCER-SERVICE] Health check at /health');
+  res.status(200).json({ 
+    status: 'healthy', 
+    service: 'kafka-producer-service', 
+    timestamp: new Date().toISOString(),
+    kafka: producer ? 'connected' : 'disconnected'
+  });
+});
+
 // Use environment variable for Kafka brokers or default to kafka:9092 (Docker service name)
 const kafkaBrokers = process.env.KAFKA_BROKERS ? process.env.KAFKA_BROKERS.split(',') : ['kafka:9092'];
 console.log(`Using Kafka brokers: ${kafkaBrokers.join(', ')}`);

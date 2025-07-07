@@ -36,6 +36,12 @@ app.use(express.json());
 // Serve Swagger UI
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  console.log('[ACCESSIBILITY-SERVICE] Health check at /health');
+  res.status(200).json({ status: 'healthy', service: 'recflux-tools-accessibility-service', timestamp: new Date().toISOString() });
+});
+
 /**
  * Analyzes the current page state with Axe and captures screenshots.
  * Can capture the full page by scrolling or just the current viewport.

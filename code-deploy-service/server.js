@@ -37,6 +37,12 @@ app.use(express.json({ limit: '50mb' })); // Increase limit for potentially larg
 // Serve Swagger UI
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 
+// Health check endpoint
+app.get('/health', (req, res) => {
+  console.log('[CODE-DEPLOY-SERVICE] Health check at /health');
+  res.status(200).json({ status: 'healthy', service: 'code-deploy-service', timestamp: new Date().toISOString() });
+});
+
 /**
  * @swagger
  * /deploy:
