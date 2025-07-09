@@ -63,6 +63,7 @@
     "react-textarea-autosize": "^8.5.3",
     "rehype-prism-plus": "^2.0.1",
     "remark-gfm": "^4.0.1",
+    "sharp": "^0.34.2",
     "stripe": "^18.2.1",
     "stylis": "^4.3.1",
     "stylis-plugin-rtl": "^2.1.1",
