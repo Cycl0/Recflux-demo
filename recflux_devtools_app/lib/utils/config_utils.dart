@@ -16,8 +16,12 @@ class ConfigUtils {
   /// Default port for the dashboard service
   static const int defaultDashboardPort = 3004;
 
+  /// Load balancer IP address for production
+  static const String loadBalancerIpAddress = "4.236.226.138";
+
   /// VM IP address for development
-  static const String vmIpAddress = "192.168.56.10";
+  static const String vmIpAddress =
+      "4.236.226.138"; // Updated from 192.168.56.10
 
   /// Get the appropriate host for API calls based on platform
   static String getApiHost() {
@@ -25,15 +29,15 @@ class ConfigUtils {
       print('Running on Web platform, using localhost');
       return 'localhost';
     } else if (Platform.isAndroid) {
-      // For Android emulator, use 10.0.2.2 which maps to host's localhost
-      // For physical devices connecting to VM, use the VM's IP address
-      final androidHost = dotenv.env['API_HOST_ANDROID'] ?? vmIpAddress;
+      // For Android devices, use the load balancer IP
+      final androidHost =
+          dotenv.env['API_HOST_ANDROID'] ?? loadBalancerIpAddress;
       print('Running on Android platform, using API host: $androidHost');
       return androidHost;
     } else if (Platform.isIOS) {
       // For iOS simulator, use localhost
-      // For physical devices, use the IP address from environment or default to localhost
-      final iosHost = dotenv.env['API_HOST_IOS'] ?? 'localhost';
+      // For physical devices, use the IP address from environment or default to load balancer
+      final iosHost = dotenv.env['API_HOST_IOS'] ?? loadBalancerIpAddress;
       print('Running on iOS platform, using API host: $iosHost');
       return iosHost;
     } else {

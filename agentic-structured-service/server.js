@@ -141,7 +141,7 @@ const creditCheckMiddleware = async (req, res, next) => {
         const { data: user, error: userError } = await supabase
             .from('users')
             .select('id, credits, plan')
-            .eq('email', userEmail)
+            .ilike('email', userEmail)
             .single();
 
         if (userError) {

@@ -10,7 +10,8 @@ class ApiClient {
   ApiClient({
     required this.baseUrl,
     Map<String, String>? headers,
-    this.defaultTimeout = const Duration(seconds: 30),
+    this.defaultTimeout =
+        const Duration(seconds: 60), // Increased from 30 to 60 seconds
   }) : defaultHeaders = {
           'Content-Type': 'application/json',
           ...?headers,
@@ -21,11 +22,21 @@ class ApiClient {
     Map<String, String>? headers,
     Duration? timeout,
   }) async {
-    final response = await http.get(
-      Uri.parse('$baseUrl$endpoint'),
-      headers: {...defaultHeaders, ...?headers},
-    ).timeout(timeout ?? defaultTimeout);
-    return response;
+    try {
+      print('GET Request to: ${baseUrl}${endpoint}');
+      final response = await http.get(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: {...defaultHeaders, ...?headers},
+      ).timeout(timeout ?? defaultTimeout);
+      return response;
+    } on TimeoutException catch (e) {
+      print('GET Request timeout: $e');
+      throw TimeoutException('Connection timeout for GET $baseUrl$endpoint',
+          timeout ?? defaultTimeout);
+    } catch (e) {
+      print('GET Request error: $e');
+      rethrow;
+    }
   }
 
   Future<http.Response> post(
@@ -34,14 +45,28 @@ class ApiClient {
     Map<String, String>? headers,
     Duration? timeout,
   }) async {
-    final response = await http
-        .post(
-          Uri.parse('$baseUrl$endpoint'),
-          headers: {...defaultHeaders, ...?headers},
-          body: body != null ? jsonEncode(body) : null,
-        )
-        .timeout(timeout ?? defaultTimeout);
-    return response;
+    try {
+      print('POST Request to: ${baseUrl}${endpoint}');
+      if (body != null) {
+        print('Request body length: ${jsonEncode(body).length} characters');
+      }
+
+      final response = await http
+          .post(
+            Uri.parse('$baseUrl$endpoint'),
+            headers: {...defaultHeaders, ...?headers},
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(timeout ?? defaultTimeout);
+      return response;
+    } on TimeoutException catch (e) {
+      print('POST Request timeout: $e');
+      throw TimeoutException('Connection timeout for POST $baseUrl$endpoint',
+          timeout ?? defaultTimeout);
+    } catch (e) {
+      print('POST Request error: $e');
+      rethrow;
+    }
   }
 
   Future<http.Response> put(
@@ -50,14 +75,24 @@ class ApiClient {
     Map<String, String>? headers,
     Duration? timeout,
   }) async {
-    final response = await http
-        .put(
-          Uri.parse('$baseUrl$endpoint'),
-          headers: {...defaultHeaders, ...?headers},
-          body: body != null ? jsonEncode(body) : null,
-        )
-        .timeout(timeout ?? defaultTimeout);
-    return response;
+    try {
+      print('PUT Request to: ${baseUrl}${endpoint}');
+      final response = await http
+          .put(
+            Uri.parse('$baseUrl$endpoint'),
+            headers: {...defaultHeaders, ...?headers},
+            body: body != null ? jsonEncode(body) : null,
+          )
+          .timeout(timeout ?? defaultTimeout);
+      return response;
+    } on TimeoutException catch (e) {
+      print('PUT Request timeout: $e');
+      throw TimeoutException('Connection timeout for PUT $baseUrl$endpoint',
+          timeout ?? defaultTimeout);
+    } catch (e) {
+      print('PUT Request error: $e');
+      rethrow;
+    }
   }
 
   Future<http.Response> delete(
@@ -65,10 +100,20 @@ class ApiClient {
     Map<String, String>? headers,
     Duration? timeout,
   }) async {
-    final response = await http.delete(
-      Uri.parse('$baseUrl$endpoint'),
-      headers: {...defaultHeaders, ...?headers},
-    ).timeout(timeout ?? defaultTimeout);
-    return response;
+    try {
+      print('DELETE Request to: ${baseUrl}${endpoint}');
+      final response = await http.delete(
+        Uri.parse('$baseUrl$endpoint'),
+        headers: {...defaultHeaders, ...?headers},
+      ).timeout(timeout ?? defaultTimeout);
+      return response;
+    } on TimeoutException catch (e) {
+      print('DELETE Request timeout: $e');
+      throw TimeoutException('Connection timeout for DELETE $baseUrl$endpoint',
+          timeout ?? defaultTimeout);
+    } catch (e) {
+      print('DELETE Request error: $e');
+      rethrow;
+    }
   }
 }

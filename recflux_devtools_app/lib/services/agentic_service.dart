@@ -31,7 +31,13 @@ class AgenticService {
           'Agentic Service - Sending request to: ${_client.baseUrl}/api/agentic');
       print('Agentic Service - Request body: ${jsonEncode(requestBody)}');
 
-      final response = await _client.post('/api/agentic', body: requestBody);
+      // Use a longer timeout for AI operations
+      final timeout = Duration(seconds: 600);
+      final response = await _client.post(
+        '/api/agentic',
+        body: requestBody,
+        timeout: timeout,
+      );
 
       print('Agentic Service - Response status: ${response.statusCode}');
       print('Agentic Service - Response headers: ${response.headers}');
@@ -39,16 +45,16 @@ class AgenticService {
       if (response.statusCode == 200) {
         // The service returns streaming text, so we need to parse it
         final responseText = response.body;
-        print('Agentic Service - Response text: $responseText');
+        print('Agentic Service - Response text length: ${responseText.length}');
 
         // Try to parse as JSON first
         try {
           final responseData = jsonDecode(responseText);
-          print('Agentic Service - Parsed JSON response: $responseData');
+          print('Agentic Service - Parsed JSON response successfully');
           return responseData;
         } catch (e) {
           // If it's not JSON, return as explanation
-          print('Agentic Service - Response is not JSON, treating as text');
+          print('Agentic Service - Response is not JSON, treating as text: $e');
           return {
             'explanation': responseText,
           };
@@ -60,23 +66,29 @@ class AgenticService {
       }
     } catch (e) {
       print('Agentic Service - Exception: $e');
-      throw Exception('Error communicating with agentic service: $e');
+      rethrow; // Rethrow to let the UI handle it appropriately
     }
   }
 
   /// Get user credits
   Future<Map<String, dynamic>> getUserCredits(String userEmail) async {
     try {
+      print('Agentic Service - Getting credits for user: $userEmail');
       final response =
           await _client.get('/api/agentic/credits?email=$userEmail');
 
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        final data = jsonDecode(response.body);
+        print('Agentic Service - Got credits: $data');
+        return data;
       } else {
+        print(
+            'Agentic Service - Failed to get credits: ${response.statusCode} - ${response.body}');
         throw Exception('Failed to get credits: ${response.statusCode}');
       }
     } catch (e) {
-      throw Exception('Error getting user credits: $e');
+      print('Agentic Service - Error getting user credits: $e');
+      rethrow;
     }
   }
 }

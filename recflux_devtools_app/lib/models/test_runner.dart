@@ -183,8 +183,8 @@ class TestRunner with ChangeNotifier {
         headers: {'Content-Type': 'application/json'},
         body: requestBody,
       )
-          .timeout(const Duration(seconds: 30), onTimeout: () {
-        throw TimeoutException('Request timed out after 30 seconds');
+          .timeout(const Duration(seconds: 600), onTimeout: () {
+        throw TimeoutException('Request timed out after 600 seconds');
       });
 
       print('Response status code: ${response.statusCode}');

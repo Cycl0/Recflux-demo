@@ -6,14 +6,10 @@ class ServiceConfig {
   static const String devAccessibilityServiceUrl = 'http://localhost:3004';
 
   // Production URLs
-  static const String prodAgenticServiceUrl =
-      'http://api.4.236.226.138.nip.io/agentic';
-  static const String prodCodeDeployServiceUrl =
-      'http://api.4.236.226.138.nip.io/code-deploy';
-  static const String prodKafkaServiceUrl =
-      'http://api.4.236.226.138.nip.io/kafka';
-  static const String prodAccessibilityServiceUrl =
-      'http://api.4.236.226.138.nip.io/accessibility';
+  static const String prodAgenticServiceUrl = 'http://4.236.226.138:3001';
+  static const String prodCodeDeployServiceUrl = 'http://4.236.226.138:3002';
+  static const String prodKafkaServiceUrl = 'http://4.236.226.138:3004';
+  static const String prodAccessibilityServiceUrl = 'http://4.236.226.138:3003';
 
   // Environment detection
   static bool get isDevelopment =>
