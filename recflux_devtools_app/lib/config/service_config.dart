@@ -7,13 +7,13 @@ class ServiceConfig {
 
   // Production URLs
   static const String prodAgenticServiceUrl =
-      'http://api.4.156.13.98.nip.io/agentic';
+      'http://api.4.236.226.138.nip.io/agentic';
   static const String prodCodeDeployServiceUrl =
-      'http://api.4.156.13.98.nip.io/code-deploy';
+      'http://api.4.236.226.138.nip.io/code-deploy';
   static const String prodKafkaServiceUrl =
-      'http://api.4.156.13.98.nip.io/kafka';
+      'http://api.4.236.226.138.nip.io/kafka';
   static const String prodAccessibilityServiceUrl =
-      'http://api.4.156.13.98.nip.io/accessibility';
+      'http://api.4.236.226.138.nip.io/accessibility';
 
   // Environment detection
   static bool get isDevelopment =>

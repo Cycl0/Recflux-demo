@@ -120,13 +120,13 @@ app.post('/deploy', async (req, res) => {
   try {
     const { execa } = await import('execa');
 
-    // 1. Clean up and create a temporary directory for the deployment
+    // Clean up and create a temporary directory for the deployment
     await fs.emptyDir(tempDir);
     
-    // 2. Copy the React template to the temporary directory
+    // Copy the React template to the temporary directory
     await fs.copy(templateDir, tempDir);
 
-    // 3. Process the incoming React code
+    // Process the incoming React code
     // Ensure React is imported for CSSProperties assertion
     const imports = "import React, { useState, useEffect, useReducer, useRef, useCallback, useMemo, useContext, Component } from 'react';\n\n";
     let processedCode = reactCode;
@@ -153,15 +153,15 @@ app.post('/deploy', async (req, res) => {
 
     const finalCode = imports + processedCode + exportStatement;
 
-    // 4. Overwrite the App.tsx in the template with the processed code
+    // Overwrite the App.tsx in the template with the processed code
     const appFilePath = path.join(tempDir, 'src', 'App.jsx');
     await fs.writeFile(appFilePath, finalCode);
 
-    // 5. Install dependencies in the temporary directory
+    // Install dependencies in the temporary directory
     console.log('Installing dependencies in temp directory...');
     await execa('npm', ['install'], { cwd: tempDir });
 
-    // 6. Run the Vercel deployment command
+    // Run the Vercel deployment command
     console.log('Starting Vercel deployment (public)...');
     const { stdout } = await execa(
       'vercel',
@@ -175,12 +175,12 @@ app.post('/deploy', async (req, res) => {
 
     console.log('Vercel deployment command output:', stdout);
 
-    // 7. The stdout of the Vercel CLI command is the deployment URL
+    // The stdout of the Vercel CLI command is the deployment URL
     const deploymentUrl = stdout;
     
     console.log(`Deployment successful! URL: ${deploymentUrl}`);
 
-    // 7. Take a screenshot of the deployed site
+    // Take a screenshot of the deployed site
     console.log('Taking screenshot...');
     const browser = await puppeteer.launch({
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
