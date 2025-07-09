@@ -164,6 +164,7 @@ jobs:
           kubectl rollout restart deployment kafka-producer-service
           kubectl rollout restart deployment code-deploy-service
           kubectl rollout restart deployment recflux-tools-accessibility-service
+          kubectl rollout restart deployment lb-proxy
 
       # Apply Kubernetes manifests
       - name: Deploy to AKS
@@ -182,4 +183,8 @@ jobs:
         run: |
           kubectl get pods
           kubectl get services
-          kubectl get ingress 
+          kubectl get ingress
+          echo "Checking load balancer service..."
+          kubectl get service unified-services-lb
+          echo "Checking lb-proxy deployment..."
+          kubectl get deployment lb-proxy 
