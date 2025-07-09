@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { type } from 'os';
 
 // The URL of our new, external microservice.
 // It's recommended to store this in an environment variable.
@@ -16,27 +17,27 @@ export async function POST(req: NextRequest) {
     // Parse the request body
     const body = await req.json();
     
-    // Check for user email in the request body
-    const userEmail = body.userEmail;
+    // Check for user ID in the request body
+    const userId = body.userId;
     
-    if (!userEmail) {
-      console.error('[BFF] No user email found in request');
+    if (!userId) {
+      console.error('[BFF] No user ID found in request');
       return new NextResponse(JSON.stringify({ 
         error: 'Authentication required',
-        explanation: 'User email is required. Please make sure you are logged in.'
+        explanation: 'User ID is required. Please make sure you are logged in.'
       }), { 
         status: 401,
         headers: { 'Content-Type': 'application/json' }
       });
     }
     
-    console.log('[BFF] Using client-provided email:', userEmail);
+    console.log('[BFF] Forwarding request for user ID:', userId);
 
-    // Forward request to microservice, including the user's email
+    // Forward request to microservice
     const microserviceResponse = await fetch(MICROSERVICE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body), // The email is already included in the body
+      body: JSON.stringify(body), // The body now contains the userId
     });
 
     if (!microserviceResponse.ok) {

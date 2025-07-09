@@ -387,16 +387,39 @@ const MessageComponent = React.memo(({ message, theme, setFilesCurrentHandler, t
 });
 
 function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicUserId }: ChatProps & { theme: 'dark' | 'light' }) {
+  const [selectedAction, setSelectedAction] = useState(chatActionOptions[0]);
+  const [showDiff, setShowDiff] = useState(false);
+  const { setFilesCurrentHandler, throttleEditorOpen, selectedFile, editorSelection, cursorPosition, applyAgenticChanges } = useContext(EditorContext);
+  
+  const { messages, setMessages, handleInputChange, handleSubmit: originalHandleSubmit } = useChat({
+    api: "/api/agentic-structured",
+    initialInput: Cookies.get('chatPrompt') || '',
+    body: {
+      actionType: selectedAction.value,
+      currentCode: selectedFile?.value || '',
+      fileName: selectedFile?.name || '',
+      userEmail: user?.email, // Keep for now for other potential uses
+      userId: user?.id // Pass the user ID
+    },
+    onFinish: (message) => {
+      try {
+        const data = JSON.parse(message.content);
+        if (data.changes && data.changes.length > 0) {
+          // ... existing code ...
+        }
+      } catch (error) {
+        console.error('Error parsing message content:', error);
+      }
+    },
+  });
+
   // Restore chat prompt from cookie
   const [input, setInput] = useState(() => Cookies.get('chatPrompt') || '');
   useEffect(() => {
     Cookies.set('chatPrompt', input, { expires: 7 });
   }, [input]);
-  const { setFilesCurrentHandler, throttleEditorOpen, selectedFile, editorSelection, cursorPosition, applyAgenticChanges } = useContext(EditorContext);
-  const [chatAction, setChatAction] = useState({ value: 'GERAR', label: 'GERAR' });
-  
+
   // Manual message management for all actions - OPTIMIZED WITH CLEANUP
-  const [messages, setMessages] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   
   // PERFORMANCE: Limit message history to prevent infinite growth
@@ -429,13 +452,6 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
       };
     }
   }, [appendRef]);
-
-  // Custom handleInputChange to sync with cookie
-  const handleInputChange = (
-    e: React.ChangeEvent<HTMLInputElement> | React.ChangeEvent<HTMLTextAreaElement>
-  ) => {
-    setInput(e.target.value);
-  }
 
   const [creditError, setCreditError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -497,7 +513,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
         'FOCAR': `Focus on and extract only the component or section related to: ${input}\n\nRemove all other code and keep only the relevant parts. Maintain the component structure. If the code does not include a render call for the component, add one at the end, like \`render(<MyComponent />);\` replacing 'MyComponent' with the actual component's name.`
       };
 
-      const agenticPrompt = actionPrompts[chatAction.value] || input;
+      const agenticPrompt = actionPrompts[selectedAction.value] || input;
 
       // Combine user message and skeleton into a single state update
       const userMessage = { 
@@ -518,10 +534,11 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             prompt: agenticPrompt,
-            currentCode: chatAction.value === 'GERAR' ? '' : (selectedFile?.value || ''),
+            currentCode: selectedAction.value === 'GERAR' ? '' : (selectedFile?.value || ''),
             fileName: selectedFile?.name || 'script.js',
-            actionType: chatAction.value,
-            userEmail: user.email // Explicitly include the user's email
+            actionType: selectedAction.value,
+            userId: user?.id, // Pass the user's ID
+            userEmail: user.email // Keep for backward compatibility or other uses if needed
           })
         });
 
@@ -580,7 +597,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
           const { oldCode, newCode } = applyAgenticChanges(data.changes);
           
           // Save file version with prompt tag
-          if (selectedFile?.id && publicUserId && (chatAction.value === 'GERAR' || chatAction.value === 'EDITAR')) {
+          if (selectedFile?.id && publicUserId && (selectedAction.value === 'GERAR' || selectedAction.value === 'EDITAR')) {
             (async () => {
               try {
                 const { saveFileVersion } = await import('@/utils/supabaseProjects');
@@ -614,7 +631,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
             changes: data.changes
           };
           
-          finalAssistantMessage.content = `${actionIcons[chatAction.value]} **${actionMessages[chatAction.value]}**\n\n${data.explanation}\n\n**Detalhes das mudanças:**\n${data.changes.map((change, i) => 
+          finalAssistantMessage.content = `${actionIcons[selectedAction.value]} **${actionMessages[selectedAction.value]}**\n\n${data.explanation}\n\n**Detalhes das mudanças:**\n${data.changes.map((change, i) => 
             `${i + 1}. **${change.type.toUpperCase()}** na linha ${change.startLine}${change.endLine && change.endLine !== change.startLine ? `-${change.endLine}` : ''}: ${change.description}`
           ).join('\n')}`;
           
@@ -624,8 +641,8 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
             finalAssistantMessage.content = `❌ Erro: ${data.error}\n\n${data.explanation || ''}`;
         } else {
           // For CHAT mode or when no changes are needed, just show the explanation
-          if (chatAction.value === 'CHAT') {
-            finalAssistantMessage.content = `${actionIcons[chatAction.value]} ${data.explanation || 'Resposta gerada.'}`;
+          if (selectedAction.value === 'CHAT') {
+            finalAssistantMessage.content = `${actionIcons[selectedAction.value]} ${data.explanation || 'Resposta gerada.'}`;
           } else {
             finalAssistantMessage.content = `ℹ️ ${data.explanation || 'Nenhuma mudança necessária para esta solicitação.'}`;
           }
@@ -735,7 +752,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
     
     // All structured actions are handled via structured API
     // Only process code blocks for GERAR and FOCAR (EDITAR applies changes directly, CHAT doesn't generate code)
-    if (chatAction.value === 'GERAR' || chatAction.value === 'FOCAR') {
+    if (selectedAction.value === 'GERAR' || selectedAction.value === 'FOCAR') {
       setSendingToEditor(true);
       
       // Collect all code blocks from the last assistant message
@@ -775,7 +792,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
       }
       return { ...prev, [lastMessage.id]: true };
     });
-  }, [allMessages, chatAction.value, currentLoading, selectedFile?.name]);
+  }, [allMessages, selectedAction.value, currentLoading, selectedFile?.name]);
 
   return (
     <div className={`relative flex flex-col h-full rounded-lg shadow-lg  ${theme === 'dark' ? 'bg-[#232733]' : 'bg-white'}`}>
@@ -805,14 +822,14 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
             <LoadingSpinner 
               theme={theme} 
               size="sm" 
-              message={`${chatAction.label} em andamento...`} 
+              message={`${selectedAction.label} em andamento...`} 
             />
           </div>
         )}
         <ReactSelect
           className="w-32 mb-2"
-          value={chatAction}
-          onChange={setChatAction}
+          value={selectedAction}
+          onChange={setSelectedAction}
           isSearchable={false}
           options={chatActionOptions}
           styles={{
@@ -2114,7 +2131,7 @@ Faça APENAS as mudanças mínimas necessárias para corrigir este erro específ
           currentCode: selectedFile?.value || '',
           fileName: selectedFile?.name || 'script.js',
           actionType: 'FIX',
-          userEmail: user.email // Explicitly include the user's email
+          userId: user.id // Explicitly include the user's ID
         }),
         signal: controller.signal
       });
