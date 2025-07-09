@@ -186,9 +186,24 @@ class ChatProvider with ChangeNotifier {
   ) async {
     if (content.trim().isEmpty) return;
 
-    // Get the latest user email from AuthService
+    // Get the latest user ID from AuthService
     final authService = Provider.of<AuthService>(context, listen: false);
-    final userEmail = authService.user?.email ?? 'test@example.com';
+    final userId = authService.userId;
+
+    if (userId == null) {
+      _error = 'User not authenticated. Please sign in again.';
+      final loadingIndex = _messages.lastIndexWhere((m) => m.isLoading);
+      if (loadingIndex != -1) {
+        _messages[loadingIndex] = ChatMessage(
+          id: _messages[loadingIndex].id,
+          role: MessageRole.assistant,
+          content: '❌ $_error',
+        );
+      }
+      _isLoading = false;
+      notifyListeners();
+      return;
+    }
 
     final userMessage = ChatMessage(role: MessageRole.user, content: content);
     final assistantMessage = ChatMessage(
@@ -218,7 +233,7 @@ class ChatProvider with ChangeNotifier {
       // Send structured query using microservices
       final response = await serviceManager.agentic.sendStructuredQuery(
         query: content,
-        userEmail: userEmail.toLowerCase(),
+        userId: userId,
         context: context,
       );
 

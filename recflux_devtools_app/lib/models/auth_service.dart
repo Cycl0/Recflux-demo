@@ -13,11 +13,13 @@ class AuthService with ChangeNotifier {
   String? _userEmail;
   String? _userName;
   String? _userPhotoUrl;
+  String? _userId;
   bool _isSignedIn = false;
 
   String? get userEmail => _userEmail;
   String? get userName => _userName;
   String? get userPhotoUrl => _userPhotoUrl;
+  String? get userId => _userId;
   bool get isSignedIn => _isSignedIn;
 
   UserModel? get user {
@@ -108,9 +110,10 @@ class AuthService with ChangeNotifier {
     _userEmail = user.email?.toLowerCase();
     _userName = user.userMetadata?['full_name'] ?? user.userMetadata?['name'];
     _userPhotoUrl = user.userMetadata?['avatar_url'];
+    _userId = user.id;
     _isSignedIn = true;
 
-    print('User signed in via Supabase: $_userEmail');
+    print('User signed in via Supabase: $_userEmail (ID: $_userId)');
     notifyListeners();
     _onAuthStateChanged?.call();
 
@@ -172,6 +175,7 @@ class AuthService with ChangeNotifier {
     _userEmail = null;
     _userName = null;
     _userPhotoUrl = null;
+    _userId = null;
     _isSignedIn = false;
     notifyListeners();
     _onAuthStateChanged?.call();

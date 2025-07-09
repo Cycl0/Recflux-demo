@@ -129,19 +129,19 @@ function parseCodeToStructuredFormat(code) {
 
 // Middleware to check and deduct credits
 const creditCheckMiddleware = async (req, res, next) => {
-    const { userEmail } = req.body;
-    if (!userEmail) {
-        return res.status(400).json({ error: 'userEmail is required' });
+    const { userId } = req.body;
+    if (!userId) {
+        return res.status(400).json({ error: 'userId is required' });
     }
 
-    console.log(`[CREDIT_MIDDLEWARE] Checking credits for user: ${userEmail}`);
+    console.log(`[CREDIT_MIDDLEWARE] Checking credits for user: ${userId}`);
 
     try {
-        // Fetch the user by email
+        // Fetch the user by ID
         const { data: user, error: userError } = await supabase
             .from('users')
             .select('id, credits, plan')
-            .ilike('email', userEmail)
+            .eq('id', userId)
             .single();
 
         if (userError) {
@@ -150,7 +150,7 @@ const creditCheckMiddleware = async (req, res, next) => {
         }
 
         if (!user) {
-            console.error('[CREDIT_MIDDLEWARE] User not found for email:', userEmail);
+            console.error('[CREDIT_MIDDLEWARE] User not found for ID:', userId);
             return res.status(404).json({ error: 'User not found' });
         }
 
@@ -176,7 +176,7 @@ const creditCheckMiddleware = async (req, res, next) => {
             return res.status(500).json({ error: 'Failed to update user credits' });
         }
         
-        console.log(`[CREDIT_MIDDLEWARE] Credit deduction successful for ${userEmail}. Credits before: ${user.credits}, After: ${user.credits - 10}`);
+        console.log(`[CREDIT_MIDDLEWARE] Credit deduction successful for ${userId}. Credits before: ${user.credits}, After: ${user.credits - 10}`);
         next(); // Proceed to the main handler
     } catch (error) {
         console.error('[CREDIT_MIDDLEWARE] Unexpected error:', error);
@@ -362,7 +362,7 @@ Regras técnicas:
  *             required:
  *               - prompt
  *               - actionType
- *               - userEmail
+ *               - userId
  *             properties:
  *               prompt:
  *                 type: string
@@ -381,10 +381,10 @@ Regras técnicas:
  *                 type: string
  *                 description: Name of the file being edited (required for EDITAR and FOCAR)
  *                 example: "App.jsx"
- *               userEmail:
+ *               userId:
  *                 type: string
- *                 description: User's email for credit verification
- *                 example: "user@example.com"
+ *                 description: User's unique ID for credit verification
+ *                 example: "a1b2c3d4-e5f6-7890-1234-567890abcdef"
  *     responses:
  *       200:
  *         description: AI response stream with structured code changes

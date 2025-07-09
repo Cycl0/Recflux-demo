@@ -10,7 +10,7 @@ class AgenticService {
   /// Send a structured query to the agentic service
   Future<Map<String, dynamic>> sendStructuredQuery({
     required String query,
-    required String userEmail,
+    required String userId,
     Map<String, dynamic>? context,
   }) async {
     try {
@@ -21,7 +21,7 @@ class AgenticService {
 
       final requestBody = {
         'prompt': query,
-        'userEmail': userEmail,
+        'userId': userId,
         'actionType': actionType,
         'currentCode': currentCode,
         'fileName': fileName,
@@ -71,11 +71,10 @@ class AgenticService {
   }
 
   /// Get user credits
-  Future<Map<String, dynamic>> getUserCredits(String userEmail) async {
+  Future<Map<String, dynamic>> getUserCredits(String userId) async {
     try {
-      print('Agentic Service - Getting credits for user: $userEmail');
-      final response =
-          await _client.get('/api/agentic/credits?email=$userEmail');
+      print('Agentic Service - Getting credits for user: $userId');
+      final response = await _client.get('/api/agentic/credits?userId=$userId');
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
