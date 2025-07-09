@@ -108,6 +108,14 @@ data:
     server {
       listen 3001;
       
+      location /health {
+        proxy_pass http://agentic-structured-service:3001/health;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      }
+      
       location / {
         proxy_pass http://agentic-structured-service:3001;
         proxy_set_header Host $host;
@@ -128,6 +136,14 @@ data:
     
     server {
       listen 3002;
+
+      location /health {
+        proxy_pass http://recflux-tools-accessibility-service:3002/health;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      }
       
       location / {
         proxy_pass http://recflux-tools-accessibility-service:3002;
@@ -151,6 +167,14 @@ data:
     
     server {
       listen 3003;
+
+      location /health {
+        proxy_pass http://code-deploy-service:3003/health;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      }
       
       location / {
         proxy_pass http://code-deploy-service:3003;
@@ -172,6 +196,14 @@ data:
     
     server {
       listen 3004;
+
+      location /health {
+        proxy_pass http://kafka-producer-service:3004/health;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+      }
       
       location / {
         proxy_pass http://kafka-producer-service:3004;

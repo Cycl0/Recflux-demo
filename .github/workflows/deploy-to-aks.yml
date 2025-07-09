@@ -157,14 +157,12 @@ jobs:
           # Clean up
           rm secret-data.yaml
 
-      - name: Restart deployments to pick up new secrets
+      # Delete all existing deployments to ensure clean deployment
+      - name: Delete existing deployments
         run: |
-          kubectl rollout restart deployment agentic-structured-service
-          kubectl rollout restart deployment nextjs-app
-          kubectl rollout restart deployment kafka-producer-service
-          kubectl rollout restart deployment code-deploy-service
-          kubectl rollout restart deployment recflux-tools-accessibility-service
-          kubectl rollout restart deployment lb-proxy
+          echo "Deleting all existing deployments..."
+          kubectl delete deployment --all
+          echo "All deployments deleted."
 
       # Apply Kubernetes manifests
       - name: Deploy to AKS
