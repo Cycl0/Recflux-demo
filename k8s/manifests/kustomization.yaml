@@ -27,5 +27,4 @@ resources:
   - configmap.yaml
   - api-ingress.yaml
   - persistent-volume.yaml
-  - app-secrets.yaml
   - unified-load-balancer.yaml 

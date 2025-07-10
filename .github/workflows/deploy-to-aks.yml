@@ -120,43 +120,28 @@ jobs:
       # Create Kubernetes secrets
       - name: Create Kubernetes secrets
         run: |
-          # Debug what we're about to write
-          echo "About to create secret with:"
-          echo "STRIPE_SECRET_KEY length: $(echo -n "${{ secrets.STRIPE_SECRET_KEY }}" | wc -c)"
-          echo "STRIPE_SECRET_KEY starts with: $(echo -n "${{ secrets.STRIPE_SECRET_KEY }}" | cut -c1-7)"
+          # Delete existing secret if it exists
+          kubectl delete secret app-secrets --ignore-not-found=true
           
-          # Create a temporary file with the secret data
-          cat <<EOF > secret-data.yaml
-          apiVersion: v1
-          kind: Secret
-          metadata:
-            name: app-secrets
-          type: Opaque
-          stringData:
-            KAFKA_BROKERS: "${{ secrets.KAFKA_BROKERS }}"
-            NEXT_PUBLIC_GOOGLE_CLIENT_ID: "${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}"
-            NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID: "${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID }}"
-            NEXT_PUBLIC_SUPABASE_ANON_KEY: "${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}"
-            NEXT_PUBLIC_SUPABASE_URL: "${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}"
-            OPENAI_API_KEY: "${{ secrets.OPENAI_API_KEY }}"
-            OPENROUTER_API_KEY: "${{ secrets.OPENROUTER_API_KEY }}"
-            STRIPE_SECRET_KEY: "${{ secrets.STRIPE_SECRET_KEY }}"
-            STRIPE_WEBHOOK_SECRET: "${{ secrets.STRIPE_WEBHOOK_SECRET }}"
-            SUPABASE_SERVICE_ROLE_KEY: "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
-            THUMBNAIL_API_KEY: "${{ secrets.THUMBNAIL_API_KEY }}"
-            VERCEL_TOKEN: "${{ secrets.VERCEL_TOKEN }}"
-            AGENTIC_STRUCTURED_LB_URL: "${{ secrets.AGENTIC_STRUCTURED_LB_URL }}"
-          EOF
+          # Create the secret
+          kubectl create secret generic app-secrets \
+            --from-literal=KAFKA_BROKERS="${{ secrets.KAFKA_BROKERS }}" \
+            --from-literal=NEXT_PUBLIC_GOOGLE_CLIENT_ID="${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}" \
+            --from-literal=NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID="${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID }}" \
+            --from-literal=NEXT_PUBLIC_SUPABASE_ANON_KEY="${{ secrets.NEXT_PUBLIC_SUPABASE_ANON_KEY }}" \
+            --from-literal=NEXT_PUBLIC_SUPABASE_URL="${{ secrets.NEXT_PUBLIC_SUPABASE_URL }}" \
+            --from-literal=OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+            --from-literal=OPENROUTER_API_KEY="${{ secrets.OPENROUTER_API_KEY }}" \
+            --from-literal=STRIPE_SECRET_KEY="${{ secrets.STRIPE_SECRET_KEY }}" \
+            --from-literal=STRIPE_WEBHOOK_SECRET="${{ secrets.STRIPE_WEBHOOK_SECRET }}" \
+            --from-literal=SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
+            --from-literal=THUMBNAIL_API_KEY="${{ secrets.THUMBNAIL_API_KEY }}" \
+            --from-literal=VERCEL_TOKEN="${{ secrets.VERCEL_TOKEN }}" \
+            --from-literal=AGENTIC_STRUCTURED_LB_URL="${{ secrets.AGENTIC_STRUCTURED_LB_URL }}"
           
-          # Apply the secret
-          kubectl apply -f secret-data.yaml
-          
-          # Verify what was created
-          echo "Secret created. Verifying STRIPE_SECRET_KEY:"
-          kubectl get secret app-secrets -o jsonpath='{.data.STRIPE_SECRET_KEY}' | base64 -d | wc -c
-          
-          # Clean up
-          rm secret-data.yaml
+          # Verify secret was created
+          echo "Secret created. Checking contents..."
+          kubectl get secret app-secrets -o yaml
 
       # Delete all existing deployments to ensure clean deployment
       - name: Delete existing deployments
