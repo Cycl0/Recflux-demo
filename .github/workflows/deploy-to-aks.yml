@@ -214,7 +214,7 @@ jobs:
         shell: bash
 
       - name: Upload APK as Artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: release-apk
           path: recflux_devtools_app/build/app/outputs/apk/release/app-release.apk
