@@ -26,7 +26,7 @@ class MicroserviceProvider extends ChangeNotifier {
   // Agentic service methods
   Future<Map<String, dynamic>> sendStructuredQuery({
     required String query,
-    required String userEmail,
+    required String userId,
     Map<String, dynamic>? context,
   }) async {
     _setLoading(true);
@@ -35,7 +35,7 @@ class MicroserviceProvider extends ChangeNotifier {
     try {
       final response = await agentic.sendStructuredQuery(
         query: query,
-        userEmail: userEmail,
+        userId: userId,
         context: context,
       );
 
@@ -49,12 +49,12 @@ class MicroserviceProvider extends ChangeNotifier {
     }
   }
 
-  Future<Map<String, dynamic>> getUserCredits(String userEmail) async {
+  Future<Map<String, dynamic>> getUserCredits(String userId) async {
     _setLoading(true);
     _clearError();
 
     try {
-      final response = await agentic.getUserCredits(userEmail);
+      final response = await agentic.getUserCredits(userId);
       _lastResponse = response;
       _setLoading(false);
       return response;

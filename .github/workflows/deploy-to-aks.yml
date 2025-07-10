@@ -145,6 +145,7 @@ jobs:
             SUPABASE_SERVICE_ROLE_KEY: "${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
             THUMBNAIL_API_KEY: "${{ secrets.THUMBNAIL_API_KEY }}"
             VERCEL_TOKEN: "${{ secrets.VERCEL_TOKEN }}"
+            AGENTIC_STRUCTURED_LB_URL: "${{ secrets.AGENTIC_STRUCTURED_LB_URL }}"
           EOF
           
           # Apply the secret

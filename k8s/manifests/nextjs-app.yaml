@@ -19,6 +19,12 @@ spec:
         image: recfluxdemoacr.azurecr.io/nextjs-app:latest
         ports:
         - containerPort: 3000
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 3000
+          initialDelaySeconds: 180 # Increased delay
+          periodSeconds: 60
         env:
         - name: API_URL
           valueFrom:
@@ -45,6 +51,13 @@ spec:
             configMapKeyRef:
               name: app-config
               key: ACCESSIBILITY_SERVICE_URL
+        - name: AGENTIC_STRUCTURED_LB_URL
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: AGENTIC_STRUCTURED_LB_URL
+        - name: NODE_ENV
+          value: "production"
         # Secret references for API keys
         - name: NEXT_PUBLIC_SUPABASE_URL
           valueFrom:

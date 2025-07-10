@@ -3,7 +3,7 @@ import { type } from 'os';
 
 // The URL of our new, external microservice.
 // It's recommended to store this in an environment variable.
-const MICROSERVICE_URL = process.env.AGENTIC_STRUCTURED_URL || 'http://localhost:3001/api/agentic';
+const MICROSERVICE_URL = process.env.AGENTIC_STRUCTURED_LB_URL || 'http://localhost:3001/api/agentic';
 
 /**
  * This route acts as a streaming BFF.
