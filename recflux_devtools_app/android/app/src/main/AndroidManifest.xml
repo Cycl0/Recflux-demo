@@ -33,16 +33,6 @@
                     android:scheme="com.example.recflux_test"
                     android:host="login-callback" />
             </intent-filter>
-            <!-- Add a second intent filter with a different format for compatibility -->
-            <intent-filter>
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data
-                    android:scheme="https"
-                    android:host="recflux-test.com"
-                    android:pathPrefix="/auth/callback" />
-            </intent-filter>
         </activity>
         <!-- Don't delete the meta-data below.
              This is used by the Flutter tool to generate GeneratedPluginRegistrant.java -->

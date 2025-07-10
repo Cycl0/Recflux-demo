@@ -10,11 +10,11 @@ class AgenticService {
 
   AgenticService(this._authService, this._config);
 
-  Future<String> executeAgenticStructuredAction({
+  Future<String> executeAgenticAction({
     required String prompt,
     String currentCode = '',
     String fileName = 'script.js',
-    String actionType = 'EDITAR',
+    String actionType = 'GERAR',
   }) async {
     try {
       // Get the user ID from AuthService
@@ -31,8 +31,7 @@ class AgenticService {
       }
 
       final response = await http.post(
-        Uri.parse(
-            '${ServiceConfig.finalAgenticServiceUrl}/api/agentic-structured'),
+        Uri.parse('${ServiceConfig.finalAgenticServiceUrl}/api/agentic'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
           'prompt': prompt,

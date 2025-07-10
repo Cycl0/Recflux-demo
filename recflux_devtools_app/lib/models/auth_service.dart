@@ -171,9 +171,24 @@ class AuthService extends ChangeNotifier {
   }
 
   Future<void> signIn() async {
-    await _supabase.auth.signInWithOAuth(
-      OAuthProvider.google,
-      redirectTo: kIsWeb ? null : 'io.recflux.devtools://login-callback/',
+    // Start the native Google Sign-In flow.
+    final googleSignIn = GoogleSignIn(
+      serverClientId: dotenv.env['NEXT_PUBLIC_GOOGLE_CLIENT_ID'],
+    );
+    final googleUser = await googleSignIn.signIn();
+    final googleAuth = await googleUser!.authentication;
+    final accessToken = googleAuth.accessToken;
+    final idToken = googleAuth.idToken;
+
+    if (idToken == null) {
+      throw 'No ID token from Google!';
+    }
+
+    // Use the ID token to sign in to Supabase.
+    await _supabase.auth.signInWithIdToken(
+      provider: OAuthProvider.google,
+      idToken: idToken,
+      accessToken: accessToken,
     );
   }
 

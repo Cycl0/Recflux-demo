@@ -227,8 +227,7 @@ class ChatProvider with ChangeNotifier {
       final serviceManager = ServiceManager();
 
       // Send structured query using microservices
-      final responseContent =
-          await serviceManager.agentic.executeAgenticStructuredAction(
+      final responseContent = await serviceManager.agentic.executeAgenticAction(
         prompt: content,
         currentCode: selectedFile?.content ?? '',
         fileName: selectedFile?.name ?? 'script.js',

@@ -28,17 +28,17 @@ class MicroserviceProvider extends ChangeNotifier {
   Map<String, dynamic>? get lastResponse => _lastResponse;
 
   // Agentic service methods
-  Future<String> executeAgenticStructuredAction({
+  Future<String> executeAgenticAction({
     required String prompt,
     String currentCode = '',
     String fileName = 'script.js',
-    String actionType = 'EDITAR',
+    String actionType = 'GERAR',
   }) async {
     _setLoading(true);
     _clearError();
 
     try {
-      final response = await agentic.executeAgenticStructuredAction(
+      final response = await agentic.executeAgenticAction(
         prompt: prompt,
         currentCode: currentCode,
         fileName: fileName,
