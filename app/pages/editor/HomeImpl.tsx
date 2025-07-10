@@ -441,225 +441,123 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
   const [creditError, setCreditError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Helper function to call the agentic API
+  async function callAgenticApi(payload: any) {
+    const response = await fetch('/api/agentic-structured', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({ 
+        error: "Erro de comunicação com a API", 
+        explanation: `A API retornou um status ${response.status} mas não foi possível ler o corpo do erro.`
+      }));
+      // Attach the status code to the error object for specific handling
+      (errorData as any).status = response.status;
+      throw errorData;
+    }
+    
+    return response.json();
+  }
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     
-    console.log('[SUBMIT] Starting handleSubmit', { isSubmitting, currentLoading, input });
-    
-    if (isSubmitting || currentLoading) {
-      console.log('[SUBMIT] Blocked by loading state', { isSubmitting, currentLoading });
-      return;
-    }
-    
-    // Check if user is authenticated
+    if (isSubmitting || currentLoading || !input) return;
     if (!user || !user.email) {
-      console.log('[SUBMIT] User not authenticated', { user });
       setCreditError('Você precisa estar logado para enviar prompts.');
       return;
     }
-
-    // Debug authentication status
-    console.log('[SUBMIT] User authenticated:', { email: user.email, id: user.id, supabaseId: supabaseUserId || 'not available' });
     
-    // Check if session is valid
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      console.log('[SUBMIT] Current session:', session ? 'Valid' : 'Invalid');
-      if (!session) {
-        console.log('[SUBMIT] Session missing, attempting to refresh');
-        const { data: refreshData } = await supabase.auth.refreshSession();
-        console.log('[SUBMIT] Session refresh result:', refreshData.session ? 'Success' : 'Failed');
-        if (!refreshData.session) {
-          console.log('[SUBMIT] Session refresh failed, continuing with client-side user info');
-          // We'll continue anyway and rely on the user email we have client-side
-        }
-      }
-    } catch (sessionError) {
-      console.error('[SUBMIT] Session check error:', sessionError);
-    }
-
-    // Clear previous errors
-    setCreditError(null);
+    // Setup UI state for submission
     setIsSubmitting(true);
-    console.log('[SUBMIT] Set isSubmitting to true');
+    setIsLoading(true);
+    setCreditError(null);
+    
+    const userInput = input; // Capture input before clearing
+    setInput('');
+
+    const userMessage = { id: Date.now().toString(), role: "user" as const, content: userInput };
+    const assistantMessageId = (Date.now() + 1).toString();
+    const skeletonMessage = { id: assistantMessageId, role: "assistant" as const, content: "", isLoading: true };
+
+    setMessages(prev => [...prev, userMessage, skeletonMessage]);
 
     try {
-      // Credit check is now handled by the microservice.
-      if (onPromptSubmit) onPromptSubmit(input);
-      if (typeof window !== 'undefined') {
-        Cookies.remove('chatPrompt');
+      // Prepare and send the API request
+      const actionPrompts = {
+        'GERAR': userInput,
+        'EDITAR': userInput,
+        'FOCAR': `Focus on and extract only the component or section related to: ${userInput}\n\nRemove all other code and keep only the relevant parts. Maintain the component structure. If the code does not include a render call for the component, add one at the end, like \`render(<MyComponent />);\` replacing 'MyComponent' with the actual component's name.`
+      };
+
+      const agenticPrompt = actionPrompts[chatAction.value] || userInput;
+
+      const payload = {
+        prompt: agenticPrompt,
+        currentCode: chatAction.value === 'GERAR' ? '' : (selectedFile?.value || ''),
+        fileName: selectedFile?.name || 'script.js',
+        actionType: chatAction.value,
+        userId: supabaseUserId,
+      };
+
+      const data = await callAgenticApi(payload);
+
+      // Process the successful response
+      if (onCreditsUpdate) {
+        onCreditsUpdate(); // Refresh credits on any successful response
+      }
+
+      const actionIcons = { 'GERAR': '🚀', 'EDITAR': '✏️', 'FOCAR': '🎯', 'CHAT': '💬' };
+      const actionMessages = {
+        'GERAR': 'Código gerado com sucesso!',
+        'EDITAR': 'Edições aplicadas com sucesso!',
+        'FOCAR': 'Foco aplicado com sucesso!',
+        'CHAT': 'Resposta gerada com sucesso!'
+      };
+
+      const finalAssistantMessage = {
+        id: assistantMessageId,
+        role: "assistant" as const,
+        content: '',
+        isLoading: false
+      };
+
+      if (data.changes && data.changes.length > 0) {
+        const { oldCode, newCode } = applyAgenticChanges(data.changes);
+        (finalAssistantMessage as any).diffData = { oldCode, newCode, changes: data.changes };
+        finalAssistantMessage.content = `${actionIcons[chatAction.value]} **${actionMessages[chatAction.value]}**\n\n${data.explanation}`;
+      } else if (data.error) {
+        finalAssistantMessage.content = `❌ Erro: ${data.error}\n\n${data.explanation || ''}`;
+      } else {
+        finalAssistantMessage.content = `${actionIcons[chatAction.value]} ${data.explanation || 'Nenhuma mudança necessária.'}`;
       }
       
-      setInput('');
-      
-      const actionPrompts = {
-        'GERAR': input, // Direct user input for generation
-        'EDITAR': input, // Direct user input for editing (main agentic mode)
-        'FOCAR': `Focus on and extract only the component or section related to: ${input}\n\nRemove all other code and keep only the relevant parts. Maintain the component structure. If the code does not include a render call for the component, add one at the end, like \`render(<MyComponent />);\` replacing 'MyComponent' with the actual component's name.`
-      };
+      setMessages(prev => prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m));
 
-      const agenticPrompt = actionPrompts[chatAction.value] || input;
-
-      // Combine user message and skeleton into a single state update
-      const userMessage = { 
-        id: Date.now().toString(), 
-        role: "user" as const, 
-        content: input 
-      };
-      const assistantMessageId = (Date.now() + 1).toString();
-      const skeletonMessage = { id: assistantMessageId, role: "assistant" as const, content: "", isLoading: true };
-
-      setMessages(prev => [...prev, userMessage, skeletonMessage]);
-      setIsLoading(true);
-      console.log('[SUBMIT] Set isLoading to true, starting API call');
-
-      try {
-        const response = await fetch('/api/agentic-structured', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt: agenticPrompt,
-            currentCode: chatAction.value === 'GERAR' ? '' : (selectedFile?.value || ''),
-            fileName: selectedFile?.name || 'script.js',
-            actionType: chatAction.value,
-            userId: supabaseUserId // Use the supabase user ID
-          })
-        });
-
-        if (!response.ok) {
-           const errorData = await response.json().catch(() => ({ 
-              error: "Erro de comunicação com a API", 
-              explanation: `A API retornou um status ${response.status} mas não foi possível ler o corpo do erro.`
-          }));
-          
-          // Handle insufficient credits error specifically on the main chat UI
-          if (response.status === 402) {
-            setCreditError(errorData.explanation || 'Créditos insuficientes.');
-            setMessages(prev => prev.filter(m => m.id !== assistantMessageId)); // Remove skeleton
-            setIsLoading(false);
-            setIsSubmitting(false);
-            return; // Stop execution
-          }
-          
-          // For other errors, throw to be caught by the catch block below
-          throw errorData;
-        }
-        
-        // If we are here, the call was successful and credits were deducted.
-        // We should refetch credits on the client to update the UI.
-        if (onCreditsUpdate) {
-            console.log('[CREDITS] Attempting to refresh credits after successful API call');
-            onCreditsUpdate();
-            console.log('[CREDITS] Credits refresh function called');
-        }
-
-        const data = await response.json();
-
-        const actionIcons = {
-          'GERAR': '🚀',
-          'EDITAR': '✏️', 
-          'FOCAR': '🎯',
-          'CHAT': '💬'
-        };
-
-        const actionMessages = {
-          'GERAR': 'Código gerado com sucesso!',
-          'EDITAR': 'Edições aplicadas com sucesso!',
-          'FOCAR': 'Foco aplicado com sucesso!',
-          'CHAT': 'Resposta gerada com sucesso!'
-        };
-
-        const finalAssistantMessage = {
-          id: assistantMessageId,
-          role: "assistant" as const,
-          content: '',
-          isLoading: false // Make sure to set isLoading to false
-        };
-
-        if (data.changes && data.changes.length > 0) {
-          // Apply changes and get old/new code for diff
-          const { oldCode, newCode } = applyAgenticChanges(data.changes);
-          
-          // Save file version with prompt tag
-          if (selectedFile?.id && publicUserId && (chatAction.value === 'GERAR' || chatAction.value === 'EDITAR')) {
-            (async () => {
-              try {
-                const { saveFileVersion } = await import('@/utils/supabaseProjects');
-                // Fetch latest version number
-                let nextVersion = 1;
-                const { data: latestVersionRows, error: latestVersionError } = await supabase
-                  .from('file_versions')
-                  .select('version')
-                  .eq('file_id', selectedFile.id)
-                  .order('version', { ascending: false })
-                  .limit(1);
-
-                if (!latestVersionError && latestVersionRows && latestVersionRows.length > 0) {
-                  nextVersion = (latestVersionRows[0].version || 0) + 1;
-                }
-                // Create a tag from the first 5 words of the prompt
-                const promptTag = input.split(' ').slice(0, 5).join(' ');
-                await saveFileVersion(selectedFile.id, promptTag, newCode, nextVersion, publicUserId);
-                console.log(`[SAVE VERSION] Saved version ${nextVersion} for file ${selectedFile.name} with tag: ${promptTag}`);
-              } catch (e) {
-                console.error("Failed to save file version with prompt tag:", e);
-                // Don't block UI for this, just log it.
-              }
-            })();
-          }
-          
-          // Store diff data for ReactDiffViewer
-          const diffData = {
-            oldCode: oldCode,
-            newCode: newCode,
-            changes: data.changes
-          };
-          
-          finalAssistantMessage.content = `${actionIcons[chatAction.value]} **${actionMessages[chatAction.value]}**\n\n${data.explanation}\n\n**Detalhes das mudanças:**\n${data.changes.map((change, i) => 
-            `${i + 1}. **${change.type.toUpperCase()}** na linha ${change.startLine}${change.endLine && change.endLine !== change.startLine ? `-${change.endLine}` : ''}: ${change.description}`
-          ).join('\n')}`;
-          
-          // Add diff data to message for custom rendering
-          (finalAssistantMessage as any).diffData = diffData;
-        } else if (data.error) {
-            finalAssistantMessage.content = `❌ Erro: ${data.error}\n\n${data.explanation || ''}`;
-        } else {
-          // For CHAT mode or when no changes are needed, just show the explanation
-          if (chatAction.value === 'CHAT') {
-            finalAssistantMessage.content = `${actionIcons[chatAction.value]} ${data.explanation || 'Resposta gerada.'}`;
-          } else {
-            finalAssistantMessage.content = `ℹ️ ${data.explanation || 'Nenhuma mudança necessária para esta solicitação.'}`;
-          }
-        }
-
-        // Add response to chat for all structured actions
-        setMessages(prev => prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m));
-        setIsLoading(false);
-        console.log('[SUBMIT] Set isLoading to false (success)');
-      } catch (error) {
-        console.error('Structured API error:', error);
-        
+    } catch (error: any) {
+      // Handle errors from the API call
+      if (error.status === 402) {
+        setCreditError(error.explanation || 'Créditos insuficientes.');
+        setMessages(prev => prev.filter(m => m.id !== assistantMessageId)); // Remove skeleton
+      } else {
         const finalAssistantMessage = {
           id: assistantMessageId,
           role: "assistant" as const,
           content: `❌ Erro: ${error.error || 'Erro desconhecido'}\n\n${error.explanation || 'Não foi possível processar sua solicitação.'}`,
           isLoading: false
         };
-
-        // Replace the skeleton message with error message
         setMessages(prev => prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m));
-        setIsLoading(false);
-        console.log('[SUBMIT] Set isLoading to false (API error)');
       }
-    
-    } catch (error) {
-      console.error('Error in handleSubmit:', error);
-      setCreditError('Erro ao processar prompt. Tente novamente.');
-      setIsLoading(false); // CRITICAL: Reset loading state on error
-      console.log('[SUBMIT] Set isLoading to false (general error)');
     } finally {
+      // 5. Final UI cleanup
       setIsSubmitting(false);
-      console.log('[SUBMIT] Set isSubmitting to false (finally block)');
+      setIsLoading(false);
     }
   };
   
