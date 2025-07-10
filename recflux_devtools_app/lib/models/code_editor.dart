@@ -421,4 +421,32 @@ class CodeEditorProvider with ChangeNotifier {
       notifyListeners();
     }
   }
+
+  Future<void> updateFile(String fileId, String newContent) async {
+    final fileIndex = _files.indexWhere((f) => f.id == fileId);
+    if (fileIndex != -1) {
+      _files[fileIndex].content = newContent;
+      _files[fileIndex].lastModified = DateTime.now();
+
+      // Also update the current file if it's the one being changed
+      if (_currentFileIndex == fileIndex) {
+        // This is already handled by the object reference update
+      }
+
+      print('File $fileId updated locally.');
+      notifyListeners();
+
+      // Persist the new version to the database
+      try {
+        await _supabase.from('file_versions').insert({
+          'file_id': fileId,
+          'code': newContent,
+        });
+        print('New version for file $fileId saved to database.');
+      } catch (e) {
+        print('Error saving new file version: $e');
+        // Optionally handle this error more gracefully
+      }
+    }
+  }
 }

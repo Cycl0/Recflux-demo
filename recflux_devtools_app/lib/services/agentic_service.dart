@@ -47,12 +47,20 @@ class AgenticService {
       );
 
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+        String responseBody = response.body;
+
+        // Find and extract the JSON part from the markdown block
+        final jsonRegex = RegExp(r"```json\s*([\s\S]*?)\s*```");
+        final match = jsonRegex.firstMatch(responseBody);
+
+        if (match != null) {
+          responseBody = match.group(1)!;
+        }
 
         // Refresh credits after using the service
         _authService.refreshCredits();
 
-        return data['response'] ?? 'No response received';
+        return responseBody;
       } else {
         return 'Error: ${response.statusCode} - ${response.body}';
       }

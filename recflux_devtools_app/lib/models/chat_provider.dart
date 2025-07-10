@@ -248,29 +248,33 @@ class ChatProvider with ChangeNotifier {
             displayContent = jsonData['explanation'];
           }
 
-          if (jsonData.containsKey('code') && selectedFile != null) {
-            final newCode = jsonData['code'];
-            diffData = {
-              'oldCode': selectedFile.content ?? '',
-              'newCode': newCode,
-              'changes': jsonData['changes'] ??
-                  [
-                    {
-                      'type': 'replace',
-                      'startLine': 1,
-                      'endLine': selectedFile.content?.split('\n').length ?? 1,
-                      'code': newCode,
-                      'description': 'Code replacement via microservices',
-                    }
-                  ],
-              'fileExtension': selectedFile.name.split('.').last,
-            };
-            displayContent +=
-                '\n\n```${selectedFile.name.split('.').last}\n$newCode\n```';
+          // Always process the 'changes' block if it exists, to show code blocks
+          if (jsonData.containsKey('changes')) {
+            final changes = jsonData['changes'] as List;
+            if (changes.isNotEmpty && selectedFile != null) {
+              final newCode = _applyChanges(selectedFile.content, changes);
+
+              diffData = {
+                'oldCode': selectedFile.content,
+                'newCode': newCode,
+                'language': selectedFile.name.split('.').last,
+              };
+
+              // Only auto-apply changes if not a pure chat action
+              if (actionType != 'CHAT') {
+                final codeEditor =
+                    Provider.of<CodeEditorProvider>(context, listen: false);
+                codeEditor.updateFile(selectedFile.id, newCode);
+
+                final actionMessage = _getActionMessage(actionType);
+                displayContent =
+                    '$actionMessage\n\n**Resumo das alterações:**\n${_formatChanges(changes)}';
+              }
+            }
           }
         } catch (e) {
-          // If it's not valid JSON, just use the raw response
-          print('Failed to parse response as JSON: $e');
+          // If JSON parsing fails, use the raw content
+          displayContent = responseContent;
         }
       }
 
