@@ -206,6 +206,13 @@ jobs:
           echo "keyPassword=${{ secrets.ANDROID_KEY_PASSWORD }}" >> recflux_devtools_app/android/key.properties
         shell: bash
 
+      - name: Create .env file for Flutter
+        run: |
+          echo "NEXT_PUBLIC_GOOGLE_CLIENT_ID=${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID }}" > recflux_devtools_app/.env
+          echo "NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID=${{ secrets.NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID }}" >> recflux_devtools_app/.env
+          echo "All required environment variables written to .env file."
+        shell: bash
+
       - name: Build Flutter APK
         run: |
           cd recflux_devtools_app
