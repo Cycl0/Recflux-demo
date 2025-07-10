@@ -129,28 +129,49 @@ function parseCodeToStructuredFormat(code) {
 
 // Middleware to check and deduct credits
 const creditCheckMiddleware = async (req, res, next) => {
-    const { userId } = req.body;
-    if (!userId) {
-        return res.status(400).json({ error: 'userId is required' });
+    const { userId, userEmail } = req.body;
+    
+    if (!userId && !userEmail) {
+        return res.status(400).json({ error: 'userId or userEmail is required' });
     }
 
-    console.log(`[CREDIT_MIDDLEWARE] Checking credits for user: ${userId}`);
+    console.log(`[CREDIT_MIDDLEWARE] Checking credits with userId: ${userId || 'not provided'}, userEmail: ${userEmail || 'not provided'}`);
 
     try {
-        // Fetch the user by ID
+        let userIdToUse = userId;
+        
+        // If only email is provided, look up the user ID first for security
+        if (!userId && userEmail) {
+            console.log(`[CREDIT_MIDDLEWARE] No userId provided, looking up by email: ${userEmail}`);
+            const { data: userData, error: userLookupError } = await supabase
+                .from('users')
+                .select('id')
+                .eq('email', userEmail)
+                .single();
+            
+            if (userLookupError || !userData) {
+                console.error('[CREDIT_MIDDLEWARE] Error looking up user by email:', userLookupError);
+                return res.status(404).json({ error: 'User not found by email' });
+            }
+            
+            userIdToUse = userData.id;
+            console.log(`[CREDIT_MIDDLEWARE] Found user ID: ${userIdToUse} for email: ${userEmail}`);
+        }
+        
+        // Now fetch the user by ID (more secure)
         const { data: user, error: userError } = await supabase
             .from('users')
             .select('id, credits, plan')
-            .eq('id', userId)
+            .eq('id', userIdToUse)
             .single();
 
         if (userError) {
-            console.error('[CREDIT_MIDDLEWARE] Error fetching user:', userError);
-            return res.status(404).json({ error: 'User not found' });
+            console.error('[CREDIT_MIDDLEWARE] Error fetching user by ID:', userError);
+            return res.status(404).json({ error: 'User not found by ID' });
         }
 
         if (!user) {
-            console.error('[CREDIT_MIDDLEWARE] User not found for ID:', userId);
+            console.error(`[CREDIT_MIDDLEWARE] User not found for ID: ${userIdToUse}`);
             return res.status(404).json({ error: 'User not found' });
         }
 
@@ -176,7 +197,10 @@ const creditCheckMiddleware = async (req, res, next) => {
             return res.status(500).json({ error: 'Failed to update user credits' });
         }
         
-        console.log(`[CREDIT_MIDDLEWARE] Credit deduction successful for ${userId}. Credits before: ${user.credits}, After: ${user.credits - 10}`);
+        // Add the verified user ID to the request body for downstream use
+        req.body.verifiedUserId = user.id;
+        
+        console.log(`[CREDIT_MIDDLEWARE] Credit deduction successful for user ID: ${user.id}. Credits before: ${user.credits}, After: ${user.credits - 10}`);
         next(); // Proceed to the main handler
     } catch (error) {
         console.error('[CREDIT_MIDDLEWARE] Unexpected error:', error);
@@ -440,8 +464,8 @@ Regras técnicas:
 app.post('/api/agentic', creditCheckMiddleware, async (req, res) => {
   console.log('[AGENTIC-STRUCTURED] Microservice endpoint hit after credit check.');
   try {
-    const { prompt, currentCode, fileName, actionType } = req.body;
-    console.log(`[AGENTIC-STRUCTURED] Request body parsed. actionType: ${actionType}`);
+    const { prompt, currentCode, fileName, actionType, verifiedUserId } = req.body;
+    console.log(`[AGENTIC-STRUCTURED] Request body parsed. actionType: ${actionType}, verifiedUserId: ${verifiedUserId}`);
 
     // Smart validation: Check for fields required by all types first.
     if (!prompt || !actionType) {

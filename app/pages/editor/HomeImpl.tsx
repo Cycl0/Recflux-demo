@@ -458,7 +458,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
     }
 
     // Debug authentication status
-    console.log('[SUBMIT] User authenticated:', { email: user.email, id: user.id });
+    console.log('[SUBMIT] User authenticated:', { email: user.email, id: user.id, supabaseId: supabaseUserId });
     
     // Check if session is valid
     try {
@@ -521,7 +521,8 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
             currentCode: chatAction.value === 'GERAR' ? '' : (selectedFile?.value || ''),
             fileName: selectedFile?.name || 'script.js',
             actionType: chatAction.value,
-            userId: user?.id
+            userId: supabaseUserId, // Use the supabase user ID instead of auth user ID
+            userEmail: user?.email // Keep email as backup
           })
         });
 
@@ -1284,7 +1285,7 @@ function Home({ onLayoutChange = () => {}, ...props }) {
   // Auth state - must be declared FIRST so it's available everywhere
   const { user, loading: userLoading } = useSupabaseGoogleRegistration();
   // Enhanced user hook for credits
-  const { credits, creditsLoading, refetchCredits, subscriptionStatus } = useSupabaseUser();
+  const { credits, creditsLoading, refetchCredits, subscriptionStatus, supabaseUserId } = useSupabaseUser();
 
   // Project selection state for ConfigWindowContent
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
@@ -2114,6 +2115,7 @@ Faça APENAS as mudanças mínimas necessárias para corrigir este erro específ
           currentCode: selectedFile?.value || '',
           fileName: selectedFile?.name || 'script.js',
           actionType: 'FIX',
+          userId: user.id,
           userEmail: user.email // Explicitly include the user's email
         }),
         signal: controller.signal

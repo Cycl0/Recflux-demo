@@ -17,27 +17,28 @@ export async function POST(req: NextRequest) {
     // Parse the request body
     const body = await req.json();
     
-    // Check for user ID in the request body
+    // Check for user ID or email in the request body
     const userId = body.userId;
+    const userEmail = body.userEmail;
     
-    if (!userId) {
-      console.error('[BFF] No user ID found in request');
+    if (!userId && !userEmail) {
+      console.error('[BFF] No user ID or email found in request');
       return new NextResponse(JSON.stringify({ 
         error: 'Authentication required',
-        explanation: 'User ID is required. Please make sure you are logged in.'
+        explanation: 'User ID or email is required. Please make sure you are logged in.'
       }), { 
         status: 401,
         headers: { 'Content-Type': 'application/json' }
       });
     }
     
-    console.log('[BFF] Forwarding request for user ID:', userId);
+    console.log('[BFF] Forwarding request for user:', userEmail || userId);
 
     // Forward request to microservice
     const microserviceResponse = await fetch(MICROSERVICE_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body), // The body now contains the userId
+      body: JSON.stringify(body), // The body now contains userId and/or userEmail
     });
 
     if (!microserviceResponse.ok) {

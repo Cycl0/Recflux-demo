@@ -9,6 +9,7 @@ import 'package:provider/provider.dart';
 import 'auth_service.dart';
 import 'package:uuid/uuid.dart';
 import '../services/service_manager.dart';
+import '../config/service_config.dart';
 
 const _uuid = Uuid();
 
@@ -61,6 +62,8 @@ class ChatProvider with ChangeNotifier {
   bool _isLoading = false;
   String? _error;
   String _userEmail = 'test@example.com'; // Default email for testing
+  final AuthService _authService;
+  final ServiceConfig _config;
 
   // Debug API connection info
   void _printApiInfo() {
@@ -72,7 +75,7 @@ class ChatProvider with ChangeNotifier {
   String? get error => _error;
   String get userEmail => _userEmail;
 
-  ChatProvider() {
+  ChatProvider(this._authService, this._config) {
     // Initialize with environment variables if available
     final testEmail = dotenv.env['TEST_USER_EMAIL'];
     if (testEmail != null && testEmail.isNotEmpty) {
@@ -188,7 +191,8 @@ class ChatProvider with ChangeNotifier {
 
     // Get the latest user ID from AuthService
     final authService = Provider.of<AuthService>(context, listen: false);
-    final userId = authService.userId;
+    final userId = authService.supabaseUserId;
+    final userEmail = authService.user?.email; // Get user email
 
     if (userId == null) {
       _error = 'User not authenticated. Please sign in again.';
@@ -234,6 +238,7 @@ class ChatProvider with ChangeNotifier {
       final response = await serviceManager.agentic.sendStructuredQuery(
         query: content,
         userId: userId,
+        userEmail: userEmail, // Pass user email to the service
         context: context,
       );
 

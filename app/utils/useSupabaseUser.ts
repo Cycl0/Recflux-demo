@@ -7,6 +7,7 @@ export function useSupabaseUser() {
   const [credits, setCredits] = useState<number | null>(null);
   const [creditsLoading, setCreditsLoading] = useState(true);
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
+  const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
 
   const fetchUserData = async (userEmail: string, retryCount = 0, mountedRef: { current: boolean }) => {
     // Check if component is still mounted before starting
@@ -15,29 +16,30 @@ export function useSupabaseUser() {
     console.log(`[CREDITS] fetchUserData called for email: ${userEmail}, retry: ${retryCount}`);
     setCreditsLoading(true);
     
-    // Fallback timeout  to prevent infinite loading (10 seconds max)
+    // Fallback timeout to prevent infinite loading (10 seconds max)
     const fallbackTimeout = setTimeout(() => {
       if (mountedRef.current) {
         console.warn('Credits loading timed out after 10 seconds');
         setCreditsLoading(false);
       }
     }, 10000);
+    
     try {
-      console.log(`[CREDITS] Querying supabase for user data: ${userEmail}`);
-      const { data: userData, error } = await supabase
+      // First, get the user ID by email for more secure operations
+      console.log(`[CREDITS] Looking up user ID for email: ${userEmail}`);
+      const { data: userIdData, error: userIdError } = await supabase
         .from('users')
-        .select('credits, plan')
+        .select('id')
         .eq('email', userEmail)
         .single();
       
-      // Check if component is still mounted before updating state
+      // Check if component is still mounted before continuing
       if (!mountedRef.current) return;
       
-      if (error) {
-        // If user not found and this is the first try, retry after a delay
-        // This handles the case where user registration is still in progress
-        if (error.code === 'PGRST116' && retryCount < 3) {
-          console.log(`User not found, retrying in ${(retryCount + 1) * 1000}ms...`);
+      if (userIdError) {
+        // If user not found and this is not the last retry, try again after a delay
+        if (userIdError.code === 'PGRST116' && retryCount < 3) {
+          console.log(`User ID not found, retrying in ${(retryCount + 1) * 1000}ms...`);
           const timeoutId = setTimeout(() => {
             if (mountedRef.current) {
               fetchUserData(userEmail, retryCount + 1, mountedRef);
@@ -51,7 +53,43 @@ export function useSupabaseUser() {
           return;
         }
         
-        console.error('Error fetching user data:', error);
+        console.error('Error fetching user ID:', userIdError);
+        setCredits(0);
+        setSubscriptionStatus(null);
+        setSupabaseUserId(null);
+        setCreditsLoading(false);
+        clearTimeout(fallbackTimeout);
+        return;
+      }
+      
+      const userId = userIdData?.id;
+      if (!userId) {
+        console.error('User ID not found for email:', userEmail);
+        setCredits(0);
+        setSubscriptionStatus(null);
+        setSupabaseUserId(null);
+        setCreditsLoading(false);
+        clearTimeout(fallbackTimeout);
+        return;
+      }
+      
+      // Store the user ID for future use
+      setSupabaseUserId(userId);
+      console.log(`[CREDITS] Found user ID: ${userId} for email: ${userEmail}`);
+      
+      // Now use the user ID to fetch credits and plan
+      console.log(`[CREDITS] Querying supabase for user data by ID: ${userId}`);
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('credits, plan')
+        .eq('id', userId)
+        .single();
+      
+      // Check if component is still mounted before updating state
+      if (!mountedRef.current) return;
+      
+      if (error) {
+        console.error('Error fetching user data by ID:', error);
         setCredits(0);
         setSubscriptionStatus(null);
         setCreditsLoading(false);
@@ -104,6 +142,7 @@ export function useSupabaseUser() {
       } else {
         setCredits(null);
         setSubscriptionStatus(null);
+        setSupabaseUserId(null);
         setCreditsLoading(false);
         }
       }
@@ -140,7 +179,8 @@ export function useSupabaseUser() {
     loading, 
     credits, 
     creditsLoading, 
-    subscriptionStatus, 
+    subscriptionStatus,
+    supabaseUserId, // Expose the supabase user ID
     refetchCredits: user?.email ? () => {
       console.log('[CREDITS] refetchCredits called for user:', user.email);
       const mountedRef = { current: true };

@@ -2,345 +2,193 @@ import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'dart:async';
 
 import 'user_model.dart';
 
-class AuthService with ChangeNotifier {
-  final SupabaseClient _supabase = Supabase.instance.client;
-  GoogleSignIn? _googleSignIn;
-  Function()? _onAuthStateChanged;
+class AuthService extends ChangeNotifier {
+  final SupabaseClient _supabase;
+  User? _user;
+  String? _supabaseUserId;
+  int? _credits;
+  String? _subscriptionStatus;
+  bool _isLoading = true;
+  bool _isCreditsLoading = true;
+  Timer? _refreshTimer;
 
-  String? _userEmail;
-  String? _userName;
-  String? _userPhotoUrl;
-  String? _userId;
-  bool _isSignedIn = false;
-
-  String? get userEmail => _userEmail;
-  String? get userName => _userName;
-  String? get userPhotoUrl => _userPhotoUrl;
-  String? get userId => _userId;
-  bool get isSignedIn => _isSignedIn;
-
-  UserModel? get user {
-    if (!_isSignedIn || _userEmail == null) return null;
-    return UserModel(
-      email: _userEmail!,
-      name: _userName,
-      photoUrl: _userPhotoUrl,
-    );
+  AuthService(this._supabase) {
+    _initializeAuth();
   }
 
-  String get testEmail => 'test@example.com';
+  User? get user => _user;
+  String? get supabaseUserId => _supabaseUserId;
+  int? get credits => _credits;
+  String? get subscriptionStatus => _subscriptionStatus;
+  bool get isLoading => _isLoading;
+  bool get isCreditsLoading => _isCreditsLoading;
 
-  void setAuthStateChangedCallback(Function() callback) {
-    _onAuthStateChanged = callback;
-  }
+  Future<void> _initializeAuth() async {
+    _isLoading = true;
+    notifyListeners();
 
-  AuthService() {
-    _initGoogleSignIn();
-    _initSupabaseAuth();
-  }
+    // Get current auth state
+    final session = _supabase.auth.currentSession;
+    _user = _supabase.auth.currentUser;
 
-  void _initGoogleSignIn() {
-    if (kIsWeb) {
-      // For web, use the web client ID
-      final clientId = dotenv.env['NEXT_PUBLIC_GOOGLE_CLIENT_ID'];
-      if (clientId != null && clientId.isNotEmpty) {
-        _googleSignIn = GoogleSignIn(
-          scopes: ['email', 'profile', 'openid'],
-          clientId: clientId,
-        );
-        print('Initialized Google Sign-In for web with clientId');
-      } else {
-        print(
-            'Web client ID not configured. Google Sign-In will be disabled on web.');
-      }
-    } else {
-      // For Android, use the Android-specific client ID if available
-      final androidClientId =
-          dotenv.env['NEXT_PUBLIC_GOOGLE_CLIENT_ID_ANDROID'];
-      final serverClientId = dotenv.env['NEXT_PUBLIC_GOOGLE_CLIENT_ID'];
-
-      if (androidClientId != null && androidClientId.isNotEmpty) {
-        _googleSignIn = GoogleSignIn(
-          scopes: ['email', 'profile', 'openid'],
-          serverClientId: serverClientId,
-          forceCodeForRefreshToken: true,
-        );
-        print(
-            'Initialized Google Sign-In for Android with serverClientId: $serverClientId');
-      } else {
-        // Fallback to regular client ID or default configuration
-        _googleSignIn = GoogleSignIn(
-          scopes: ['email', 'profile', 'openid'],
-          serverClientId: serverClientId,
-          forceCodeForRefreshToken: true,
-        );
-        print(
-            'Using default Google Sign-In configuration for Android with serverClientId: $serverClientId');
-      }
+    if (_user != null && _user!.email != null) {
+      await _fetchUserData(_user!.email!);
     }
-  }
 
-  void _initSupabaseAuth() {
-    // Listen to auth state changes
+    _isLoading = false;
+    notifyListeners();
+
+    // Listen for auth changes
     _supabase.auth.onAuthStateChange.listen((data) {
       final AuthChangeEvent event = data.event;
       final Session? session = data.session;
 
-      print('Auth state changed: $event');
+      _user = session?.user;
 
-      if (event == AuthChangeEvent.signedIn && session != null) {
-        _updateUserFromSession(session);
-      } else if (event == AuthChangeEvent.signedOut) {
-        _clearUserData();
+      if (_user != null && _user!.email != null) {
+        _fetchUserData(_user!.email!);
+      } else {
+        _credits = null;
+        _subscriptionStatus = null;
+        _supabaseUserId = null;
+        _isCreditsLoading = false;
       }
+
+      notifyListeners();
     });
 
-    // Check if user is already signed in
-    final session = _supabase.auth.currentSession;
-    if (session != null) {
-      _updateUserFromSession(session);
+    // Set up periodic refresh for credits (every 5 minutes)
+    _refreshTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
+      if (_user != null && _user!.email != null) {
+        _fetchUserData(_user!.email!);
+      }
+    });
+  }
+
+  Future<void> _fetchUserData(String userEmail, {int retryCount = 0}) async {
+    if (kDebugMode) {
+      print(
+          '[CREDITS] fetchUserData called for email: $userEmail, retry: $retryCount');
     }
-  }
 
-  void _updateUserFromSession(Session session) {
-    final user = session.user;
-    _userEmail = user.email?.toLowerCase();
-    _userName = user.userMetadata?['full_name'] ?? user.userMetadata?['name'];
-    _userPhotoUrl = user.userMetadata?['avatar_url'];
-    _userId = user.id;
-    _isSignedIn = true;
-
-    print('User signed in via Supabase: $_userEmail (ID: $_userId)');
+    _isCreditsLoading = true;
     notifyListeners();
-    _onAuthStateChanged?.call();
 
-    // Ensure user exists in our users table
-    _ensureUserExists(user);
-  }
-
-  Future<void> _ensureUserExists(User user) async {
     try {
-      // Check if user already exists in our users table
-      if (user.email == null) {
-        print('User email is null, cannot create user record');
+      // First, get the user ID by email for more secure operations
+      if (kDebugMode) {
+        print('[CREDITS] Looking up user ID for email: $userEmail');
+      }
+
+      final userIdResponse = await _supabase
+          .from('users')
+          .select('id')
+          .eq('email', userEmail)
+          .single();
+
+      final userId = userIdResponse['id'];
+      if (userId == null) {
+        if (retryCount < 3) {
+          // Retry after delay if user might still be registering
+          if (kDebugMode) {
+            print(
+                'User ID not found, retrying in ${(retryCount + 1) * 1000}ms...');
+          }
+
+          await Future.delayed(Duration(milliseconds: (retryCount + 1) * 1000));
+          return _fetchUserData(userEmail, retryCount: retryCount + 1);
+        }
+
+        if (kDebugMode) {
+          print(
+              'User ID not found for email: $userEmail after $retryCount retries');
+        }
+
+        _credits = 0;
+        _subscriptionStatus = null;
+        _supabaseUserId = null;
+        _isCreditsLoading = false;
+        notifyListeners();
         return;
       }
 
-      final existingUser = await _supabase
+      // Store the user ID for future use
+      _supabaseUserId = userId;
+      if (kDebugMode) {
+        print('[CREDITS] Found user ID: $userId for email: $userEmail');
+      }
+
+      // Now use the user ID to fetch credits and plan
+      if (kDebugMode) {
+        print('[CREDITS] Querying supabase for user data by ID: $userId');
+      }
+
+      final userDataResponse = await _supabase
           .from('users')
-          .select()
-          .eq('email', user.email!)
-          .maybeSingle();
+          .select('credits, plan')
+          .eq('id', userId)
+          .single();
 
-      if (existingUser == null) {
-        print('Creating new user record for: ${user.email}');
+      _credits = userDataResponse['credits'] ?? 0;
+      _subscriptionStatus = userDataResponse['plan'];
 
-        // Create user in our users table
-        final userData = <String, dynamic>{
-          'email': user.email ?? '',
-          'username':
-              user.email?.split('@')[0] ?? 'user_${user.id.substring(0, 8)}',
-        };
-
-        if (user.appMetadata['provider'] == 'google') {
-          userData['google_id'] = user.id;
-        }
-
-        final fullName =
-            user.userMetadata?['full_name'] ?? user.userMetadata?['name'];
-        if (fullName != null) {
-          userData['full_name'] = fullName;
-        }
-
-        final avatarUrl = user.userMetadata?['avatar_url'];
-        if (avatarUrl != null) {
-          userData['avatar_url'] = avatarUrl;
-        }
-
-        await _supabase.from('users').insert(userData);
-        print('Created user record in database: ${user.email}');
-      } else {
+      if (kDebugMode) {
         print(
-            'Found existing user record: ${existingUser['id']} for email: ${user.email}');
-      }
-    } catch (e) {
-      print('Error ensuring user exists: $e');
-    }
-  }
-
-  void _clearUserData() {
-    _userEmail = null;
-    _userName = null;
-    _userPhotoUrl = null;
-    _userId = null;
-    _isSignedIn = false;
-    notifyListeners();
-    _onAuthStateChanged?.call();
-  }
-
-  Future<bool> signInWithGoogle() async {
-    if (_googleSignIn == null) {
-      print(
-          'Google Sign-In is not configured. Please set NEXT_PUBLIC_GOOGLE_CLIENT_ID in .env file.');
-      return false;
-    }
-
-    try {
-      // For direct Google Sign-In through the native SDK
-      final GoogleSignInAccount? googleUser = await _googleSignIn!.signIn();
-      if (googleUser == null) {
-        print('Google Sign-In was canceled by user');
-        return false;
-      }
-
-      print('Google Sign-In successful for: ${googleUser.email}');
-      print('Display name: ${googleUser.displayName}');
-      print('Server auth code available: ${googleUser.serverAuthCode != null}');
-
-      final GoogleSignInAuthentication googleAuth =
-          await googleUser.authentication;
-
-      print(
-          'Google auth - idToken: ${googleAuth.idToken != null ? "present" : "null"}');
-      print(
-          'Google auth - accessToken: ${googleAuth.accessToken != null ? "present" : "null"}');
-      print(
-          'Google auth - serverAuthCode: ${googleUser.serverAuthCode != null ? "present" : "null"}');
-
-      // For web, use the standard OAuth flow
-      if (kIsWeb) {
-        await _supabase.auth.signInWithOAuth(
-          OAuthProvider.google,
-          redirectTo: '${Uri.base.origin}/auth/callback',
-        );
-        return true; // The redirect will handle the rest
-      }
-
-      // For Android, use the idToken if available (preferred)
-      if (googleAuth.idToken != null) {
-        try {
-          print('Attempting to sign in with idToken');
-          final response = await _supabase.auth.signInWithIdToken(
-            provider: OAuthProvider.google,
-            idToken: googleAuth.idToken!,
-            accessToken: googleAuth.accessToken,
-          );
-
-          if (response.user != null) {
-            print(
-                'Successfully signed in with Google idToken: ${response.user!.email}');
-            return true;
-          } else {
-            print('Failed to sign in with idToken - no user returned');
-          }
-        } catch (e) {
-          print('Error signing in with Google idToken: $e');
-          // Fall back to OAuth flow if idToken authentication fails
-        }
-      } else if (googleAuth.accessToken != null) {
-        // Try using the access token if idToken is not available
-        try {
-          print('Attempting to sign in with accessToken since idToken is null');
-
-          // Try to exchange the accessToken for a session
-          final response = await _supabase.auth.signInWithOAuth(
-            OAuthProvider.google,
-            redirectTo: 'com.example.recflux_test://login-callback',
-            queryParams: {
-              'access_token': googleAuth.accessToken!,
-              'skip_browser': 'true',
-            },
-          );
-
-          print('OAuth sign-in with accessToken initiated');
-          return true;
-        } catch (e) {
-          print('Error signing in with Google accessToken: $e');
-        }
-      }
-
-      // Fall back to OAuth flow with deep link for mobile
-      print('Falling back to OAuth flow with deep link for mobile');
-
-      // Make sure to use the correct redirect URL format that matches AndroidManifest.xml
-      const redirectUrl = 'com.example.recflux_test://login-callback';
-      print('Using redirect URL: $redirectUrl');
-
-      // Use signInWithOAuth with the correct redirect URL
-      try {
-        final authResponse = await _supabase.auth.signInWithOAuth(
-          OAuthProvider.google,
-          redirectTo: redirectUrl,
-          queryParams: {
-            'skip_browser': 'true',
-            'access_type': 'offline',
-          },
-        );
-
-        // The deep link will be handled by app_links in main.dart
-        print(
-            'OAuth sign-in initiated - waiting for app_links to handle the callback');
-        return true;
-      } catch (e) {
-        print('Error initiating OAuth flow: $e');
-        return false;
+            '[CREDITS] User data fetched successfully: $_credits credits, plan: $_subscriptionStatus');
       }
     } catch (error) {
-      print('Error signing in with Google: $error');
-      return false;
-    }
-  }
-
-  Future<bool> signInWithEmailPassword(String email, String password) async {
-    try {
-      final AuthResponse response = await _supabase.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
-
-      if (response.user != null) {
-        print('Successfully signed in with email: ${response.user!.email}');
-        return true;
-      } else {
-        print('Failed to sign in with email');
-        return false;
+      if (kDebugMode) {
+        print('Error fetching user data: $error');
       }
-    } catch (error) {
-      print('Error signing in with email/password: $error');
-      return false;
-    }
-  }
 
-  Future<bool> signInAsTestUser() async {
-    try {
-      // For test user, we'll create a session manually
-      _userEmail = testEmail;
-      _userName = 'Test User';
-      _userPhotoUrl = null;
-      _isSignedIn = true;
+      if (error.toString().contains('Row not found') && retryCount < 3) {
+        // Retry after delay if user might still be registering
+        if (kDebugMode) {
+          print('User not found, retrying in ${(retryCount + 1) * 1000}ms...');
+        }
 
-      print('Signed in as test user: $_userEmail');
+        await Future.delayed(Duration(milliseconds: (retryCount + 1) * 1000));
+        return _fetchUserData(userEmail, retryCount: retryCount + 1);
+      }
+
+      _credits = 0;
+      _subscriptionStatus = null;
+      _supabaseUserId = null;
+    } finally {
+      _isCreditsLoading = false;
       notifyListeners();
-      return true;
-    } catch (error) {
-      print('Error signing in as test user: $error');
-      return false;
     }
+  }
+
+  Future<void> refreshCredits() async {
+    if (_user?.email != null) {
+      await _fetchUserData(_user!.email!);
+    }
+  }
+
+  Future<void> signIn() async {
+    await _supabase.auth.signInWithOAuth(
+      OAuthProvider.google,
+      redirectTo: kIsWeb ? null : 'io.recflux.devtools://login-callback/',
+    );
   }
 
   Future<void> signOut() async {
-    try {
-      if (_googleSignIn != null) {
-        await _googleSignIn!.signOut();
-      }
+    await _supabase.auth.signOut();
+    _user = null;
+    _credits = null;
+    _subscriptionStatus = null;
+    _supabaseUserId = null;
+    notifyListeners();
+  }
 
-      await _supabase.auth.signOut();
-      _clearUserData();
-    } catch (error) {
-      print('Error signing out: $error');
-    }
+  @override
+  void dispose() {
+    _refreshTimer?.cancel();
+    super.dispose();
   }
 }
