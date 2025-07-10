@@ -6,15 +6,15 @@ namespace: default
 # Define the common tag for all images
 images:
 - name: recfluxdemoacr.azurecr.io/agentic-structured-service
-  newTag: 20250706023640-4216695c
+  newTag: ${IMAGE_TAG}
 - name: recfluxdemoacr.azurecr.io/kafka-producer-service
-  newTag: 20250706023640-4216695c
+  newTag: ${IMAGE_TAG}
 - name: recfluxdemoacr.azurecr.io/nextjs-app
-  newTag: 20250706023640-4216695c
+  newTag: ${IMAGE_TAG}
 - name: recfluxdemoacr.azurecr.io/recflux-tools-accessibility-service
-  newTag: 20250706023640-4216695c
+  newTag: ${IMAGE_TAG}
 - name: recfluxdemoacr.azurecr.io/code-deploy-service
-  newTag: 20250706023640-4216695c
+  newTag: ${IMAGE_TAG}
 
 resources:
   - zookeeper.yaml
