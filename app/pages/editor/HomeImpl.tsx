@@ -178,6 +178,7 @@ interface ChatProps {
   user?: any;
   onCreditsUpdate?: () => void;
   publicUserId?: string | null;
+  supabaseUserId?: string | null;
 }
 
 // Generate diff from API changes data instead of comparing code strings
@@ -386,7 +387,7 @@ const MessageComponent = React.memo(({ message, theme, setFilesCurrentHandler, t
   );
 });
 
-function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicUserId }: ChatProps & { theme: 'dark' | 'light' }) {
+function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicUserId, supabaseUserId }: ChatProps & { theme: 'dark' | 'light' }) {
   // Restore chat prompt from cookie
   const [input, setInput] = useState(() => Cookies.get('chatPrompt') || '');
   useEffect(() => {
@@ -458,7 +459,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
     }
 
     // Debug authentication status
-    console.log('[SUBMIT] User authenticated:', { email: user.email, id: user.id, supabaseId: supabaseUserId });
+    console.log('[SUBMIT] User authenticated:', { email: user.email, id: user.id, supabaseId: supabaseUserId || 'not available' });
     
     // Check if session is valid
     try {
@@ -521,8 +522,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
             currentCode: chatAction.value === 'GERAR' ? '' : (selectedFile?.value || ''),
             fileName: selectedFile?.name || 'script.js',
             actionType: chatAction.value,
-            userId: supabaseUserId, // Use the supabase user ID instead of auth user ID
-            userEmail: user?.email // Keep email as backup
+            userId: supabaseUserId // Use the supabase user ID
           })
         });
 
@@ -2251,6 +2251,7 @@ return (
               user={user}
               onCreditsUpdate={refetchCredits}
               publicUserId={publicUserId}
+              supabaseUserId={supabaseUserId}
             />
           </div>
         </WinBoxWindow>

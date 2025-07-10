@@ -129,34 +129,16 @@ function parseCodeToStructuredFormat(code) {
 
 // Middleware to check and deduct credits
 const creditCheckMiddleware = async (req, res, next) => {
-    const { userId, userEmail } = req.body;
+    const { userId } = req.body;
     
-    if (!userId && !userEmail) {
-        return res.status(400).json({ error: 'userId or userEmail is required' });
+    if (!userId) {
+        return res.status(400).json({ error: 'userId is required' });
     }
 
-    console.log(`[CREDIT_MIDDLEWARE] Checking credits with userId: ${userId || 'not provided'}, userEmail: ${userEmail || 'not provided'}`);
+    console.log(`[CREDIT_MIDDLEWARE] Checking credits with userId: ${userId}`);
 
     try {
         let userIdToUse = userId;
-        
-        // If only email is provided, look up the user ID first for security
-        if (!userId && userEmail) {
-            console.log(`[CREDIT_MIDDLEWARE] No userId provided, looking up by email: ${userEmail}`);
-            const { data: userData, error: userLookupError } = await supabase
-                .from('users')
-                .select('id')
-                .eq('email', userEmail)
-                .single();
-            
-            if (userLookupError || !userData) {
-                console.error('[CREDIT_MIDDLEWARE] Error looking up user by email:', userLookupError);
-                return res.status(404).json({ error: 'User not found by email' });
-            }
-            
-            userIdToUse = userData.id;
-            console.log(`[CREDIT_MIDDLEWARE] Found user ID: ${userIdToUse} for email: ${userEmail}`);
-        }
         
         // Now fetch the user by ID (more secure)
         const { data: user, error: userError } = await supabase
@@ -463,18 +445,37 @@ Regras técnicas:
  */
 app.post('/api/agentic', creditCheckMiddleware, async (req, res) => {
   console.log('[AGENTIC-STRUCTURED] Microservice endpoint hit after credit check.');
+  
+  // Enhanced logging for request details
+  console.log('[AGENTIC-STRUCTURED] Request headers:', JSON.stringify(req.headers));
+  
   try {
     const { prompt, currentCode, fileName, actionType, verifiedUserId } = req.body;
     console.log(`[AGENTIC-STRUCTURED] Request body parsed. actionType: ${actionType}, verifiedUserId: ${verifiedUserId}`);
+    console.log(`[AGENTIC-STRUCTURED] fileName: ${fileName}, promptLength: ${prompt?.length || 0}, codeLength: ${currentCode?.length || 0}`);
 
     // Smart validation: Check for fields required by all types first.
     if (!prompt || !actionType) {
-        return res.status(400).json({ error: 'Missing required fields: prompt, actionType' });
+        console.error('[AGENTIC-STRUCTURED] Validation error: Missing required fields');
+        return res.status(400).json({ 
+          error: 'Missing required fields: prompt, actionType',
+          details: {
+            promptPresent: !!prompt,
+            actionTypePresent: !!actionType
+          }
+        });
     }
 
     // Conditional validation: Check for fields only needed for specific actions.
     if (actionType !== 'GERAR' && actionType !== 'CHAT' && (!currentCode || !fileName)) {
-        return res.status(400).json({ error: `Missing required fields for actionType ${actionType}: currentCode, fileName` });
+        console.error(`[AGENTIC-STRUCTURED] Validation error: Missing required fields for actionType ${actionType}`);
+        return res.status(400).json({ 
+          error: `Missing required fields for actionType ${actionType}: currentCode, fileName`,
+          details: {
+            currentCodePresent: !!currentCode,
+            fileNamePresent: !!fileName
+          }
+        });
     }
 
     let systemPrompt = getSystemPrompt(actionType || 'EDITAR');
@@ -482,10 +483,14 @@ app.post('/api/agentic', creditCheckMiddleware, async (req, res) => {
 
     if (actionType === 'GERAR') {
       userPrompt = `Crie um componente react: ${prompt}`;
+      console.log('[AGENTIC-STRUCTURED] Using GERAR prompt template');
     } else {
-      const codeStructure = parseCodeToStructuredFormat(currentCode);
-      const structuredCodeDisplay = JSON.stringify(codeStructure, null, 2);
-      userPrompt = `ARQUIVO: ${fileName}
+      try {
+        console.log('[AGENTIC-STRUCTURED] Parsing code structure...');
+        const codeStructure = parseCodeToStructuredFormat(currentCode);
+        console.log(`[AGENTIC-STRUCTURED] Code structure parsed successfully with ${codeStructure.length} lines`);
+        const structuredCodeDisplay = JSON.stringify(codeStructure, null, 2);
+        userPrompt = `ARQUIVO: ${fileName}
 
 ESTRUTURA DO CÓDIGO COM MAPEAMENTO DE LINHAS:
 ${structuredCodeDisplay}
@@ -497,42 +502,105 @@ INSTRUÇÕES:
 2. Faça APENAS a mudança mínima solicitada.
 3. Retorne JSON com as mudanças mínimas.
 SEMPRE responda em português brasileiro.`;
+      } catch (parseError) {
+        console.error('[AGENTIC-STRUCTURED] Error parsing code structure:', parseError);
+        userPrompt = `ARQUIVO: ${fileName}
+
+CÓDIGO ORIGINAL:
+${currentCode}
+
+SOLICITAÇÃO DO USUÁRIO: ${prompt}
+
+INSTRUÇÕES:
+1. Analise o código acima.
+2. Faça APENAS a mudança mínima solicitada.
+3. Retorne JSON com as mudanças mínimas.
+SEMPRE responda em português brasileiro.`;
+        console.log('[AGENTIC-STRUCTURED] Using fallback prompt template due to parsing error');
+      }
     }
     
-    const result = await streamText({
-      model: openrouter('anthropic/claude-sonnet-4'),
-      system: systemPrompt && systemPrompt.trim() ? systemPrompt : undefined,
-      messages: [{ role: 'user', content: userPrompt }],
-      temperature: 0.7,
-      maxTokens: 8000,
-    });
-
-    // Reverting to a streaming response, with added logging.
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    console.log('[AGENTIC-STRUCTURED] AI stream received. Streaming response back to BFF...');
+    console.log('[AGENTIC-STRUCTURED] Preparing to call AI model...');
+    console.log(`[AGENTIC-STRUCTURED] System prompt length: ${systemPrompt?.length || 0}`);
+    console.log(`[AGENTIC-STRUCTURED] User prompt length: ${userPrompt?.length || 0}`);
     
-    let chunkCount = 0;
-    for await (const chunk of result.textStream) {
-        chunkCount++;
-        if (chunkCount === 1) {
-            console.log('[AGENTIC-STRUCTURED] Writing first chunk...');
-        }
-        res.write(chunk);
+    try {
+      const result = await streamText({
+        model: openrouter('anthropic/claude-sonnet-4'),
+        system: systemPrompt && systemPrompt.trim() ? systemPrompt : undefined,
+        messages: [{ role: 'user', content: userPrompt }],
+        temperature: 0.7,
+        maxTokens: 8000,
+      });
+
+      // Reverting to a streaming response, with added logging.
+      res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+      console.log('[AGENTIC-STRUCTURED] AI stream received. Streaming response back to BFF...');
+      
+      let chunkCount = 0;
+      let totalChunkSize = 0;
+      let firstChunkContent = '';
+      let lastChunkContent = '';
+      
+      for await (const chunk of result.textStream) {
+          chunkCount++;
+          totalChunkSize += chunk.length;
+          
+          if (chunkCount === 1) {
+              console.log('[AGENTIC-STRUCTURED] Writing first chunk...');
+              firstChunkContent = chunk.substring(0, Math.min(100, chunk.length));
+              console.log(`[AGENTIC-STRUCTURED] First chunk preview: ${firstChunkContent}${chunk.length > 100 ? '...' : ''}`);
+          }
+          
+          if (chunkCount % 10 === 0) {
+              console.log(`[AGENTIC-STRUCTURED] Streamed ${chunkCount} chunks so far (${totalChunkSize} bytes total)`);
+          }
+          
+          lastChunkContent = chunk;
+          res.write(chunk);
+      }
+
+      if (chunkCount > 0) {
+          console.log(`[AGENTIC-STRUCTURED] Finished streaming ${chunkCount} chunks (${totalChunkSize} bytes total).`);
+          console.log(`[AGENTIC-STRUCTURED] Last chunk: ${lastChunkContent}`);
+      } else {
+          console.warn('[AGENTIC-STRUCTURED] AI stream was empty. No chunks were sent.');
+      }
+
+      res.end();
+    } catch (aiError) {
+      console.error('[AGENTIC-STRUCTURED] Error calling AI model:', aiError);
+      console.error('[AGENTIC-STRUCTURED] Error details:', aiError.message);
+      console.error('[AGENTIC-STRUCTURED] Error stack:', aiError.stack);
+      
+      // Return a structured error response
+      if (!res.headersSent) {
+        res.status(500).json({ 
+          error: 'AI Model Error', 
+          message: aiError.message,
+          timestamp: new Date().toISOString(),
+          details: {
+            modelProvider: 'anthropic/claude-sonnet-4',
+            errorType: aiError.name || 'Unknown'
+          }
+        });
+      } else {
+        res.end();
+      }
     }
-
-    if (chunkCount > 0) {
-        console.log(`[AGENTIC-STRUCTURED] Finished streaming ${chunkCount} chunks.`);
-    } else {
-        console.warn('[AGENTIC-STRUCTURED] AI stream was empty. No chunks were sent.');
-    }
-
-    res.end();
-
   } catch (error) {
-    console.error('[AGENTIC-STRUCTURED] Error in microservice:', error);
+    console.error('[AGENTIC-STRUCTURED] Unhandled error in microservice:', error);
+    console.error('[AGENTIC-STRUCTURED] Error details:', error.message);
+    console.error('[AGENTIC-STRUCTURED] Error stack:', error.stack);
+    
     // Ensure we don't try to stream a response if headers are already sent
     if (!res.headersSent) {
-        res.status(500).json({ error: 'Internal Server Error' });
+        res.status(500).json({ 
+          error: 'Internal Server Error',
+          message: error.message,
+          timestamp: new Date().toISOString(),
+          errorType: error.name || 'Unknown'
+        });
     } else {
         res.end();
     }
