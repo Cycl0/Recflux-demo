@@ -11,16 +11,7 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
   bool _isLoading = false;
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,134 +40,35 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 32),
 
-              // Email field
-              TextField(
-                controller: _emailController,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.email),
-                ),
-                keyboardType: TextInputType.emailAddress,
-              ),
-
-              const SizedBox(height: 16),
-
-              // Password field
-              TextField(
-                controller: _passwordController,
-                decoration: const InputDecoration(
-                  labelText: 'Senha',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.lock),
-                ),
-                obscureText: true,
-              ),
-
-              const SizedBox(height: 24),
-
-              // Login button
-              ElevatedButton(
-                onPressed:
-                    _isLoading ? null : () => _loginWithEmailPassword(context),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  backgroundColor: Theme.of(context).primaryColor,
-                  foregroundColor: Colors.white,
-                  minimumSize: const Size(double.infinity, 50),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                ),
-                child: _isLoading
-                    ? const SizedBox(
-                        height: 20,
-                        width: 20,
-                        child: CircularProgressIndicator(
-                          color: Colors.white,
-                          strokeWidth: 2,
-                        ),
-                      )
-                    : const Text(
-                        'Entrar',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-              ),
-
-              const SizedBox(height: 16),
-
-              // Divider
-              const Row(
-                children: [
-                  Expanded(child: Divider()),
-                  Padding(
-                    padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Text('OU'),
-                  ),
-                  Expanded(child: Divider()),
-                ],
-              ),
-
-              const SizedBox(height: 16),
-
               // Google Sign-In button
-              Column(
-                children: [
-                  ElevatedButton.icon(
-                    icon: const Icon(
-                      Icons.g_mobiledata,
-                      size: 24,
-                      color: Colors.red,
-                    ),
-                    label: const Text(
-                      'Entrar com Google',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(
-                        vertical: 16,
-                        horizontal: 24,
-                      ),
-                      backgroundColor: Colors.white,
-                      foregroundColor: Colors.black87,
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                        side: const BorderSide(color: Colors.grey, width: 1),
-                      ),
-                      minimumSize: const Size(double.infinity, 50),
-                    ),
-                    onPressed:
-                        _isLoading ? null : () => _loginWithGoogle(context),
+              ElevatedButton.icon(
+                icon: const Icon(
+                  Icons.g_mobiledata,
+                  size: 24,
+                  color: Colors.red,
+                ),
+                label: const Text(
+                  'Entrar com Google',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
                   ),
-                ],
-              ),
-
-              const SizedBox(height: 24),
-
-              // Test user login
-              OutlinedButton(
-                onPressed: _isLoading ? null : () => _loginAsTestUser(context),
-                style: OutlinedButton.styleFrom(
+                ),
+                style: ElevatedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(
                     vertical: 16,
                     horizontal: 24,
                   ),
-                  minimumSize: const Size(double.infinity, 50),
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.black87,
+                  elevation: 2,
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(8),
+                    side: const BorderSide(color: Colors.grey, width: 1),
                   ),
+                  minimumSize: const Size(double.infinity, 50),
                 ),
-                child: const Text(
-                  'Entrar como usuário de teste',
-                  style: TextStyle(fontSize: 16),
-                ),
+                onPressed: _isLoading ? null : () => _loginWithGoogle(context),
               ),
             ],
           ),
@@ -185,93 +77,33 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Future<void> _loginWithEmailPassword(BuildContext context) async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Por favor, preencha todos os campos'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    setState(() {
-      _isLoading = true;
-    });
-
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final success = await authService.signInWithEmailPassword(
-      _emailController.text,
-      _passwordController.text,
-    );
-
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (success) {
-        Navigator.of(context).pushReplacementNamed('/home');
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Email ou senha inválidos'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    }
-  }
-
   Future<void> _loginWithGoogle(BuildContext context) async {
     setState(() {
       _isLoading = true;
     });
 
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final success = await authService.signInWithGoogle();
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      await authService.signIn();
 
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (success) {
-        Navigator.of(context).pushReplacementNamed('/home');
-      } else {
+      if (mounted) {
+        // We don't navigate here as the auth state change will trigger navigation
+        // in the AuthenticationWrapper
+      }
+    } catch (e) {
+      if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Falha ao fazer login com Google'),
+          SnackBar(
+            content: Text('Falha ao fazer login: $e'),
             backgroundColor: Colors.red,
           ),
         );
       }
-    }
-  }
-
-  Future<void> _loginAsTestUser(BuildContext context) async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    final authService = Provider.of<AuthService>(context, listen: false);
-    final success = await authService.signInAsTestUser();
-
-    if (mounted) {
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (success) {
-        Navigator.of(context).pushReplacementNamed('/home');
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Falha ao fazer login como usuário de teste'),
-            backgroundColor: Colors.red,
-          ),
-        );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
       }
     }
   }

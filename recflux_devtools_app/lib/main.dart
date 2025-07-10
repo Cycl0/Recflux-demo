@@ -66,13 +66,15 @@ Future<void> main() async {
     "For Google Sign-In on Android, make sure to add 'com.example.recflux_test://login-callback' as an authorized redirect URI in Google Cloud Console",
   );
 
-  // Initialize microservices
-  ServiceManager().initialize(
-    agenticServiceUrl: ServiceConfig.finalAgenticServiceUrl,
-    codeDeployServiceUrl: ServiceConfig.finalCodeDeployServiceUrl,
-    kafkaServiceUrl: ServiceConfig.finalKafkaServiceUrl,
-    accessibilityServiceUrl: ServiceConfig.finalAccessibilityServiceUrl,
-  );
+  // Get Supabase client instance
+  final supabaseClient = Supabase.instance.client;
+
+  // Create AuthService instance
+  final authService = AuthService(supabaseClient);
+
+  // Initialize ServiceManager with AuthService
+  final serviceManager = ServiceManager();
+  serviceManager.initialize(authService);
 
   print('Microservices initialized:');
   print('- Agentic Service: ${ServiceConfig.finalAgenticServiceUrl}');
@@ -86,9 +88,16 @@ Future<void> main() async {
       providers: [
         ChangeNotifierProvider(create: (context) => TestRunner()),
         ChangeNotifierProvider(create: (context) => CodeEditorProvider()),
-        ChangeNotifierProvider(create: (context) => AuthService()),
-        ChangeNotifierProvider(create: (context) => ChatProvider()),
-        ChangeNotifierProvider(create: (context) => MicroserviceProvider()),
+        ChangeNotifierProvider.value(value: authService),
+        ChangeNotifierProvider(
+            create: (context) => ChatProvider(
+                  Provider.of<AuthService>(context, listen: false),
+                  ServiceConfig(),
+                )),
+        ChangeNotifierProvider(
+            create: (context) => MicroserviceProvider(
+                  Provider.of<AuthService>(context, listen: false),
+                )),
       ],
       child: const ProviderConnector(),
     ),
@@ -107,12 +116,10 @@ class _ProviderConnectorState extends State<ProviderConnector> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authService = Provider.of<AuthService>(context, listen: false);
       final codeEditorProvider =
           Provider.of<CodeEditorProvider>(context, listen: false);
-      authService.setAuthStateChangedCallback(() {
-        codeEditorProvider.refreshOnAuthChange();
-      });
+      // No need for auth state callback, the AuthService now handles this internally
+      codeEditorProvider.refreshOnAuthChange();
     });
   }
 
@@ -284,7 +291,10 @@ class AuthenticationWrapper extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AuthService>(
       builder: (context, authService, _) {
-        if (authService.isSignedIn) {
+        if (authService.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (authService.user != null) {
           return const MainNavigator();
         } else {
           return const LoginScreen();
@@ -327,18 +337,27 @@ class _MainNavigatorState extends State<MainNavigator> {
       appBar: AppBar(
         title: const Text('Recflux DevTools'),
         actions: [
-          if (authService.isSignedIn)
+          if (authService.user != null)
             Row(
               children: [
-                if (authService.userPhotoUrl != null)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                    child: CircleAvatar(
-                      backgroundImage: NetworkImage(authService.userPhotoUrl!),
-                      radius: 16,
-                    ),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8.0),
+                  child: CircleAvatar(
+                    backgroundImage:
+                        authService.user?.userMetadata?['avatar_url'] != null
+                            ? NetworkImage(
+                                authService.user!.userMetadata!['avatar_url'])
+                            : null,
+                    child: authService.user?.userMetadata?['avatar_url'] == null
+                        ? const Icon(Icons.person)
+                        : null,
+                    radius: 16,
                   ),
-                Text(authService.userName ?? authService.userEmail ?? 'User'),
+                ),
+                Text(authService.user?.userMetadata?['name'] ??
+                    authService.user?.userMetadata?['full_name'] ??
+                    authService.user?.email ??
+                    'User'),
                 IconButton(
                   icon: const Icon(Icons.logout),
                   tooltip: 'Sign Out',

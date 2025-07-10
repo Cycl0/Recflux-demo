@@ -226,48 +226,53 @@ class ChatProvider with ChangeNotifier {
       // Use the ServiceManager to access the agentic service
       final serviceManager = ServiceManager();
 
-      // Prepare context for the structured query
-      final context = {
-        'actionType': actionType,
-        'currentCode': selectedFile?.content ?? '',
-        'fileName': selectedFile?.name ?? 'script.js',
-        'source': 'flutter_app',
-      };
-
       // Send structured query using microservices
-      final response = await serviceManager.agentic.sendStructuredQuery(
-        query: content,
-        userId: userId,
-        userEmail: userEmail, // Pass user email to the service
-        context: context,
+      final responseContent =
+          await serviceManager.agentic.executeAgenticStructuredAction(
+        prompt: content,
+        currentCode: selectedFile?.content ?? '',
+        fileName: selectedFile?.name ?? 'script.js',
+        actionType: actionType,
       );
 
       // Process the response
-      String responseContent = '';
+      String displayContent = responseContent;
       Map<String, dynamic>? diffData;
 
-      if (response.containsKey('explanation')) {
-        responseContent += response['explanation'];
-      }
+      // Try to parse as JSON if it looks like JSON
+      if (responseContent.trim().startsWith('{') &&
+          responseContent.trim().endsWith('}')) {
+        try {
+          final jsonData = jsonDecode(responseContent);
 
-      if (response.containsKey('code') && selectedFile != null) {
-        final newCode = response['code'];
-        diffData = {
-          'oldCode': selectedFile.content ?? '',
-          'newCode': newCode,
-          'changes': [
-            {
-              'type': 'replace',
-              'startLine': 1,
-              'endLine': selectedFile.content?.split('\n').length ?? 1,
-              'code': newCode,
-              'description': 'Code replacement via microservices',
-            },
-          ],
-          'fileExtension': selectedFile.name.split('.').last,
-        };
-        responseContent +=
-            '\n\n```${selectedFile.name.split('.').last}\n$newCode\n```';
+          if (jsonData.containsKey('explanation')) {
+            displayContent = jsonData['explanation'];
+          }
+
+          if (jsonData.containsKey('code') && selectedFile != null) {
+            final newCode = jsonData['code'];
+            diffData = {
+              'oldCode': selectedFile.content ?? '',
+              'newCode': newCode,
+              'changes': jsonData['changes'] ??
+                  [
+                    {
+                      'type': 'replace',
+                      'startLine': 1,
+                      'endLine': selectedFile.content?.split('\n').length ?? 1,
+                      'code': newCode,
+                      'description': 'Code replacement via microservices',
+                    }
+                  ],
+              'fileExtension': selectedFile.name.split('.').last,
+            };
+            displayContent +=
+                '\n\n```${selectedFile.name.split('.').last}\n$newCode\n```';
+          }
+        } catch (e) {
+          // If it's not valid JSON, just use the raw response
+          print('Failed to parse response as JSON: $e');
+        }
       }
 
       // Update the assistant message
@@ -277,7 +282,7 @@ class ChatProvider with ChangeNotifier {
         _messages[loadingIndex] = ChatMessage(
           id: assistantMessage.id,
           role: MessageRole.assistant,
-          content: responseContent,
+          content: displayContent,
           diffData: diffData,
           isLoading: false,
         );

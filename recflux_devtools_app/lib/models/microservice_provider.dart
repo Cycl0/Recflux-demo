@@ -4,9 +4,13 @@ import '../services/agentic_service.dart';
 import '../services/code_deploy_service.dart';
 import '../services/kafka_service.dart';
 import '../services/accessibility_service.dart';
+import '../models/auth_service.dart';
 
 class MicroserviceProvider extends ChangeNotifier {
   final ServiceManager _serviceManager = ServiceManager();
+  final AuthService _authService;
+
+  MicroserviceProvider(this._authService);
 
   // Service instances
   AgenticService get agentic => _serviceManager.agentic;
@@ -24,44 +28,29 @@ class MicroserviceProvider extends ChangeNotifier {
   Map<String, dynamic>? get lastResponse => _lastResponse;
 
   // Agentic service methods
-  Future<Map<String, dynamic>> sendStructuredQuery({
-    required String query,
-    required String userId,
-    Map<String, dynamic>? context,
+  Future<String> executeAgenticStructuredAction({
+    required String prompt,
+    String currentCode = '',
+    String fileName = 'script.js',
+    String actionType = 'EDITAR',
   }) async {
     _setLoading(true);
     _clearError();
 
     try {
-      final response = await agentic.sendStructuredQuery(
-        query: query,
-        userId: userId,
-        context: context,
+      final response = await agentic.executeAgenticStructuredAction(
+        prompt: prompt,
+        currentCode: currentCode,
+        fileName: fileName,
+        actionType: actionType,
       );
 
-      _lastResponse = response;
       _setLoading(false);
       return response;
     } catch (e) {
       _setError(e.toString());
       _setLoading(false);
-      rethrow;
-    }
-  }
-
-  Future<Map<String, dynamic>> getUserCredits(String userId) async {
-    _setLoading(true);
-    _clearError();
-
-    try {
-      final response = await agentic.getUserCredits(userId);
-      _lastResponse = response;
-      _setLoading(false);
-      return response;
-    } catch (e) {
-      _setError(e.toString());
-      _setLoading(false);
-      rethrow;
+      return 'Error: $e';
     }
   }
 
