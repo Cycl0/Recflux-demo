@@ -521,7 +521,6 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
             currentCode: chatAction.value === 'GERAR' ? '' : (selectedFile?.value || ''),
             fileName: selectedFile?.name || 'script.js',
             actionType: chatAction.value,
-            userEmail: user?.email,
             userId: user?.id
           })
         });

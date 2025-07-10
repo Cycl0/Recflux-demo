@@ -14,11 +14,31 @@ spec:
     spec:
       imagePullSecrets:
       - name: acr-auth
+      volumes:
+      - name: health-proxy-volume
+        configMap:
+          name: health-proxy-configmap
       containers:
       - name: agentic-structured-service
         image: recfluxdemoacr.azurecr.io/agentic-structured-service:latest
         ports:
         - containerPort: 3001
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 30
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
         env:
         - name: CORS_ORIGIN
           value: "*"
@@ -82,6 +102,17 @@ spec:
             secretKeyRef:
               name: app-secrets
               key: VERCEL_TOKEN
+      - name: health-proxy
+        image: node:18-slim
+        command: ["node", "/health-proxy/health-proxy.js"]
+        ports:
+        - containerPort: 8080
+        env:
+        - name: SERVICE_NAME
+          value: "agentic-structured-service"
+        volumeMounts:
+        - name: health-proxy-volume
+          mountPath: /health-proxy
 ---
 apiVersion: v1
 kind: Service
@@ -91,6 +122,7 @@ spec:
   selector:
     app: agentic-structured-service
   ports:
-  - port: 3001
+  - protocol: TCP
+    port: 3001
     targetPort: 3001
   type: ClusterIP 
