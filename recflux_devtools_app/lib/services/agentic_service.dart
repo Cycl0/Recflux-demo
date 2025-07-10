@@ -32,7 +32,10 @@ class AgenticService {
 
       final response = await http.post(
         Uri.parse('${ServiceConfig.finalAgenticServiceUrl}/api/agentic'),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
         body: jsonEncode({
           'prompt': prompt,
           'currentCode': currentCode,
