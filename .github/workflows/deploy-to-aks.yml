@@ -176,7 +176,6 @@ jobs:
   build-flutter-apk:
     name: Build Flutter Release APK
     runs-on: ubuntu-latest
-    needs: build-and-deploy # Optional: run after the main deploy job
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
