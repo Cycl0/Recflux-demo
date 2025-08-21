@@ -199,6 +199,32 @@ app.post('/deploy', async (req, res) => {
       throw new Error(`Template src/App.jsx missing in temp-deploy at ${srcAppPath}.`);
     }
 
+    // Link temp dir to a fixed Vercel project if envs are provided
+    try {
+      const vercelProjectId = process.env.VERCEL_PROJECT_ID;
+      const vercelOrgId = process.env.VERCEL_ORG_ID;
+      if (vercelProjectId && vercelOrgId) {
+        const vercelDir = path.join(tempDir, '.vercel');
+        await fs.ensureDir(vercelDir);
+        await fs.writeJson(
+          path.join(vercelDir, 'project.json'),
+          { projectId: vercelProjectId, orgId: vercelOrgId },
+          { spaces: 2 }
+        );
+        // Some CLI versions also read org.json; write defensively
+        await fs.writeJson(
+          path.join(vercelDir, 'org.json'),
+          { orgId: vercelOrgId },
+          { spaces: 2 }
+        );
+        console.log(`[DEPLOY-${deploymentId}] Linked temp directory to Vercel project ${vercelProjectId} (org ${vercelOrgId}).`);
+      } else {
+        console.log(`[DEPLOY-${deploymentId}] VERCEL_PROJECT_ID/VERCEL_ORG_ID not set; CLI will create/select project automatically.`);
+      }
+    } catch (linkErr) {
+      console.warn(`[DEPLOY-${deploymentId}] Failed to write .vercel linking files:`, linkErr?.message || linkErr);
+    }
+
     // Process the incoming React code
     // Ensure React is imported for CSSProperties assertion
     const imports = "import React, { useState, useEffect, useReducer, useRef, useCallback, useMemo, useContext, Component } from 'react';\n\n";
@@ -272,15 +298,18 @@ app.post('/deploy', async (req, res) => {
 
     // Run the Vercel deployment command
     console.log('Starting Vercel deployment (public)...');
-    const { stdout } = await execa(
-      'vercel',
-      ['--prod', '--public', '--yes', '--token', process.env.VERCEL_TOKEN],
-      {
-        cwd: tempDir,
-        // Pass parent environment variables to the child process
-        env: { ...process.env },
-      }
-    );
+    const vercelArgs = ['--prod', '--public', '--yes', '--token', process.env.VERCEL_TOKEN];
+    if (process.env.VERCEL_SCOPE) {
+      vercelArgs.push('--scope', process.env.VERCEL_SCOPE);
+    }
+    if (process.env.VERCEL_PROJECT_NAME) {
+      vercelArgs.push('--name', process.env.VERCEL_PROJECT_NAME);
+    }
+    const { stdout } = await execa('vercel', vercelArgs, {
+      cwd: tempDir,
+      // Pass parent environment variables to the child process
+      env: { ...process.env },
+    });
 
     console.log('Vercel deployment command output:', stdout);
 
