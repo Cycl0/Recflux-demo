@@ -78,7 +78,7 @@ const transport = new StdioClientTransport({
     command: MCP_COMMAND,
     args: MCP_ARGS.split(/\s+/).filter(Boolean)
 });
-const mcpClient = new Client({ name: 'whatsapp-codegen-bot', version: '1.0.0' }, { capabilities: { tools: {} } });
+const mcpClient = new Client({ name: 'whatsapp-codegen-bot', version: '1.0.0' }, { capabilities: { tools: {} }, requestTimeoutMs: 600000 });
 async function startMcp() {
     await mcpClient.connect(transport);
     console.log('Connected to MCP server');
@@ -327,6 +327,8 @@ app.post('/webhook', async (req, res) => {
             let wrapAsCode = true;
             if (text.toLowerCase().startsWith('/deploy ')) {
                 const reactCode = text.slice(8);
+                // Immediate feedback to user about expected duration
+                await sendWhatsappText(from, '⏳ Iniciando deploy… tempo estimado ~2 minutos. Enviarei o link e o screenshot assim que estiver pronto.');
                 const raw = await callCodeDeploy(reactCode);
                 reply = raw;
             }
@@ -413,6 +415,8 @@ app.post('/webhook', async (req, res) => {
             }
             else {
                 console.log(`[WEBHOOK] Processing deployment request from ${from}: "${text.substring(0, 100)}..."`);
+                // Immediate feedback to user about expected duration
+                await sendWhatsappText(from, '⏳ Gerando e publicando… tempo estimado ~2 minutos. Vou enviar o link e o screenshot quando finalizar.');
                 const result = await buildAndDeployFromPrompt(text, from);
                 console.log('[WEBHOOK] Deployment result:', {
                     textLength: result.text.length,

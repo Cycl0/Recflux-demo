@@ -38,7 +38,7 @@ const DASHBOARD_SERVICE_URL = process.env.DASHBOARD_SERVICE_URL || `${SERVICES_S
 
 const server = new McpServer(
 	{ name: 'codegen-mcp', version: '1.0.0' },
-	{ capabilities: { tools: {} } }
+	{ capabilities: { tools: {} }, requestTimeoutMs: 600000 } as any
 );
 
 function logServiceRequest(service: string, url: string, payload: unknown) {

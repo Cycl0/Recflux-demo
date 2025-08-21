@@ -31,7 +31,7 @@ const TEST_SERVICE_URL = process.env.TEST_SERVICE_URL || `${SERVICES_SCHEME}://$
 const ACCESSIBILITY_SERVICE_URL = process.env.ACCESSIBILITY_SERVICE_URL || `${SERVICES_SCHEME}://${SERVICES_HOST}:${DEFAULT_ACCESSIBILITY_PORT}`;
 const DEPLOY_SERVICE_URL = process.env.DEPLOY_SERVICE_URL || `${SERVICES_SCHEME}://${SERVICES_HOST}:${DEFAULT_CODE_DEPLOY_PORT}`;
 const DASHBOARD_SERVICE_URL = process.env.DASHBOARD_SERVICE_URL || `${SERVICES_SCHEME}://${SERVICES_HOST}:${DEFAULT_DASHBOARD_PORT}`;
-const server = new McpServer({ name: 'codegen-mcp', version: '1.0.0' }, { capabilities: { tools: {} } });
+const server = new McpServer({ name: 'codegen-mcp', version: '1.0.0' }, { capabilities: { tools: {} }, requestTimeoutMs: 600000 });
 function logServiceRequest(service, url, payload) {
     try {
         console.log(`[SERVICE:${service}] POST ${url}`);
