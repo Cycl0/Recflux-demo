@@ -121,11 +121,33 @@ app.post('/deploy', async (req, res) => {
   try {
     const { execa } = await import('execa');
 
+    // Debug path information
+    console.log('[DEBUG] __dirname:', __dirname);
+    console.log('[DEBUG] tempDir:', tempDir);
+    console.log('[DEBUG] templateDir:', templateDir);
+    
+    // Verify template directory exists before copying
+    if (!(await fs.pathExists(templateDir))) {
+      throw new Error(`Template directory does not exist: ${templateDir}`);
+    }
+    
+    // Check template directory contents
+    const templateContents = await fs.readdir(templateDir);
+    console.log('[DEBUG] Template directory contents:', templateContents);
+
     // Clean up and create a temporary directory for the deployment
     await fs.emptyDir(tempDir);
     
+    // Ensure temp directory exists
+    await fs.ensureDir(tempDir);
+    
     // Copy the React template to the temporary directory
+    console.log('[DEBUG] Copying template from:', templateDir, 'to:', tempDir);
     await fs.copy(templateDir, tempDir);
+    
+    // Verify copy was successful
+    const tempContents = await fs.readdir(tempDir);
+    console.log('[DEBUG] Temp directory contents after copy:', tempContents);
 
     // Runtime toolchain diagnostics
     try {
@@ -137,11 +159,15 @@ app.post('/deploy', async (req, res) => {
     const pkgPath = path.join(tempDir, 'package.json');
     const lockPath = path.join(tempDir, 'package-lock.json');
     const srcAppPath = path.join(tempDir, 'src', 'App.jsx');
+    
+    console.log('[DEBUG] Checking for package.json at:', pkgPath);
     if (!(await fs.pathExists(pkgPath))) {
-      throw new Error('Template package.json missing in temp-deploy. Ensure template/ was copied.');
+      throw new Error(`Template package.json missing in temp-deploy at ${pkgPath}. Ensure template/ was copied.`);
     }
+    
+    console.log('[DEBUG] Checking for App.jsx at:', srcAppPath);
     if (!(await fs.pathExists(srcAppPath))) {
-      throw new Error('Template src/App.jsx missing in temp-deploy.');
+      throw new Error(`Template src/App.jsx missing in temp-deploy at ${srcAppPath}.`);
     }
 
     // Process the incoming React code
@@ -177,6 +203,13 @@ app.post('/deploy', async (req, res) => {
 
     // Install dependencies in the temporary directory
     console.log('Installing dependencies in temp directory...');
+    console.log('[DEBUG] Installing dependencies in:', tempDir);
+    
+    // Double-check that package.json exists before running npm
+    if (!(await fs.pathExists(pkgPath))) {
+      throw new Error(`Cannot install dependencies: package.json not found at ${pkgPath}`);
+    }
+    
     const npmPath = '/usr/bin/npm'; // prefer Node 22 installed via NodeSource
     const baseEnv = {
       ...process.env,
@@ -184,6 +217,11 @@ app.post('/deploy', async (req, res) => {
       NPM_CONFIG_CACHE: path.join(tempDir, '.npm-cache'),
       NPM_CONFIG_ENGINE_STRICT: 'false'
     };
+    
+    console.log('[DEBUG] npm path:', npmPath);
+    console.log('[DEBUG] working directory:', tempDir);
+    console.log('[DEBUG] package.json exists:', await fs.pathExists(pkgPath));
+    
     try {
       if (await fs.pathExists(lockPath)) {
         console.log('Using npm ci');
@@ -193,8 +231,14 @@ app.post('/deploy', async (req, res) => {
         await execa(npmPath, ['install', '--no-audit', '--no-fund'], { cwd: tempDir, env: baseEnv });
       }
     } catch (e) {
+      console.error('Primary install failed with error:', e);
       console.warn('Primary install failed, retrying with legacy peer deps...', e?.message || e);
-      await execa(npmPath, ['install', '--no-audit', '--no-fund', '--legacy-peer-deps'], { cwd: tempDir, env: baseEnv });
+      try {
+        await execa(npmPath, ['install', '--no-audit', '--no-fund', '--legacy-peer-deps'], { cwd: tempDir, env: baseEnv });
+      } catch (retryError) {
+        console.error('Retry install also failed:', retryError);
+        throw new Error(`npm install failed: ${retryError.message}. Working directory: ${tempDir}, package.json exists: ${await fs.pathExists(pkgPath)}`);
+      }
     }
 
     // Run the Vercel deployment command
