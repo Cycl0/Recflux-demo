@@ -26,6 +26,37 @@ function shouldProcessMessage(uniqueId: string): boolean {
     return true;
 }
 
+function getSupabaseForIdempotency() {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL as string | undefined;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY as string | undefined;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string | undefined;
+    if (!url) return null;
+    if (serviceKey) return createClient(url, serviceKey);
+    if (anonKey) return createClient(url, anonKey);
+    return null;
+}
+
+async function ensureFirstProcessDistributed(uniqueId: string): Promise<boolean> {
+    const supabase = getSupabaseForIdempotency();
+    if (!supabase) return shouldProcessMessage(uniqueId);
+    try {
+        const { error } = await supabase
+            .from('processed_messages')
+            .insert({ id: uniqueId })
+            .single();
+        if (error) {
+            const code = (error as any)?.code || '';
+            if (code === '23505') return false;
+            console.warn('[IDEMPOTENCY] Supabase insert failed, using in-memory fallback:', error.message || error);
+            return shouldProcessMessage(uniqueId);
+        }
+        return true;
+    } catch (e: any) {
+        console.warn('[IDEMPOTENCY] Supabase error, using in-memory fallback:', e?.message || e);
+        return shouldProcessMessage(uniqueId);
+    }
+}
+
 const {
 	WHATSAPP_TOKEN,
 	WHATSAPP_PHONE_NUMBER_ID,
@@ -227,7 +258,7 @@ app.post('/webhook', async (req: Request, res: Response) => {
 			const from = msg.from;
 			const text: string = (msg.text?.body || '').trim();
 			const uniqueId = msg.id || `${from}:${msg.timestamp || Date.now()}`;
-			if (!shouldProcessMessage(uniqueId)) {
+			if (!(await ensureFirstProcessDistributed(uniqueId))) {
 				console.log(`[WEBHOOK] duplicate message detected, id=${uniqueId}, skipping`);
 				return res.sendStatus(200);
 			}

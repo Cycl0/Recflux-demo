@@ -16,13 +16,6 @@ coverage
 .gitignore
 .dockerignore
 
-# Monorepo directories to exclude when building from repo root or broad contexts
-whatsapp-integration/
-code-deploy-service/
-agentic-structured-service/
-recflux-tools-accessibility-service/
-.git/
-
 # Env files
 .env
 .env.*

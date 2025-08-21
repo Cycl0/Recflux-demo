@@ -6,6 +6,7 @@ const swaggerUi = require('swagger-ui-express');
 const fs = require('fs-extra');
 const path = require('path');
 const puppeteer = require('puppeteer');
+const { execSync } = require('child_process');
 
 const app = express();
 const port = process.env.PORT || 3003;
@@ -126,6 +127,23 @@ app.post('/deploy', async (req, res) => {
     // Copy the React template to the temporary directory
     await fs.copy(templateDir, tempDir);
 
+    // Runtime toolchain diagnostics
+    try {
+      const npmVer = execSync('npm -v').toString().trim();
+      console.log('[DIAG] Node:', process.version, 'npm:', npmVer);
+    } catch {}
+
+    // Verify template integrity
+    const pkgPath = path.join(tempDir, 'package.json');
+    const lockPath = path.join(tempDir, 'package-lock.json');
+    const srcAppPath = path.join(tempDir, 'src', 'App.jsx');
+    if (!(await fs.pathExists(pkgPath))) {
+      throw new Error('Template package.json missing in temp-deploy. Ensure template/ was copied.');
+    }
+    if (!(await fs.pathExists(srcAppPath))) {
+      throw new Error('Template src/App.jsx missing in temp-deploy.');
+    }
+
     // Process the incoming React code
     // Ensure React is imported for CSSProperties assertion
     const imports = "import React, { useState, useEffect, useReducer, useRef, useCallback, useMemo, useContext, Component } from 'react';\n\n";
@@ -159,7 +177,25 @@ app.post('/deploy', async (req, res) => {
 
     // Install dependencies in the temporary directory
     console.log('Installing dependencies in temp directory...');
-    await execa('npm', ['install'], { cwd: tempDir });
+    const npmPath = '/usr/bin/npm'; // prefer Node 22 installed via NodeSource
+    const baseEnv = {
+      ...process.env,
+      PATH: `/usr/bin:/usr/local/bin:${process.env.PATH || ''}`,
+      NPM_CONFIG_CACHE: path.join(tempDir, '.npm-cache'),
+      NPM_CONFIG_ENGINE_STRICT: 'false'
+    };
+    try {
+      if (await fs.pathExists(lockPath)) {
+        console.log('Using npm ci');
+        await execa(npmPath, ['ci', '--no-audit', '--no-fund'], { cwd: tempDir, env: baseEnv });
+      } else {
+        console.log('Lockfile not found; using npm install');
+        await execa(npmPath, ['install', '--no-audit', '--no-fund'], { cwd: tempDir, env: baseEnv });
+      }
+    } catch (e) {
+      console.warn('Primary install failed, retrying with legacy peer deps...', e?.message || e);
+      await execa(npmPath, ['install', '--no-audit', '--no-fund', '--legacy-peer-deps'], { cwd: tempDir, env: baseEnv });
+    }
 
     // Run the Vercel deployment command
     console.log('Starting Vercel deployment (public)...');
