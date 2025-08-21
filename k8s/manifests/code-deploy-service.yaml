@@ -25,6 +25,16 @@ spec:
             secretKeyRef:
               name: app-secrets
               key: VERCEL_TOKEN
+        - name: VERCEL_ORG_ID
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: VERCEL_ORG_ID
+        - name: VERCEL_PROJECT_ID
+          valueFrom:
+            secretKeyRef:
+              name: app-secrets
+              key: VERCEL_PROJECT_ID
         resources:
           requests:
             memory: "256Mi"

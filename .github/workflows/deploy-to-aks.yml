@@ -137,7 +137,10 @@ jobs:
             --from-literal=SUPABASE_SERVICE_ROLE_KEY="${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}" \
             --from-literal=THUMBNAIL_API_KEY="${{ secrets.THUMBNAIL_API_KEY }}" \
             --from-literal=VERCEL_TOKEN="${{ secrets.VERCEL_TOKEN }}" \
-            --from-literal=AGENTIC_STRUCTURED_LB_URL="${{ secrets.AGENTIC_STRUCTURED_LB_URL }}"
+            --from-literal=VERCEL_ORG_ID="${{ secrets.VERCEL_ORG_ID }}" \
+            --from-literal=VERCEL_PROJECT_ID="${{ secrets.VERCEL_PROJECT_ID }}" \
+            --from-literal=AGENTIC_STRUCTURED_LB_URL="${{ secrets.AGENTIC_STRUCTURED_LB_URL }}" \
+            --dry-run=client -o yaml | kubectl apply -f -
           
           # Verify secret was created
           echo "Secret created. Checking contents..."
