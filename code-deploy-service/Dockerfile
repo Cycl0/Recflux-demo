@@ -1,5 +1,5 @@
-# Use the official Puppeteer image which comes with Chromium and all necessary dependencies.
-FROM ghcr.io/puppeteer/puppeteer:22.12.1
+# Use a Puppeteer base image aligned with Node 22.12 to satisfy modern toolchains (e.g., Vite 7)
+FROM ghcr.io/puppeteer/puppeteer:22.12.0
 
 # Switch to root user to install global dependencies
 USER root
