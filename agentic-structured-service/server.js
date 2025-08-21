@@ -10,6 +10,28 @@ const { createClient } = require('@supabase/supabase-js');
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// In-memory store for tracking active code generation requests (prevent duplicates)
+const activeGenerations = new Map();
+
+// Periodic cleanup of stale generation requests (every 5 minutes)
+setInterval(() => {
+  const now = Date.now();
+  const staleThreshold = 10 * 60 * 1000; // 10 minutes
+  let cleaned = 0;
+  
+  for (const [hash, generation] of activeGenerations.entries()) {
+    if (now - generation.startTime > staleThreshold) {
+      activeGenerations.delete(hash);
+      cleaned++;
+      console.log(`[AGENTIC-STRUCTURED] [CLEANUP] Removed stale generation: ${generation.generationId} (age: ${Math.round((now - generation.startTime) / 1000)}s)`);
+    }
+  }
+  
+  if (cleaned > 0) {
+    console.log(`[AGENTIC-STRUCTURED] [CLEANUP] Cleaned up ${cleaned} stale generation(s). Active: ${activeGenerations.size}`);
+  }
+}, 5 * 60 * 1000); // Run every 5 minutes
+
 // Swagger configuration
 const swaggerOptions = {
   definition: {
@@ -45,7 +67,34 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(specs));
 // Health check endpoint
 app.get('/health', (req, res) => {
   console.log('[AGENTIC-STRUCTURED] Health check at /health');
-  res.status(200).json({ status: 'healthy', service: 'agentic-structured-service', timestamp: new Date().toISOString() });
+  res.status(200).json({ 
+    status: 'healthy', 
+    service: 'agentic-structured-service', 
+    timestamp: new Date().toISOString(),
+    activeGenerations: activeGenerations.size
+  });
+});
+
+// Status endpoint to monitor active generations
+app.get('/status', (req, res) => {
+  const generations = Array.from(activeGenerations.entries()).map(([hash, gen]) => ({
+    hash,
+    generationId: gen.generationId,
+    userId: gen.userId,
+    actionType: gen.actionType,
+    startTime: new Date(gen.startTime).toISOString(),
+    ageSeconds: Math.round((Date.now() - gen.startTime) / 1000),
+    promptPreview: gen.prompt
+  }));
+  
+  res.status(200).json({
+    service: 'agentic-structured-service',
+    timestamp: new Date().toISOString(),
+    activeGenerations: {
+      count: activeGenerations.size,
+      generations
+    }
+  });
 });
 
 // Root path handler - forwards to /api/agentic
@@ -478,6 +527,41 @@ app.post('/api/agentic', creditCheckMiddleware, async (req, res) => {
         });
     }
 
+    // Create a hash of the request to detect duplicate requests
+    const crypto = require('crypto');
+    const requestData = {
+      prompt,
+      currentCode: currentCode || '',
+      fileName: fileName || '',
+      actionType,
+      userId: verifiedUserId
+    };
+    const requestHash = crypto.createHash('sha256').update(JSON.stringify(requestData)).digest('hex').substring(0, 16);
+    
+    // Check if this exact request is already being processed
+    if (activeGenerations.has(requestHash)) {
+      const existingGeneration = activeGenerations.get(requestHash);
+      console.log(`[AGENTIC-STRUCTURED] [DUPLICATE] Rejecting duplicate generation request for hash: ${requestHash}`);
+      return res.status(429).json({ 
+        error: 'Code generation already in progress', 
+        details: `This exact request is already being processed (started ${new Date(existingGeneration.startTime).toISOString()})`,
+        generationId: existingGeneration.generationId,
+        requestHash
+      });
+    }
+
+    // Create unique generation ID and track this request
+    const generationId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+    activeGenerations.set(requestHash, {
+      generationId,
+      startTime: Date.now(),
+      userId: verifiedUserId,
+      actionType,
+      prompt: prompt.substring(0, 100) + '...' // Store truncated prompt for debugging
+    });
+    
+    console.log(`[AGENTIC-STRUCTURED] [GEN-${generationId}] Starting code generation (hash: ${requestHash})`);
+
     let systemPrompt = getSystemPrompt(actionType || 'EDITAR');
     let userPrompt;
 
@@ -603,6 +687,12 @@ SEMPRE responda em português brasileiro.`;
         });
     } else {
         res.end();
+    }
+  } finally {
+    // Clean up the active generation tracking
+    if (typeof requestHash !== 'undefined') {
+      activeGenerations.delete(requestHash);
+      console.log(`[AGENTIC-STRUCTURED] [GEN-${typeof generationId !== 'undefined' ? generationId : 'unknown'}] Cleanup: Removed active generation tracking for hash: ${requestHash}`);
     }
   }
 });

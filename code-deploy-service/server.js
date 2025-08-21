@@ -11,6 +11,9 @@ const { execSync } = require('child_process');
 const app = express();
 const port = process.env.PORT || 3003;
 
+// In-memory store for tracking active deployments (prevent duplicates)
+const activeDeployments = new Map();
+
 // Swagger configuration
 const swaggerOptions = {
   definition: {
@@ -115,16 +118,42 @@ app.post('/deploy', async (req, res) => {
     return res.status(400).json({ error: 'reactCode is required' });
   }
 
-  const tempDir = path.join(__dirname, 'temp-deploy');
+  // Create a hash of the code to detect duplicate requests
+  const crypto = require('crypto');
+  const codeHash = crypto.createHash('sha256').update(reactCode).digest('hex').substring(0, 16);
+  
+  // Check if this exact code is already being deployed
+  if (activeDeployments.has(codeHash)) {
+    const existingDeployment = activeDeployments.get(codeHash);
+    console.log(`[DUPLICATE] Rejecting duplicate deployment request for code hash: ${codeHash}`);
+    return res.status(429).json({ 
+      error: 'Deployment already in progress', 
+      details: `This code is already being deployed (started ${new Date(existingDeployment.startTime).toISOString()})`,
+      deploymentId: existingDeployment.deploymentId
+    });
+  }
+
+  // Create unique temp directory for this deployment to avoid race conditions
+  const deploymentId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+  const tempDir = path.join(__dirname, `temp-deploy-${deploymentId}`);
   const templateDir = path.join(__dirname, 'template');
+  
+  // Track this deployment to prevent duplicates
+  activeDeployments.set(codeHash, {
+    deploymentId,
+    startTime: Date.now(),
+    tempDir
+  });
+  
+  console.log(`[DEPLOY-${deploymentId}] Starting deployment with unique temp directory (code hash: ${codeHash})`);
 
   try {
     const { execa } = await import('execa');
 
     // Debug path information
-    console.log('[DEBUG] __dirname:', __dirname);
-    console.log('[DEBUG] tempDir:', tempDir);
-    console.log('[DEBUG] templateDir:', templateDir);
+    console.log(`[DEPLOY-${deploymentId}] __dirname:`, __dirname);
+    console.log(`[DEPLOY-${deploymentId}] tempDir:`, tempDir);
+    console.log(`[DEPLOY-${deploymentId}] templateDir:`, templateDir);
     
     // Verify template directory exists before copying
     if (!(await fs.pathExists(templateDir))) {
@@ -280,6 +309,17 @@ app.post('/deploy', async (req, res) => {
   } catch (error) {
     console.error('Deployment failed:', error);
     res.status(500).json({ error: 'Deployment failed', details: error.message });
+  } finally {
+    // Remove from active deployments tracking
+    activeDeployments.delete(codeHash);
+    
+    // Clean up the unique temp directory
+    try {
+      await fs.remove(tempDir);
+      console.log(`[DEPLOY-${deploymentId}] Cleanup: Removed temp directory and cleared active deployment: ${tempDir}`);
+    } catch (cleanupError) {
+      console.warn(`[DEPLOY-${deploymentId}] Cleanup: Failed to remove temp directory ${tempDir}:`, cleanupError.message);
+    }
   }
 });
 
