@@ -2,11 +2,69 @@ import 'dotenv/config';
 import express from 'express';
 import bodyParser from 'body-parser';
 import axios from 'axios';
+import FormData from 'form-data';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { configureAuth, getUserByWhatsApp } from './auth.js';
 import { createClient } from '@supabase/supabase-js';
-const { WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_VERIFY_TOKEN, MCP_COMMAND, MCP_ARGS, PUBLIC_BASE_URL } = process.env;
+// Simple in-memory idempotency cache for WhatsApp message IDs
+const processedMessageIds = new Map();
+const SEEN_TTL_MS = 10 * 60 * 1000; // 10 minutes
+function pruneProcessed() {
+    const now = Date.now();
+    for (const [id, ts] of processedMessageIds.entries()) {
+        if (now - ts > SEEN_TTL_MS)
+            processedMessageIds.delete(id);
+    }
+}
+function shouldProcessMessage(uniqueId) {
+    pruneProcessed();
+    if (processedMessageIds.has(uniqueId))
+        return false;
+    processedMessageIds.set(uniqueId, Date.now());
+    return true;
+}
+function getSupabaseForIdempotency() {
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url)
+        return null;
+    if (serviceKey)
+        return createClient(url, serviceKey);
+    if (anonKey)
+        return createClient(url, anonKey);
+    return null;
+}
+async function ensureFirstProcessDistributed(uniqueId) {
+    const supabase = getSupabaseForIdempotency();
+    if (!supabase)
+        return shouldProcessMessage(uniqueId);
+    try {
+        const { error } = await supabase
+            .from('processed_messages')
+            .insert({ id: uniqueId })
+            .single();
+        if (error) {
+            const code = error?.code || '';
+            if (code === '23505')
+                return false;
+            console.warn('[IDEMPOTENCY] Supabase insert failed, using in-memory fallback:', error.message || error);
+            return shouldProcessMessage(uniqueId);
+        }
+        return true;
+    }
+    catch (e) {
+        console.warn('[IDEMPOTENCY] Supabase error, using in-memory fallback:', e?.message || e);
+        return shouldProcessMessage(uniqueId);
+    }
+}
+const { WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_VERIFY_TOKEN, MCP_COMMAND, MCP_ARGS, PUBLIC_BASE_URL, SERVICES_SCHEME: ENV_SERVICES_SCHEME, SERVICES_HOST: ENV_SERVICES_HOST, CODE_DEPLOY_PORT: ENV_CODE_DEPLOY_PORT, DEPLOY_SERVICE_URL: ENV_DEPLOY_SERVICE_URL } = process.env;
+// Build deploy service URL (mirror mcp-server.ts logic)
+const SERVICES_SCHEME = ENV_SERVICES_SCHEME || 'http';
+const SERVICES_HOST = ENV_SERVICES_HOST || 'localhost';
+const DEFAULT_CODE_DEPLOY_PORT = Number(ENV_CODE_DEPLOY_PORT || 3003);
+const DEPLOY_SERVICE_URL = ENV_DEPLOY_SERVICE_URL || `${SERVICES_SCHEME}://${SERVICES_HOST}:${DEFAULT_CODE_DEPLOY_PORT}`;
 function isValidUuid(value) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
@@ -26,12 +84,30 @@ async function startMcp() {
     console.log('Connected to MCP server');
 }
 async function callMcpTool(name, args) {
-    const response = await mcpClient.callTool({ name, arguments: args });
+    const timeoutMs = 600000;
+    const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error(`MCP tool call timeout after ${timeoutMs}ms`)), timeoutMs);
+    });
+    const callPromise = mcpClient.callTool({ name, arguments: args });
+    const response = await Promise.race([callPromise, timeoutPromise]);
     const part = response?.content?.find((c) => c.type === 'text');
     return part?.text || 'No content returned.';
 }
+async function callCodeDeployHttp(reactCode) {
+    const url = `${DEPLOY_SERVICE_URL}/deploy`;
+    console.log('[CODE-DEPLOY:HTTP] POST', url);
+    const { data, status } = await axios.post(url, { reactCode }, { timeout: 600000 });
+    console.log('[CODE-DEPLOY:HTTP] status=', status);
+    return typeof data === 'string' ? data : JSON.stringify(data);
+}
 async function callCodeDeploy(reactCode) {
-    return callMcpTool('code_deploy', { reactCode });
+    try {
+        return await callCodeDeployHttp(reactCode);
+    }
+    catch (httpErr) {
+        console.warn('[CODE-DEPLOY] HTTP path failed, falling back to MCP:', httpErr?.message || httpErr);
+        return callMcpTool('code_deploy', { reactCode });
+    }
 }
 async function callAccessibility(urls) {
     const resolution = { width: 1366, height: 768 };
@@ -90,27 +166,45 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
             userId = fallback;
     }
     if (!isValidUuid(userId)) {
-        return 'Please /login first so we can attribute credits, or configure DEFAULT_USER_ID (UUID) on the server.';
+        return { text: 'Please /login first so we can attribute credits, or configure DEFAULT_USER_ID (UUID) on the server.' };
     }
     const agenticRaw = await callAgenticStructured({ prompt: nlPrompt, actionType: 'GERAR', userId });
     const code = extractCodeFromAgentic(agenticRaw);
     if (!code) {
-        return 'Could not extract generated code from the AI response. Please retry with a clearer prompt.';
+        return { text: 'Could not extract generated code from the AI response. Please retry with a clearer prompt.' };
     }
     const deployRaw = await callCodeDeploy(code);
+    console.log('[DEPLOY] Raw deployment response:', deployRaw.substring(0, 500) + '...');
     try {
         const parsed = JSON.parse(deployRaw);
+        console.log('[DEPLOY] Parsed response keys:', Object.keys(parsed));
         const url = parsed?.deploymentUrl;
+        const screenshot = parsed?.screenshot;
+        console.log('[DEPLOY] URL found:', typeof url, url ? 'YES' : 'NO');
+        console.log('[DEPLOY] Screenshot found:', typeof screenshot, screenshot ? `YES (${screenshot.length} chars)` : 'NO');
         if (typeof url === 'string' && url.startsWith('http')) {
-            return `Deployed: ${url}`;
+            const response = {
+                text: `🚀 Deployment successful!\n\n🔗 Live URL: ${url}\n\n📱 Screenshot of your app is being sent...`,
+                shouldSendImage: false
+            };
+            // If we have a screenshot, prepare to send it
+            if (typeof screenshot === 'string' && screenshot.length > 0) {
+                response.shouldSendImage = true;
+                response.imageData = screenshot;
+                response.imageCaption = `📸 Screenshot of your deployed app: ${url}`;
+            }
+            return response;
         }
     }
-    catch {
+    catch (parseError) {
+        console.warn('[DEPLOY] Failed to parse deployment response:', parseError);
+        // Try to extract URL from raw text as fallback
         const match = deployRaw.match(/https?:\/\/\S+/);
-        if (match)
-            return `Deployed: ${match[0]}`;
+        if (match) {
+            return { text: `🚀 Deployed: ${match[0]}` };
+        }
     }
-    return deployRaw;
+    return { text: deployRaw };
 }
 async function sendWhatsappText(to, body) {
     const chunks = [];
@@ -145,6 +239,54 @@ async function sendWhatsappText(to, body) {
         }
     }
 }
+async function sendWhatsappImage(to, base64Image, caption) {
+    try {
+        console.log(`[WHATSAPP_API] Sending image to ${to} (${Math.round(base64Image.length / 1024)}KB)`);
+        // Convert base64 to buffer
+        const imageBuffer = Buffer.from(base64Image, 'base64');
+        // First, upload the media
+        const uploadUrl = `https://graph.facebook.com/v20.0/${WHATSAPP_PHONE_NUMBER_ID}/media`;
+        const formData = new FormData();
+        formData.append('messaging_product', 'whatsapp');
+        formData.append('file', imageBuffer, {
+            filename: 'screenshot.png',
+            contentType: 'image/png'
+        });
+        formData.append('type', 'image/png');
+        const uploadResp = await axios.post(uploadUrl, formData, {
+            headers: {
+                Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+                ...formData.getHeaders()
+            }
+        });
+        const mediaId = uploadResp.data.id;
+        console.log(`[WHATSAPP_API] Media uploaded successfully, ID: ${mediaId}`);
+        // Then send the image message
+        const messageUrl = `https://graph.facebook.com/v20.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+        const payload = {
+            messaging_product: 'whatsapp',
+            to,
+            type: 'image',
+            image: {
+                id: mediaId,
+                caption: caption || ''
+            }
+        };
+        const resp = await axios.post(messageUrl, payload, {
+            headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }
+        });
+        console.log(`[WHATSAPP_API] Image sent successfully, status=${resp.status}`);
+        return resp.data;
+    }
+    catch (err) {
+        const status = err?.response?.status;
+        const dataPreview = err?.response?.data ? (typeof err.response.data === 'string' ? err.response.data.slice(0, 500) : JSON.stringify(err.response.data).slice(0, 500)) : '';
+        console.error(`[WHATSAPP_API] Image send error status=${status} message=${err?.message}`);
+        if (dataPreview)
+            console.error(`[WHATSAPP_API] Image send error body=${dataPreview}`);
+        throw err;
+    }
+}
 const app = express();
 app.use(bodyParser.json());
 // Optional Google auth setup
@@ -168,9 +310,19 @@ app.post('/webhook', async (req, res) => {
         const changes = entry?.changes?.[0];
         const value = changes?.value;
         const messages = value?.messages;
+        // Ignore status callbacks (delivery/read, outbound acks)
+        if (Array.isArray(value?.statuses) && value.statuses.length > 0) {
+            return res.sendStatus(200);
+        }
         if (messages && messages[0] && messages[0].type === 'text') {
-            const from = messages[0].from;
-            const text = (messages[0].text?.body || '').trim();
+            const msg = messages[0];
+            const from = msg.from;
+            const text = (msg.text?.body || '').trim();
+            const uniqueId = msg.id || `${from}:${msg.timestamp || Date.now()}`;
+            if (!(await ensureFirstProcessDistributed(uniqueId))) {
+                console.log(`[WEBHOOK] duplicate message detected, id=${uniqueId}, skipping`);
+                return res.sendStatus(200);
+            }
             let reply = '';
             let wrapAsCode = true;
             if (text.toLowerCase().startsWith('/deploy ')) {
@@ -260,9 +412,40 @@ app.post('/webhook', async (req, res) => {
                 wrapAsCode = false;
             }
             else {
+                console.log(`[WEBHOOK] Processing deployment request from ${from}: "${text.substring(0, 100)}..."`);
                 const result = await buildAndDeployFromPrompt(text, from);
-                reply = result;
+                console.log('[WEBHOOK] Deployment result:', {
+                    textLength: result.text.length,
+                    shouldSendImage: result.shouldSendImage,
+                    hasImageData: !!result.imageData,
+                    imageDataLength: result.imageData?.length || 0
+                });
+                reply = result.text;
                 wrapAsCode = false;
+                // Send the text message
+                if (wrapAsCode && !reply.startsWith('```')) {
+                    reply = '```' + reply + '```';
+                }
+                console.log(`[WEBHOOK] Sending text message to ${from}`);
+                await sendWhatsappText(from, reply);
+                // Send the image if available
+                if (result.shouldSendImage && result.imageData) {
+                    console.log(`[WEBHOOK] Attempting to send screenshot to ${from} (${result.imageData.length} chars)`);
+                    try {
+                        await sendWhatsappImage(from, result.imageData, result.imageCaption);
+                        console.log(`[WEBHOOK] Successfully sent screenshot to ${from}`);
+                    }
+                    catch (imageError) {
+                        console.error(`[WEBHOOK] Failed to send screenshot to ${from}:`, imageError);
+                        // Send a fallback message about the screenshot failure
+                        await sendWhatsappText(from, '⚠️ Screenshot could not be sent, but your app is deployed and accessible via the URL above.');
+                    }
+                }
+                else {
+                    console.log(`[WEBHOOK] No screenshot to send (shouldSendImage: ${result.shouldSendImage}, hasImageData: ${!!result.imageData})`);
+                }
+                // Return early since we already sent the message(s)
+                return res.sendStatus(200);
             }
             if (wrapAsCode && !reply.startsWith('```')) {
                 reply = '```' + reply + '```';

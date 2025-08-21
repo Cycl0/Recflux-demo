@@ -19,7 +19,7 @@
     }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "../whatsapp-integration/**", "../../whatsapp-integration/**", "whatsapp-integration/**"]
+  "exclude": ["node_modules", "dist"]
 }
 
 
