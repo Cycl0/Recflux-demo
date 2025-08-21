@@ -3,11 +3,12 @@ FROM node:22.12.0-bullseye
 WORKDIR /app
 
 # Install deps first for better layer caching
-
-# Copy
-COPY . .
-
+COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
+
+# Copy only source needed to build
+COPY tsconfig.json ./
+COPY src ./src
 
 # Build TypeScript
 RUN npx tsc -p tsconfig.json
