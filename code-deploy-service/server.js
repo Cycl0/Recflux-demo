@@ -305,7 +305,7 @@ app.post('/deploy', async (req, res) => {
     if (process.env.VERCEL_PROJECT_NAME) {
       vercelArgs.push('--name', process.env.VERCEL_PROJECT_NAME);
     }
-    const { stdout, stderr } = await execa('vercel', [...vercelArgs, '--json'], {
+    const { stdout, stderr } = await execa('vercel', vercelArgs, {
       cwd: tempDir,
       // Pass parent environment variables to the child process
       env: { ...process.env },
@@ -313,26 +313,10 @@ app.post('/deploy', async (req, res) => {
     
     console.log('Vercel deployment command output (raw):', stdout || '(empty)');
 
-    // Try to parse JSON output first
-    let deploymentUrl = '';
-    try {
-      const parsed = JSON.parse(stdout || '{}');
-      // Prefer alias/url fields if present
-      const candidates = [parsed?.alias, parsed?.url, parsed?.inspectorUrl, parsed?.readyState === 'READY' ? parsed?.alias : undefined];
-      deploymentUrl = candidates.find((v) => typeof v === 'string' && /^https?:\/\//.test(v)) || '';
-      // Some versions return arrays e.g. aliases
-      if (!deploymentUrl && Array.isArray(parsed?.aliases)) {
-        const found = parsed.aliases.find((u) => typeof u === 'string' && /^https?:\/\//.test(u));
-        if (found) deploymentUrl = found;
-      }
-    } catch {}
-
-    // Fallback: regex from combined stdio
-    if (!deploymentUrl) {
-      const combined = `${stdout || ''}\n${stderr || ''}`;
-      const match = combined.match(/https?:\/\/\S+/);
-      if (match) deploymentUrl = match[0];
-    }
+    // Extract the first URL-looking token from combined stdio
+    const combined = `${stdout || ''}\n${stderr || ''}`;
+    const urlMatch = combined.match(/https?:\/\/\S+/);
+    const deploymentUrl = urlMatch ? urlMatch[0] : '';
 
     if (!deploymentUrl) {
       throw new Error('Vercel did not return a deployment URL. Check CLI output and credentials.');
