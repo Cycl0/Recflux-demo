@@ -112,10 +112,15 @@ app.get('/health', (req, res) => {
  *                   description: Detailed error information
  */
 app.post('/deploy', async (req, res) => {
-  const { reactCode } = req.body;
+  // Support both legacy { reactCode } and generic { code, language, platform }
+  const { reactCode: reactCodeLegacy, code, language, platform, options } = req.body || {};
+  const reactCode = reactCodeLegacy || code;
 
   if (!reactCode) {
-    return res.status(400).json({ error: 'reactCode is required' });
+    return res.status(400).json({ error: 'reactCode (or code) is required' });
+  }
+  if (code && !reactCodeLegacy) {
+    console.log('[DEPLOY] Received generic payload:', { language, platform, hasOptions: !!options });
   }
 
   // Create a hash of the code to detect duplicate requests
