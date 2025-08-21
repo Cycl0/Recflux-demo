@@ -298,23 +298,45 @@ app.post('/deploy', async (req, res) => {
 
     // Run the Vercel deployment command
     console.log('Starting Vercel deployment (public)...');
-    const vercelArgs = ['--prod', '--public', '--yes', '--token', process.env.VERCEL_TOKEN];
+    const vercelArgs = ['--prod', '--public', '--yes', '--archive', 'tgz', '--token', process.env.VERCEL_TOKEN];
     if (process.env.VERCEL_SCOPE) {
       vercelArgs.push('--scope', process.env.VERCEL_SCOPE);
     }
     if (process.env.VERCEL_PROJECT_NAME) {
       vercelArgs.push('--name', process.env.VERCEL_PROJECT_NAME);
     }
-    const { stdout } = await execa('vercel', vercelArgs, {
+    const { stdout, stderr } = await execa('vercel', [...vercelArgs, '--json'], {
       cwd: tempDir,
       // Pass parent environment variables to the child process
       env: { ...process.env },
     });
+    
+    console.log('Vercel deployment command output (raw):', stdout || '(empty)');
 
-    console.log('Vercel deployment command output:', stdout);
+    // Try to parse JSON output first
+    let deploymentUrl = '';
+    try {
+      const parsed = JSON.parse(stdout || '{}');
+      // Prefer alias/url fields if present
+      const candidates = [parsed?.alias, parsed?.url, parsed?.inspectorUrl, parsed?.readyState === 'READY' ? parsed?.alias : undefined];
+      deploymentUrl = candidates.find((v) => typeof v === 'string' && /^https?:\/\//.test(v)) || '';
+      // Some versions return arrays e.g. aliases
+      if (!deploymentUrl && Array.isArray(parsed?.aliases)) {
+        const found = parsed.aliases.find((u) => typeof u === 'string' && /^https?:\/\//.test(u));
+        if (found) deploymentUrl = found;
+      }
+    } catch {}
 
-    // The stdout of the Vercel CLI command is the deployment URL
-    const deploymentUrl = stdout;
+    // Fallback: regex from combined stdio
+    if (!deploymentUrl) {
+      const combined = `${stdout || ''}\n${stderr || ''}`;
+      const match = combined.match(/https?:\/\/\S+/);
+      if (match) deploymentUrl = match[0];
+    }
+
+    if (!deploymentUrl) {
+      throw new Error('Vercel did not return a deployment URL. Check CLI output and credentials.');
+    }
     
     console.log(`Deployment successful! URL: ${deploymentUrl}`);
 
