@@ -139,7 +139,7 @@ export default function PlanosPage() {
                         
                         <PlanCard
                             title="Premium"
-                            price="$59,99"
+                            price="R$59,99"
                             color="bg-gradient-to-r from-purple-600 to-purple-800"
                             features={[
                                 { text: "10 Projetos", available: true },

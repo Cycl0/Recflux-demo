@@ -65,6 +65,8 @@ const SERVICES_SCHEME = ENV_SERVICES_SCHEME || 'http';
 const SERVICES_HOST = ENV_SERVICES_HOST || 'localhost';
 const DEFAULT_CODE_DEPLOY_PORT = Number(ENV_CODE_DEPLOY_PORT || 3003);
 const DEPLOY_SERVICE_URL = ENV_DEPLOY_SERVICE_URL || `${SERVICES_SCHEME}://${SERVICES_HOST}:${DEFAULT_CODE_DEPLOY_PORT}`;
+const DEFAULT_AGENTIC_PORT = Number(process.env.AGENTIC_PORT || 3001);
+const AGENTIC_SERVICE_URL = process.env.AGENTIC_SERVICE_URL || `${SERVICES_SCHEME}://${SERVICES_HOST}:${DEFAULT_AGENTIC_PORT}`;
 function isValidUuid(value) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
@@ -109,12 +111,26 @@ async function callCodeDeploy(reactCode) {
         return callMcpTool('code_deploy', { reactCode });
     }
 }
+async function callAgenticHttp(payload) {
+    const url = `${AGENTIC_SERVICE_URL}/api/agentic`;
+    console.log('[AGENTIC:HTTP] POST', url);
+    const { data, status } = await axios.post(url, payload, { timeout: 600000, headers: { 'Content-Type': 'application/json' } });
+    console.log('[AGENTIC:HTTP] status=', status);
+    return typeof data === 'string' ? data : JSON.stringify(data);
+}
 async function callAccessibility(urls) {
     const resolution = { width: 1366, height: 768 };
     return callMcpTool('accessibility_test', { urls, resolution });
 }
 async function callAgenticStructured(params) {
-    return callMcpTool('agentic_structured', params);
+    // Prefer HTTP to avoid MCP 60s SDK timeout
+    try {
+        return await callAgenticHttp(params);
+    }
+    catch (httpErr) {
+        console.warn('[AGENTIC] HTTP path failed, falling back to MCP:', httpErr?.message || httpErr);
+        return callMcpTool('agentic_structured', params);
+    }
 }
 function extractCodeFromAgentic(raw) {
     try {
@@ -166,7 +182,7 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
             userId = fallback;
     }
     if (!isValidUuid(userId)) {
-        return { text: 'Please /login first so we can attribute credits, or configure DEFAULT_USER_ID (UUID) on the server.' };
+        return { text: 'Por favor, faça /login para atribuirmos créditos, ou configure DEFAULT_USER_ID (UUID) no servidor.' };
     }
     const agenticRaw = await callAgenticStructured({ prompt: nlPrompt, actionType: 'GERAR', userId });
     const code = extractCodeFromAgentic(agenticRaw);
@@ -184,14 +200,14 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
         console.log('[DEPLOY] Screenshot found:', typeof screenshot, screenshot ? `YES (${screenshot.length} chars)` : 'NO');
         if (typeof url === 'string' && url.startsWith('http')) {
             const response = {
-                text: `🚀 Deployment successful!\n\n🔗 Live URL: ${url}\n\n📱 Screenshot of your app is being sent...`,
+                text: `🚀 Deploy concluído!\n\n🔗 URL público: ${url}\n\n📱 Enviarei um screenshot do seu app em seguida...`,
                 shouldSendImage: false
             };
             // If we have a screenshot, prepare to send it
             if (typeof screenshot === 'string' && screenshot.length > 0) {
                 response.shouldSendImage = true;
                 response.imageData = screenshot;
-                response.imageCaption = `📸 Screenshot of your deployed app: ${url}`;
+                response.imageCaption = `📸 Screenshot do seu app publicado: ${url}`;
             }
             return response;
         }
@@ -201,7 +217,7 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
         // Try to extract URL from raw text as fallback
         const match = deployRaw.match(/https?:\/\/\S+/);
         if (match) {
-            return { text: `🚀 Deployed: ${match[0]}` };
+            return { text: `🚀 Publicado: ${match[0]}` };
         }
     }
     return { text: deployRaw };
@@ -336,7 +352,7 @@ app.post('/webhook', async (req, res) => {
                 const rest = text.slice(8).trim();
                 const urls = rest.split(/\s+/).filter(Boolean);
                 if (urls.length === 0) {
-                    reply = 'Usage: /access <url1> [url2 ...]';
+                    reply = 'Uso: /access <url1> [url2 ...]';
                 }
                 else {
                     const raw = await callAccessibility(urls);
@@ -347,7 +363,7 @@ app.post('/webhook', async (req, res) => {
                 const base = (PUBLIC_BASE_URL && PUBLIC_BASE_URL.trim()) || `http://localhost:${process.env.PORT || 3000}`;
                 const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base;
                 const loginUrl = `${normalizedBase}/auth/google?state=${encodeURIComponent(from)}`;
-                reply = `Login with Google: ${loginUrl}`;
+                reply = `Login com Google: ${loginUrl}`;
                 wrapAsCode = false;
             }
             else if (text.toLowerCase().startsWith('/agentic')) {
@@ -387,8 +403,8 @@ app.post('/webhook', async (req, res) => {
                 const prompt = parts.length > 1 ? parts[parts.length - 1] : '';
                 const currentCode = currentCodeRaw?.trim();
                 if (!prompt) {
-                    const who = mappedUser ? ` (as ${mappedUser.email || mappedUser.name || mappedUser.id})` : '';
-                    reply = `You are using /agentic${who}.\nUsage:\n/agentic GERAR | <prompt>\n/agentic EDITAR | <fileName> | <prompt> || <currentCode>`;
+                    const who = mappedUser ? ` (como ${mappedUser.email || mappedUser.name || mappedUser.id})` : '';
+                    reply = `Você está usando /agentic${who}.\nUso:\n/agentic GERAR | <prompt>\n/agentic EDITAR | <fileName> | <prompt> || <currentCode>`;
                 }
                 else {
                     // Fallback: if userId isn't a UUID, try DEFAULT_USER_ID env, otherwise ask user to /login
@@ -399,7 +415,7 @@ app.post('/webhook', async (req, res) => {
                             userId = fallback;
                         }
                         else {
-                            reply = 'Please /login first or provide a valid user UUID. You can also set DEFAULT_USER_ID in the server env.';
+                            reply = 'Por favor, faça /login primeiro ou forneça um UUID de usuário válido. Você também pode definir DEFAULT_USER_ID nas variáveis do servidor.';
                             wrapAsCode = false;
                             await sendWhatsappText(from, reply);
                             return res.sendStatus(200);
@@ -410,7 +426,7 @@ app.post('/webhook', async (req, res) => {
                 }
             }
             else if (text.toLowerCase() === '/help') {
-                reply = 'Send a natural prompt (e.g., "Build a modern portfolio site") and I will generate and deploy it. Commands: /login, /agentic, /access, /deploy';
+                reply = 'Envie um prompt em linguagem natural (ex.: "Crie um portfólio moderno") e eu vou gerar e publicar. Comandos: /login, /agentic, /access, /deploy';
                 wrapAsCode = false;
             }
             else {
@@ -442,7 +458,7 @@ app.post('/webhook', async (req, res) => {
                     catch (imageError) {
                         console.error(`[WEBHOOK] Failed to send screenshot to ${from}:`, imageError);
                         // Send a fallback message about the screenshot failure
-                        await sendWhatsappText(from, '⚠️ Screenshot could not be sent, but your app is deployed and accessible via the URL above.');
+                        await sendWhatsappText(from, '⚠️ Não consegui enviar o screenshot, mas seu app já está no ar e acessível pelo link acima.');
                     }
                 }
                 else {
