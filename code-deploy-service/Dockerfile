@@ -4,8 +4,16 @@ FROM ghcr.io/puppeteer/puppeteer:22.12.0
 # Switch to root user to install global dependencies
 USER root
 
-# Install Vercel CLI globally
-RUN npm install -g vercel
+# Install Node.js 22 to satisfy modern toolchains (e.g., Vite 7) and Vercel CLI
+RUN apt-get update \
+    && apt-get install -y curl ca-certificates gnupg \
+    && curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && npm install -g vercel \
+    && node -v \
+    && npm -v \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
 
 # Create a non-root user and app directory
 RUN mkdir -p /home/pptruser/app && \

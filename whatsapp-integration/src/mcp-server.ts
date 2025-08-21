@@ -5,7 +5,18 @@ import { z } from 'zod';
 import OpenAI from 'openai';
 import axios from 'axios';
 
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+// Configure OpenAI SDK to point to OpenRouter when available
+const useOpenRouter = Boolean(process.env.OPENROUTER_API_KEY);
+const openai = new OpenAI({
+  apiKey: useOpenRouter ? process.env.OPENROUTER_API_KEY : process.env.OPENAI_API_KEY,
+  baseURL: useOpenRouter ? 'https://openrouter.ai/api/v1' : undefined,
+  defaultHeaders: useOpenRouter
+    ? {
+        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://example.com',
+        'X-Title': 'WhatsApp Codegen'
+      }
+    : undefined
+});
 
 // Base host/scheme for services
 const SERVICES_SCHEME = process.env.SERVICES_SCHEME || 'http';

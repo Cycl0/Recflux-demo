@@ -8,6 +8,24 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 import { configureAuth, getUserByWhatsApp } from './auth.js';
 import { createClient } from '@supabase/supabase-js';
 
+// Simple in-memory idempotency cache for WhatsApp message IDs
+const processedMessageIds: Map<string, number> = new Map();
+const SEEN_TTL_MS = 10 * 60 * 1000; // 10 minutes
+
+function pruneProcessed(): void {
+    const now = Date.now();
+    for (const [id, ts] of processedMessageIds.entries()) {
+        if (now - ts > SEEN_TTL_MS) processedMessageIds.delete(id);
+    }
+}
+
+function shouldProcessMessage(uniqueId: string): boolean {
+    pruneProcessed();
+    if (processedMessageIds.has(uniqueId)) return false;
+    processedMessageIds.set(uniqueId, Date.now());
+    return true;
+}
+
 const {
 	WHATSAPP_TOKEN,
 	WHATSAPP_PHONE_NUMBER_ID,
@@ -199,10 +217,20 @@ app.post('/webhook', async (req: Request, res: Response) => {
 		const changes = entry?.changes?.[0];
 		const value = changes?.value;
 		const messages = value?.messages;
+		// Ignore status callbacks (delivery/read, outbound acks)
+		if (Array.isArray(value?.statuses) && value.statuses.length > 0) {
+			return res.sendStatus(200);
+		}
 
 		if (messages && messages[0] && messages[0].type === 'text') {
-			const from = messages[0].from;
-			const text: string = (messages[0].text?.body || '').trim();
+			const msg = messages[0];
+			const from = msg.from;
+			const text: string = (msg.text?.body || '').trim();
+			const uniqueId = msg.id || `${from}:${msg.timestamp || Date.now()}`;
+			if (!shouldProcessMessage(uniqueId)) {
+				console.log(`[WEBHOOK] duplicate message detected, id=${uniqueId}, skipping`);
+				return res.sendStatus(200);
+			}
 
 			let reply = '';
 			let wrapAsCode = true;
