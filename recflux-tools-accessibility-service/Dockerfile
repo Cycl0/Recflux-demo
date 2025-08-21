@@ -1,5 +1,5 @@
 # Use the official Playwright image which is designed for this purpose
-FROM mcr.microsoft.com/playwright:v1.54.0-jammy
+FROM mcr.microsoft.com/playwright:v1.55.0-jammy
 
 # Switch to root to create and own the app directory
 USER root
