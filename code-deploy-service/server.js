@@ -112,15 +112,10 @@ app.get('/health', (req, res) => {
  *                   description: Detailed error information
  */
 app.post('/deploy', async (req, res) => {
-  // Support both legacy { reactCode } and generic { code, language, platform }
-  const { reactCode: reactCodeLegacy, code, language, platform, options } = req.body || {};
-  const reactCode = reactCodeLegacy || code;
+  const { reactCode } = req.body;
 
   if (!reactCode) {
-    return res.status(400).json({ error: 'reactCode (or code) is required' });
-  }
-  if (code && !reactCodeLegacy) {
-    console.log('[DEPLOY] Received generic payload:', { language, platform, hasOptions: !!options });
+    return res.status(400).json({ error: 'reactCode is required' });
   }
 
   // Create a hash of the code to detect duplicate requests
@@ -138,9 +133,10 @@ app.post('/deploy', async (req, res) => {
     });
   }
 
-  // Create unique temp directory for this deployment to avoid race conditions
+  // Use a single stable temp directory so Vercel infers the same project name
+  // (we still keep a deploymentId for logging/correlation only)
   const deploymentId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-  const tempDir = path.join(__dirname, `temp-deploy-${deploymentId}`);
+  const tempDir = path.join(__dirname, 'temp-deploy');
   const templateDir = path.join(__dirname, 'template');
   
   // Track this deployment to prevent duplicates
