@@ -133,10 +133,9 @@ app.post('/deploy', async (req, res) => {
     });
   }
 
-  // Use a single stable temp directory so Vercel infers the same project name
-  // (we still keep a deploymentId for logging/correlation only)
+  // Create unique temp directory for this deployment to avoid race conditions
   const deploymentId = Date.now() + '-' + Math.random().toString(36).substr(2, 9);
-  const tempDir = path.join(__dirname, 'temp-deploy');
+  const tempDir = path.join(__dirname, `temp-deploy-${deploymentId}`);
   const templateDir = path.join(__dirname, 'template');
   
   // Track this deployment to prevent duplicates
