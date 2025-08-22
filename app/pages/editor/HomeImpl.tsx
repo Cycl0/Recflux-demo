@@ -884,17 +884,35 @@ function useSupabaseGoogleRegistration() {
       .select('id, stripe_customer_id')
       .eq('email', userEmail)
       .single();
-    // If not found, insert the user with default credits
+    // If not found, insert the user with default credits; ensure unique username and set id
     if (customUserError && customUserError.code === 'PGRST116') {
       isNewUser = true;
-      const username = userEmail.split('@')[0];
-      const { data: newUser, error: insertError } = await supabase
-        .from('users')
-        .insert([{ email: userEmail, username, plan: 'free', credits: 10 }])
-        .select('id, stripe_customer_id')
-        .single();
+      const emailLocal = userEmail.split('@')[0];
+      const base = (emailLocal || 'user')
+        .toLowerCase()
+        .replace(/[^a-z0-9_\-]/gi, '')
+        .slice(0, 24) || 'user';
+      let username = base;
+      let newUser: any = null;
+      let insertError: any = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { data, error } = await supabase
+          .from('users')
+          .insert([{ id: sessionUser.id, email: userEmail, username, plan: 'free', credits: 10 }])
+          .select('id, stripe_customer_id')
+          .single();
+        if (!error) { newUser = data; break; }
+        insertError = error;
+        const code = (error as any)?.code || (error as any)?.details || (error as any)?.message || '';
+        if (`${code}`.includes('23505') || `${code}`.toLowerCase().includes('duplicate')) {
+          const suffix = Math.random().toString(36).slice(2, 6);
+          username = `${base}-${suffix}`;
+          continue;
+        }
+        break;
+      }
       if (insertError) {
-        console.error('Failed to insert user:', insertError.message);
+        console.error('Failed to insert user:', insertError?.message || insertError);
         return { isNewUser: false };
       }
       customUser = newUser;

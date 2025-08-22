@@ -11,6 +11,43 @@ export default function AuthCallback() {
         console.log('Auth callback page loaded');
         console.log('Current URL:', window.location.href);
         console.log('Hash:', window.location.hash);
+        const url = new URL(window.location.href);
+        const hasCode = !!url.searchParams.get('code');
+        const hasError = !!url.searchParams.get('error');
+
+        // Handle PKCE authorization code flow
+        if (hasCode && !hasError) {
+          console.log('Found authorization code, exchanging for session...');
+          const { data, error } = await supabase.auth.exchangeCodeForSession(window.location.href);
+          if (error) {
+            console.error('Code exchange failed:', error);
+            if (window.opener) {
+              window.opener.postMessage({ type: 'SUPABASE_AUTH_ERROR', error }, '*');
+            }
+            setTimeout(() => window.close(), 1000);
+            return;
+          }
+
+          const session = data?.session;
+          if (session && window.opener) {
+            console.log('Session obtained via code exchange:', session);
+            window.opener.postMessage({ type: 'SUPABASE_AUTH_SUCCESS', session }, '*');
+            setTimeout(() => window.close(), 500);
+            return;
+          }
+
+          // Fallback: try to read session after short delay
+          setTimeout(async () => {
+            const { data: { session: refreshed } } = await supabase.auth.getSession();
+            if (refreshed && window.opener) {
+              window.opener.postMessage({ type: 'SUPABASE_AUTH_SUCCESS', session: refreshed }, '*');
+            } else if (window.opener) {
+              window.opener.postMessage({ type: 'SUPABASE_AUTH_ERROR', error: 'No session after code exchange' }, '*');
+            }
+            setTimeout(() => window.close(), 500);
+          }, 1000);
+          return;
+        }
         
         // Check if we have a hash with auth tokens
         if (window.location.hash && window.location.hash.includes('access_token')) {
