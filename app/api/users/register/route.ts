@@ -22,6 +22,19 @@ export async function POST(req: NextRequest) {
       .single();
 
     if (existing && !fetchError) {
+      // If the existing row somehow has a null/empty id, repair it with the provided userId
+      if (!existing.id) {
+        const { data: repaired, error: repairError } = await supabase
+          .from('users')
+          .update({ id: userId })
+          .eq('email', email)
+          .select('id, stripe_customer_id')
+          .single();
+        if (repairError) {
+          return NextResponse.json({ error: repairError.message }, { status: 500 });
+        }
+        return NextResponse.json({ user: repaired, created: false, repaired: true }, { status: 200 });
+      }
       return NextResponse.json({ user: existing, created: false }, { status: 200 });
     }
 

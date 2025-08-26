@@ -879,9 +879,20 @@ function useSupabaseGoogleRegistration() {
     let isNewUser = false;
     
     // Prefer server-side registration to avoid RLS issues on public client
+    // Ensure we have a valid Supabase auth user id before attempting registration
+    if (!sessionUser.id) {
+      console.warn('[registerUserIfNeeded] sessionUser.id is missing. Delaying registration...');
+      // Poll once after a short delay
+      await new Promise(res => setTimeout(res, 500));
+    }
+
     let customUser: any = null;
     let isNewUserLocal = false;
     try {
+      if (!sessionUser.id) {
+        console.error('[registerUserIfNeeded] Supabase user id still missing. Aborting register call.');
+        return { isNewUser: false };
+      }
       const resp = await fetch('/api/users/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
