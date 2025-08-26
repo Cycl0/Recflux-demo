@@ -9,6 +9,52 @@ export function useSupabaseUser() {
   const [subscriptionStatus, setSubscriptionStatus] = useState<string | null>(null);
   const [supabaseUserId, setSupabaseUserId] = useState<string | null>(null);
 
+  const fetchUserDataById = async (userId: string, mountedRef: { current: boolean }) => {
+    if (!mountedRef.current) return;
+    console.log(`[CREDITS] fetchUserDataById called for id: ${userId}`);
+    setCreditsLoading(true);
+    const fallbackTimeout = setTimeout(() => {
+      if (mountedRef.current) {
+        console.warn('Credits loading timed out after 10 seconds');
+        setCreditsLoading(false);
+      }
+    }, 10000);
+
+    try {
+      setSupabaseUserId(userId);
+      console.log(`[CREDITS] Querying supabase for user data by ID: ${userId}`);
+      const { data: userData, error } = await supabase
+        .from('users')
+        .select('credits, plan')
+        .eq('id', userId)
+        .single();
+
+      if (!mountedRef.current) return;
+      if (error) {
+        console.error('Error fetching user data by ID:', error);
+        setCredits(0);
+        setSubscriptionStatus(null);
+        setCreditsLoading(false);
+        clearTimeout(fallbackTimeout);
+      } else {
+        console.log('[CREDITS] User data fetched successfully:', userData);
+        console.log(`[CREDITS] Setting credits to: ${userData?.credits || 0} (was: ${credits})`);
+        setCredits(userData?.credits || 0);
+        setSubscriptionStatus(userData?.plan || null);
+        setCreditsLoading(false);
+        clearTimeout(fallbackTimeout);
+      }
+    } catch (error) {
+      if (!mountedRef.current) return;
+      console.error('Error fetching user data by ID:', error);
+      setCredits(0);
+      setSubscriptionStatus(null);
+      setCreditsLoading(false);
+      clearTimeout(fallbackTimeout);
+    }
+  };
+
+  // Deprecated: kept for backwards compatibility where email polling is needed
   const fetchUserData = async (userEmail: string, retryCount = 0, mountedRef: { current: boolean }) => {
     // Check if component is still mounted before starting
     if (!mountedRef.current) return;
@@ -116,63 +162,55 @@ export function useSupabaseUser() {
 
   useEffect(() => {
     const mountedRef = { current: true, timeouts: [] as NodeJS.Timeout[] };
-    
-    supabase.auth.getUser().then(({ data, error }) => {
-      if (mountedRef.current) {
-        const authUser = data?.user || null;
-        setUser(authUser);
-        setLoading(false);
-        
-        if (authUser?.email) {
-          fetchUserData(authUser.email, 0, mountedRef);
-        } else {
-          setCreditsLoading(false);
-        }
+
+    supabase.auth.getUser().then(({ data }) => {
+      if (!mountedRef.current) return;
+      const authUser = data?.user || null;
+      setUser(authUser);
+      setLoading(false);
+      if (authUser?.id) {
+        fetchUserDataById(authUser.id, mountedRef);
+      } else {
+        setCreditsLoading(false);
       }
     });
-    
+
     const { data: authListener } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (mountedRef.current) {
+      if (!mountedRef.current) return;
       const authUser = session?.user || null;
       setUser(authUser);
       setLoading(false);
-      
-      if (authUser?.email) {
-          fetchUserData(authUser.email, 0, mountedRef);
+      if (authUser?.id) {
+        fetchUserDataById(authUser.id, mountedRef);
       } else {
         setCredits(null);
         setSubscriptionStatus(null);
         setSupabaseUserId(null);
         setCreditsLoading(false);
-        }
       }
     });
-    
-    // Listen for custom refresh events
+
     const handleRefreshCredits = () => {
-      if (user?.email && mountedRef.current) {
+      if (user?.id && mountedRef.current) {
         console.log('Refreshing credits due to custom event');
-        fetchUserData(user.email, 0, mountedRef);
+        fetchUserDataById(user.id, mountedRef);
       }
     };
-    
+
     if (typeof window !== 'undefined') {
       window.addEventListener('refreshCredits', handleRefreshCredits);
     }
-    
+
     return () => {
       mountedRef.current = false;
-      
-      // Clear any pending timeouts
       mountedRef.timeouts.forEach(timeoutId => clearTimeout(timeoutId));
       mountedRef.timeouts = [];
-      
       authListener?.subscription.unsubscribe();
       if (typeof window !== 'undefined') {
         window.removeEventListener('refreshCredits', handleRefreshCredits);
       }
     };
-  }, [user?.email]);
+  }, []);
 
   return { 
     user, 
@@ -181,13 +219,12 @@ export function useSupabaseUser() {
     creditsLoading, 
     subscriptionStatus,
     supabaseUserId, // Expose the supabase user ID
-    refetchCredits: user?.email ? () => {
-      console.log('[CREDITS] refetchCredits called for user:', user.email);
-      const mountedRef = { current: true };
-      fetchUserData(user.email, 0, mountedRef);
-      console.log('[CREDITS] fetchUserData triggered in refetchCredits');
+    refetchCredits: user?.id ? () => {
+      console.log('[CREDITS] refetchCredits called for user id:', user.id);
+      const mountedRef = { current: true } as any;
+      fetchUserDataById(user.id, mountedRef);
     } : () => {
-      console.log('[CREDITS] refetchCredits called but no user email available');
-    } 
+      console.log('[CREDITS] refetchCredits called but no user id available');
+    }
   };
 } 
