@@ -10,6 +10,17 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 );
 
+function ensureEnv(name: string) {
+  if (!process.env[name]) {
+    console.warn(`[stripe/webhook] Missing env var: ${name}`);
+  }
+}
+
+ensureEnv('STRIPE_SECRET_KEY');
+ensureEnv('STRIPE_WEBHOOK_SECRET');
+ensureEnv('NEXT_PUBLIC_SUPABASE_URL');
+ensureEnv('SUPABASE_SERVICE_ROLE_KEY');
+
 export async function POST(req: NextRequest) {
   const sig = req.headers.get('stripe-signature');
   const buf = await req.arrayBuffer();

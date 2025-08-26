@@ -878,47 +878,35 @@ function useSupabaseGoogleRegistration() {
     
     let isNewUser = false;
     
-    // Check if user exists in your users table
-    let { data: customUser, error: customUserError } = await supabase
-      .from('users')
-      .select('id, stripe_customer_id')
-      .eq('email', userEmail)
-      .single();
-    // If not found, insert the user with default credits; ensure unique username and set id
-    if (customUserError && customUserError.code === 'PGRST116') {
-      isNewUser = true;
-      const emailLocal = userEmail.split('@')[0];
-      const base = (emailLocal || 'user')
-        .toLowerCase()
-        .replace(/[^a-z0-9_\-]/gi, '')
-        .slice(0, 24) || 'user';
-      let username = base;
-      let newUser: any = null;
-      let insertError: any = null;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const { data, error } = await supabase
+    // Prefer server-side registration to avoid RLS issues on public client
+    let customUser: any = null;
+    let isNewUserLocal = false;
+    try {
+      const resp = await fetch('/api/users/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: sessionUser.id, email: userEmail }),
+      });
+      const payload = await resp.json();
+      if (!resp.ok) {
+        console.error('Server registration failed:', payload?.error || payload);
+        // Fallback to client-side check to keep UX resilient
+        const { data: existing, error: existingErr } = await supabase
           .from('users')
-          .insert([{ id: sessionUser.id, email: userEmail, username, plan: 'free', credits: 10 }])
           .select('id, stripe_customer_id')
+          .eq('email', userEmail)
           .single();
-        if (!error) { newUser = data; break; }
-        insertError = error;
-        const code = (error as any)?.code || (error as any)?.details || (error as any)?.message || '';
-        if (`${code}`.includes('23505') || `${code}`.toLowerCase().includes('duplicate')) {
-          const suffix = Math.random().toString(36).slice(2, 6);
-          username = `${base}-${suffix}`;
-          continue;
+        if (existingErr) {
+          console.error('Error fetching user after register failure:', existingErr);
+          return { isNewUser: false };
         }
-        break;
+        customUser = existing;
+      } else {
+        customUser = payload.user;
+        isNewUserLocal = !!payload.created;
       }
-      if (insertError) {
-        console.error('Failed to insert user:', insertError?.message || insertError);
-        return { isNewUser: false };
-      }
-      customUser = newUser;
-      console.log('New user created with 10 credits:', newUser);
-    } else if (customUserError) {
-      console.error('Error fetching user:', customUserError.message);
+    } catch (e) {
+      console.error('Register call error:', e);
       return { isNewUser: false };
     }
     // If user exists and has no stripe_customer_id, create one
@@ -931,7 +919,7 @@ function useSupabaseGoogleRegistration() {
       });
     }
     
-    return { isNewUser };
+    return { isNewUser: isNewUserLocal };
   };
 
   useEffect(() => {
