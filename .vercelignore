@@ -1,0 +1,7 @@
+# Exclude non-Next.js service folders from Vercel deployments
+whatsapp-integration/
+recflux_devtools_app/
+agentic-structured-service/
+code-deploy-service/
+recflux-tools-accessibility-service/
+
