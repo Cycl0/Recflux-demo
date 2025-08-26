@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       .from('users')
       .select('id, stripe_customer_id')
       .eq('email', email)
-      .single();
+      .maybeSingle();
 
     if (existing && !fetchError) {
       // If the existing row somehow has a null/empty id, repair it with the provided userId
@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
     for (let attempt = 0; attempt < 3; attempt++) {
       const { data, error } = await supabase
         .from('users')
-        .insert([{ id: userId, email, username, plan: 'free', credits: 10 }])
+        .insert([{ id: userId, email, username, plan: 'free', credits: 100 }])
         .select('id, stripe_customer_id')
         .single();
 

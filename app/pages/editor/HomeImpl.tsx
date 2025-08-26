@@ -1241,19 +1241,47 @@ function Home({ onLayoutChange = () => {}, ...props }) {
     fetchProjectsAndMaybeCreate();
   }, [publicUserId]);
 
-  // Fetch and set publicUserId after login
+  // Fetch and set publicUserId after login with retries and self-healing registration
   useEffect(() => {
     async function fetchCustomUserId() {
       if (!user) return;
       const userEmail = user.email;
-      if (!userEmail) return;
-      const { data: customUser } = await supabase
-        .from('users')
-        .select('id')
-        .eq('email', userEmail)
-        .single();
-      if (customUser) {
-        setPublicUserId(customUser.id);
+      const authUserId = user.id;
+      if (!userEmail || !authUserId) return;
+
+      const tryFetch = async () => {
+        const { data, error } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', userEmail)
+          .single();
+        if (data && !error) return { id: data.id };
+        return { id: null, error };
+      };
+
+      // Try up to 5 times, attempt server-side register if not found
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const result = await tryFetch();
+        if (result.id) {
+          setPublicUserId(result.id);
+          return;
+        }
+        const err: any = result.error;
+        if (err && (err.code === 'PGRST116' || (err.details && `${err.details}`.includes('0 rows')))) {
+          // Ensure registration exists server-side
+          try {
+            await fetch('/api/users/register', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: authUserId, email: userEmail }),
+            });
+          } catch (_) {}
+          await new Promise(res => setTimeout(res, 300 + attempt * 200));
+          continue;
+        } else if (err) {
+          console.error('Error fetching custom user id:', err);
+          break;
+        }
       }
     }
     fetchCustomUserId();
