@@ -31,6 +31,13 @@ export default function AuthCallback() {
           const session = data?.session;
           if (session && window.opener) {
             console.log('Session obtained via code exchange:', session);
+            try {
+              // Persist session in opener directly to avoid timing issues
+              await window.opener?.supabase?.auth?.setSession?.({
+                access_token: session.access_token,
+                refresh_token: session.refresh_token,
+              });
+            } catch (_) {}
             window.opener.postMessage({ type: 'SUPABASE_AUTH_SUCCESS', session }, '*');
             setTimeout(() => window.close(), 500);
             return;

@@ -15,12 +15,12 @@ export default function LoginPage() {
       
       // Determine if we're in development or production
       const isLocalhost = currentOrigin.includes('localhost');
-      const isProduction = currentOrigin.includes('recflux-demo.vercel.app') || currentOrigin.includes('vercel.app');
+      const isProduction = currentOrigin.includes('recflux.vercel.app') || currentOrigin.includes('vercel.app');
       
       if (isLocalhost) {
         redirectUrl = 'http://localhost:3000/auth/callback';
       } else if (isProduction) {
-        redirectUrl = 'https://recflux-demo.vercel.app/auth/callback';
+        redirectUrl = 'https://recflux.vercel.app/auth/callback';
       }
       
       console.log('Current origin:', currentOrigin);
