@@ -129,7 +129,7 @@ function runClaudeCLIInDir(cwd: string, userPrompt: string, systemAppend: string
 			'--output-format', 'text',
 			'--add-dir', absProjectDir,
 			'--mcp-config', mcpConfigPath,
-			'--allowedTools', 'Read,Write,Edit,MultiEdit,Glob,LS,Grep,mcp__recflux__project_reset,mcp__recflux__vercel_deploy'
+			'--allowedTools', 'Read,Write,Edit,MultiEdit,Glob,LS,Grep,mcp__recflux__project_reset,mcp__recflux__codesandbox_deploy'
 			// User prompt will be provided via stdin instead of as argument
 		];
 		let cmd = CLAUDE_BIN;
@@ -201,20 +201,17 @@ function runClaudeCLIInDir(cwd: string, userPrompt: string, systemAppend: string
 		let stderr = '';
 		let stdout = '';
 		const killTimer = setTimeout(() => {
-			console.log('[CLAUDE] Timeout reached, killing process');
-			child.kill('SIGKILL');
+			console.log('[CLAUDE] Timeout reached after 5 minutes, letting process continue');
 			cleanup();
-			reject(new Error('Claude CLI timed out after 3 minutes'));
-		}, 180000);
+			reject(new Error('Claude CLI timed out after 5 minutes'));
+		}, 300000);
 		
 		// Add a shorter timeout for debugging
 		const debugTimer = setTimeout(() => {
-			console.log('[CLAUDE] No output after 30 seconds, process may be hanging');
+			console.log('[CLAUDE] No output after 60 seconds, process may still be working');
 			console.log('[CLAUDE] Process PID:', child.pid);
 			console.log('[CLAUDE] Process killed:', child.killed);
-			console.log('[CLAUDE] Attempting graceful termination');
-			child.kill('SIGTERM');
-		}, 30000);
+		}, 60000);
 		
 		const cleanup = () => {
 			clearTimeout(debugTimer);
@@ -259,28 +256,342 @@ function runClaudeCLIInDir(cwd: string, userPrompt: string, systemAppend: string
 	});
 }
 
-async function takeScreenshot(deploymentUrl: string): Promise<string> {
+async function takeScreenshot(targetUrl: string): Promise<string> {
 	console.log('Taking screenshot...');
 	const browser = await puppeteer.launch({
 		args: ['--no-sandbox', '--disable-setuid-sandbox'],
 	});
 	const page = await browser.newPage();
+	await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 });
 	
-	// Try networkidle0 first, fallback to domcontentloaded if it fails
+	// Navigate to intended URL
 	try {
-		await page.goto(deploymentUrl, { waitUntil: 'networkidle0', timeout: 60000 });
+		await page.goto(targetUrl, { waitUntil: 'networkidle0', timeout: 60000 });
 	} catch (networkError) {
 		console.warn('networkidle0 failed, trying domcontentloaded:', networkError);
-		await page.goto(deploymentUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-		// Give it a moment for content to render
+		await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
 		await new Promise(resolve => setTimeout(resolve, 2000));
 	}
 	
-	const screenshotBuffer = await page.screenshot({ encoding: 'base64' });
+	// If a CodeSandbox interstitial is detected, jump to preview domain
+	try {
+		const current = page.url();
+		let interstitial = /codesandbox\.io/i.test(current) || /preview/i.test(current);
+		// Detect by page text as well (covers interstitial served from csb.app)
+		try {
+			const hasInterstitialText = await page.evaluate(() => {
+				const doc = (globalThis as any).document as any;
+				const t = ((doc?.body?.innerText) || '').toLowerCase();
+				return t.includes('codesandbox preview') && (t.includes('do you want to continue') || t.includes('proceed to preview'));
+			});
+			if (hasInterstitialText) interstitial = true;
+		} catch {}
+
+		if (interstitial) {
+			console.log('[SCREENSHOT] Detected CodeSandbox interstitial, attempting bypass');
+			// First try clicking the "Yes, proceed to preview" button/link
+			const clicked = await page.evaluate(() => {
+				const doc = (globalThis as any).document as any;
+				const anchors = Array.from(doc.querySelectorAll('a')) as any[];
+				const yes = anchors.find(a => /proceed to preview/i.test(((a as any).textContent || '')));
+				if (yes) { (yes as any).click(); return true; }
+				const buttons = Array.from(doc.querySelectorAll('button')) as any[];
+				const btn = buttons.find(b => /proceed to preview/i.test(((b as any).textContent || '')));
+				if (btn) { (btn as any).click(); return true; }
+				return false;
+			});
+			if (clicked) {
+				try {
+					await page.waitForNavigation({ waitUntil: 'networkidle0', timeout: 15000 });
+				} catch {}
+			}
+
+			// If still on interstitial, try extracting the preview href and navigating
+			const previewHref = await page.$$eval('a[href]', (as: any[]) => {
+				const found = (as as any[]).find((a: any) => /\.csb\.app/i.test((a as any).href));
+				return found ? (found as any).href : '';
+			}).catch(() => '');
+			if (previewHref) {
+				try {
+					await page.goto(previewHref, { waitUntil: 'networkidle0', timeout: 60000 });
+				} catch {
+					await page.goto(previewHref, { waitUntil: 'domcontentloaded', timeout: 30000 });
+					await new Promise(resolve => setTimeout(resolve, 2000));
+				}
+			}
+		}
+	} catch (e: any) {
+		console.warn('[SCREENSHOT] Interstitial bypass failed:', e?.message || e);
+	}
+
+	// If CodeSandbox is still installing dependencies, wait until it's done
+	async function waitUntilDependenciesInstalled(maxMs: number): Promise<boolean> {
+		const start = Date.now();
+		while (Date.now() - start < maxMs) {
+			const installing = await page.evaluate(() => {
+				const doc = (globalThis as any).document as any;
+				if (!doc || !doc.body) return true;
+				const text = ((doc.body.innerText || '').toLowerCase());
+				const hasLoader = text.includes('installing dependencies');
+				const hasOpenSandbox = text.includes('open sandbox');
+				return hasLoader || hasOpenSandbox;
+			});
+			if (!installing) return true;
+			console.log('[SCREENSHOT] CodeSandbox still installing, waiting 5s…');
+			await new Promise(res => setTimeout(res, 5000));
+			// Do a light reload every 20s to nudge progress/WS reconnects
+			if ((Date.now() - start) % 20000 < 5000) {
+				try { await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 }); } catch {}
+			}
+		}
+		return false;
+	}
+
+	const depsReady = await waitUntilDependenciesInstalled(180000); // up to 3 minutes
+	if (!depsReady) {
+		console.warn('[SCREENSHOT] Timed out waiting for dependencies to install; proceeding anyway');
+	}
+
+	// Wait for meaningful content to render (avoid blank screenshot)
+	async function waitForMeaningfulContent(maxMs: number): Promise<boolean> {
+		const start = Date.now();
+		while (Date.now() - start < maxMs) {
+			const hasContent = await page.evaluate(() => {
+				const doc = (globalThis as any).document as any;
+				if (!doc || !doc.body) return false;
+				// Candidates for app roots
+				const roots = ['#root', '#app', 'main', 'body'];
+				for (const sel of roots) {
+					const el = doc.querySelector(sel) as any;
+					if (el && el.getBoundingClientRect) {
+						const r = el.getBoundingClientRect();
+						if (r && r.width * r.height > 50000) return true;
+					}
+				}
+				// Any large visible element
+				const nodes = Array.from(doc.querySelectorAll('*')) as any[];
+				for (const n of nodes) {
+					if (!n || !n.getBoundingClientRect) continue;
+					const s = (doc.defaultView as any).getComputedStyle(n);
+					if (!s || s.visibility === 'hidden' || s.display === 'none') continue;
+					const r = n.getBoundingClientRect();
+					if (r && r.width * r.height > 50000) return true;
+				}
+				// Any loaded image
+				const imgs = Array.from((doc as any).images || []) as any[];
+				if (imgs.some(img => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0)) return true;
+				// Fallback: sufficient text content
+				const textLen = ((doc.body.innerText || '').trim()).length;
+				return textLen > 50;
+			});
+			if (hasContent) return true;
+			await new Promise(res => setTimeout(res, 1000));
+		}
+		return false;
+	}
+
+	let contentReady = await waitForMeaningfulContent(20000);
+	if (!contentReady) {
+		console.warn('[SCREENSHOT] No meaningful content detected, reloading once...');
+		try {
+			await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
+			await new Promise(res => setTimeout(res, 2000));
+			contentReady = await waitForMeaningfulContent(20000);
+		} catch (e) {
+			console.warn('[SCREENSHOT] Reload failed:', (e as Error)?.message);
+		}
+	}
+
+	// Final small settle to ensure painting
+	await page.evaluate(() => new Promise(r => (globalThis as any).requestAnimationFrame(() => (globalThis as any).requestAnimationFrame(r))));
+
+	let screenshotBuffer = await page.screenshot({ encoding: 'base64', fullPage: true });
+	// If image is suspiciously small (possibly blank), retry once after short wait
+	if (!screenshotBuffer || (screenshotBuffer as any as string).length < 1000) {
+		await new Promise(res => setTimeout(res, 2000));
+		screenshotBuffer = await page.screenshot({ encoding: 'base64', fullPage: true });
+	}
 	await browser.close();
 	console.log('Screenshot taken successfully.');
-	
 	return screenshotBuffer as string;
+}
+
+async function deployToCodeSandbox(projectDir: string): Promise<{ deploymentUrl: string; previewUrl: string; editorUrl: string }> {
+	console.log(`[CODESANDBOX_DEPLOY] Starting deployment from ${projectDir}`);
+	
+	// Read all files from the project directory
+	async function collectAllFiles(dir: string, prefix = ''): Promise<Record<string, { content: string | object }>> {
+		const files: Record<string, { content: string | object }> = {};
+		
+		try {
+			const entries = await fs.readdir(dir, { withFileTypes: true });
+			
+			for (const entry of entries) {
+				// Skip certain directories and files
+				if (['node_modules', '.git', '.vercel', 'dist', 'build', '.next'].includes(entry.name)) {
+					continue;
+				}
+				
+				const fullPath = path.join(dir, entry.name);
+				const relativePath = prefix ? path.join(prefix, entry.name).replace(/\\/g, '/') : entry.name;
+				
+				if (entry.isDirectory()) {
+					// Recursively read subdirectory
+					const subFiles = await collectAllFiles(fullPath, relativePath);
+					Object.assign(files, subFiles);
+				} else if (entry.isFile()) {
+					try {
+						// Handle different file types
+						if (entry.name === 'package.json') {
+							const content = await fs.readFile(fullPath, 'utf8');
+							files[relativePath] = { content: JSON.parse(content) };
+						} else {
+							// Read as text file
+							const content = await fs.readFile(fullPath, 'utf8');
+							files[relativePath] = { content };
+						}
+						console.log(`[CODESANDBOX_DEPLOY] Read ${relativePath}`);
+					} catch (readError) {
+						console.warn(`[CODESANDBOX_DEPLOY] Could not read ${relativePath}:`, readError);
+					}
+				}
+			}
+		} catch (dirError) {
+			console.warn(`[CODESANDBOX_DEPLOY] Could not read directory ${dir}:`, dirError);
+		}
+		
+		return files;
+	}
+	
+	// Collect all project files
+	const allFiles = await collectAllFiles(projectDir);
+	
+	// Add timestamp to ensure unique sandbox creation
+	const timestamp = Date.now();
+	const uniqueComment = `/* Generated at ${new Date().toISOString()} - ${timestamp} */\n`;
+	
+	// Add unique identifier to package.json name if it exists
+	if (allFiles['package.json'] && typeof allFiles['package.json'].content === 'object') {
+		const pkgContent = allFiles['package.json'].content as any;
+		allFiles['package.json'].content = { ...pkgContent, name: `recflux-app-${timestamp}` };
+	}
+	
+	// Add timestamp comments to certain file types to ensure uniqueness
+	const codeExtensions = ['.js', '.jsx', '.ts', '.tsx', '.css', '.scss', '.less'];
+	for (const [filePath, fileData] of Object.entries(allFiles)) {
+		const ext = path.extname(filePath).toLowerCase();
+		if (codeExtensions.includes(ext) && typeof fileData.content === 'string') {
+			fileData.content = `${uniqueComment}${fileData.content}`;
+		}
+	}
+	
+	// Ensure we have essential files and proper configuration
+	if (!allFiles['src/index.js'] && !allFiles['src/index.jsx']) {
+		allFiles['src/index.js'] = {
+			content: `${uniqueComment}import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);`
+		};
+	}
+	
+	// Ensure package.json has the correct structure for CodeSandbox
+	if (!allFiles['package.json']) {
+		allFiles['package.json'] = {
+			content: {
+				"name": `recflux-app-${timestamp}`,
+				"version": "1.0.0",
+				"main": "src/index.js",
+				"dependencies": {
+					"react": "^18.0.0",
+					"react-dom": "^18.0.0",
+					"react-scripts": "5.0.1"
+				},
+				"scripts": {
+					"start": "react-scripts start",
+					"build": "react-scripts build"
+				},
+				"browserslist": {
+					"production": [">0.2%", "not dead", "not op_mini all"],
+					"development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
+				}
+			}
+		};
+	}
+	
+	// Add CodeSandbox configuration to help with dependency resolution
+	if (!allFiles['sandbox.config.json']) {
+		allFiles['sandbox.config.json'] = {
+			content: {
+				"infiniteLoopProtection": true,
+				"hardReloadOnChange": false,
+				"view": "browser",
+				"template": "create-react-app"
+			}
+		};
+	}
+	
+	console.log(`[CODESANDBOX_DEPLOY] Collected ${Object.keys(allFiles).length} files`);
+	console.log(`[CODESANDBOX_DEPLOY] Files:`, Object.keys(allFiles).join(', '));
+	
+	// Create the sandbox using all project files
+	const sandboxData = {
+		files: allFiles
+	};
+	
+	console.log('[CODESANDBOX_DEPLOY] Creating sandbox...');
+	
+	try {
+		console.log('[CODESANDBOX_DEPLOY] Sending sandbox data with', Object.keys(sandboxData.files).length, 'files');
+		console.log('[CODESANDBOX_DEPLOY] Package.json dependencies:', 
+			typeof sandboxData.files['package.json']?.content === 'object' 
+				? JSON.stringify((sandboxData.files['package.json'].content as any)?.dependencies, null, 2)
+				: 'N/A'
+		);
+		
+		// Use POST with JSON body per CodeSandbox define API
+		const response = await axios.post(
+			'https://codesandbox.io/api/v1/sandboxes/define?json=1',
+			sandboxData,
+			{
+				timeout: 30000, // Increased timeout
+				headers: { 'Content-Type': 'application/json' },
+			}
+		);
+		
+		console.log('[CODESANDBOX_DEPLOY] Response status:', response.status);
+		console.log('[CODESANDBOX_DEPLOY] Response data:', response.data);
+		
+		let sandboxId = '';
+		if (response.data && typeof response.data === 'object') {
+			sandboxId = (response.data as any).sandbox_id || (response.data as any).id || '';
+		}
+		
+		if (!sandboxId) {
+			throw new Error('CodeSandbox API did not return a valid sandbox ID');
+		}
+		
+		const editorUrl = `https://codesandbox.io/s/${sandboxId}`;
+		const previewUrl = `https://${sandboxId}.csb.app`;
+		
+		console.log('[CODESANDBOX_DEPLOY] Sandbox created! ID:', sandboxId);
+		console.log('[CODESANDBOX_DEPLOY] Editor URL:', editorUrl);
+		console.log('[CODESANDBOX_DEPLOY] Preview URL:', previewUrl);
+		
+		return { 
+			deploymentUrl: editorUrl,
+			previewUrl: previewUrl,
+			editorUrl: editorUrl 
+		};
+	} catch (error: any) {
+		const status = error?.response?.status;
+		const dataPreview = error?.response?.data ? (typeof error.response.data === 'string' ? error.response.data.slice(0, 400) : JSON.stringify(error.response.data).slice(0, 400)) : '';
+		console.error('[CODESANDBOX_DEPLOY] Failed to create sandbox. status=', status, 'message=', error?.message);
+		if (dataPreview) console.error('[CODESANDBOX_DEPLOY] error body=', dataPreview);
+		throw new Error(`CodeSandbox deployment failed: ${error.message}`);
+	}
 }
 
 async function deployToVercel(projectDir: string): Promise<{ deploymentUrl: string }> {
@@ -444,7 +755,7 @@ if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_NUMBER_ID || !WHATSAPP_VERIFY_TOKEN) {
 }
 // Removed direct deploy helpers; MCP server handles deployment
 
-async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string): Promise<{ text: string; shouldSendImage?: boolean; imageData?: string; imageCaption?: string; claudeOutput?: string; deploymentUrl?: string }> {
+async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string): Promise<{ text: string; shouldSendImage?: boolean; imageData?: string; imageCaption?: string; claudeOutput?: string; deploymentUrl?: string; previewUrl?: string; editorUrl?: string }> {
     const mappedUser = getUserByWhatsApp(whatsappFrom);
     let userId = 'dev-user';
     if (mappedUser?.email) {
@@ -522,18 +833,32 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
         if (before.size !== after.size) changed = true; else { for (const [k,v] of after.entries()) { if (before.get(k) !== v) { changed = true; break; } } }
         
         if (changed) {
-            console.log('[DEPLOY] Changes detected, deploying to Vercel...');
+            console.log('[DEPLOY] Changes detected, deploying to CodeSandbox...');
             try {
-                const deployment = await deployToVercel(dir);
+                const deployment = await deployToCodeSandbox(dir);
+                
+                const messageText = `🚀 Site publicado!
+
+📱 *Preview:*
+${deployment.previewUrl}
+
+⚙️ *Code:*
+${deployment.editorUrl}`;
+                
                 return { 
-                    text: `🚀 Site publicado com sucesso!\n\n${deployment.deploymentUrl}`,
+                    text: messageText,
                     claudeOutput: stdout,
-                    deploymentUrl: deployment.deploymentUrl
+                    deploymentUrl: deployment.previewUrl,
+                    previewUrl: deployment.previewUrl,
+                    editorUrl: deployment.editorUrl,
+                    shouldSendImage: true, // Always try to send screenshot separately
+                    imageData: '', // Will be populated later
+                    imageCaption: '📸 Preview do seu site'
                 };
             } catch (deployError) {
                 console.error('[DEPLOY] Error:', deployError);
                 return { 
-                    text: '❌ Código gerado mas falha no deploy. Verifique as configurações do Vercel.',
+                    text: '❌ Código gerado mas falha no deploy.',
                     claudeOutput: stdout
                 };
             }
@@ -544,8 +869,41 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
             };
         }
     } catch (e) {
-        console.error('[CLAUDE] Error:', e);
-        return { text: '❌ Erro ao gerar código. Tente novamente.' };
+        console.error('[CLAUDE] Error or timeout:', e);
+        // If Claude times out but we have changes, still try to deploy
+        const before = await hashDirectory(dir);
+        const after = await hashDirectory(dir);
+        let changed = false;
+        // For timeout case, assume there were changes if files exist
+        try {
+            const appPath = path.join(dir, 'src', 'App.jsx');
+            const stats = await fs.stat(appPath);
+            changed = stats.isFile();
+        } catch {
+            changed = false;
+        }
+        
+        if (changed) {
+            console.log('[DEPLOY] Claude timed out but changes detected, attempting deploy anyway...');
+            try {
+                const deployment = await deployToCodeSandbox(dir);
+                return { 
+                    text: `🚀 Site publicado! (Claude timeout mas deploy funcionou)
+
+📱 *Preview:*
+${deployment.previewUrl}
+
+⚙️ *Code:*
+${deployment.editorUrl}`,
+                    deploymentUrl: deployment.previewUrl,
+                    previewUrl: deployment.previewUrl,
+                    editorUrl: deployment.editorUrl
+                };
+            } catch (deployError) {
+                return { text: '❌ Claude timeout e falha no deploy. Tente novamente.' };
+            }
+        }
+        return { text: '❌ Erro ao gerar código. Tente um prompt mais simples.' };
     }
 }
 
@@ -683,7 +1041,7 @@ app.post('/webhook', async (req: Request, res: Response) => {
 			if (text.toLowerCase().startsWith('/deploy ')) {
 				const reactCode = text.slice(8);
 				// Immediate feedback to user about expected duration
-				await sendWhatsappText(from, '⏳ Iniciando deploy… tempo estimado ~2 minutos. Enviarei o link assim que estiver pronto.');
+				await sendWhatsappText(from, '⚡ Iniciando deploy… Aguarde alguns minutos!');
 				const dirFromEnv = process.env.CLONED_TEMPLATE_DIR;
 				if (!dirFromEnv) {
 					reply = '⚠️ Projeto não inicializado. Faça /login para criar o projeto a partir do template.';
@@ -710,16 +1068,22 @@ app.post('/webhook', async (req: Request, res: Response) => {
 						for (const [k, v] of after.entries()) { if (before.get(k) !== v) { changed = true; break; } }
 					}
 					
-					let deploymentResult: { deploymentUrl?: string } | null = null;
+					let deploymentResult: { deploymentUrl?: string; previewUrl?: string; editorUrl?: string } | null = null;
 					
 					if (changed) {
-						console.log('[DEPLOY] Changes detected, deploying to Vercel...');
+						console.log('[DEPLOY] Changes detected, deploying to CodeSandbox...');
 						try {
-							deploymentResult = await deployToVercel(dir);
-							reply = `🚀 Site publicado com sucesso!\n\n${deploymentResult.deploymentUrl}`;
+							deploymentResult = await deployToCodeSandbox(dir);
+							reply = `🚀 Site publicado!
+
+📱 **Preview:**
+${deploymentResult.previewUrl}
+
+⚙️ **Code:**
+${deploymentResult.editorUrl}`;
 						} catch (deployError) {
 							console.error('[DEPLOY] Error:', deployError);
-							reply = '❌ Código editado mas falha no deploy. Verifique as configurações do Vercel.';
+							reply = '❌ Código editado mas falha no deploy.';
 						}
 					} else {
 						reply = '✅ Nenhuma alteração detectada. Não publicarei.';
@@ -737,18 +1101,6 @@ app.post('/webhook', async (req: Request, res: Response) => {
 					wrapAsCode = false;
 					await sendWhatsappText(from, reply);
 					
-					// 3. Take and send screenshot if deployment was successful
-					if (deploymentResult?.deploymentUrl) {
-						console.log(`[WEBHOOK] Taking screenshot for ${deploymentResult.deploymentUrl}`);
-						try {
-							const screenshot = await takeScreenshot(deploymentResult.deploymentUrl);
-							console.log(`[WEBHOOK] Sending screenshot to ${from} for /deploy command`);
-							await sendWhatsappImage(from, screenshot, deploymentResult.deploymentUrl);
-						} catch (imageError) {
-							console.error(`[WEBHOOK] Failed to take or send screenshot:`, imageError);
-							await sendWhatsappText(from, '⚠️ Screenshot falhou, mas seu app já está no ar e acessível pelo link acima.');
-						}
-					}
 					
 					return res.sendStatus(200);
 				} finally {
@@ -822,7 +1174,7 @@ app.post('/webhook', async (req: Request, res: Response) => {
 			} else {
 				console.log(`[WEBHOOK] Processing deployment request from ${from}: "${text.substring(0, 100)}..."`);
 				// Immediate feedback to user about expected duration
-				await sendWhatsappText(from, '⏳ Gerando e publicando… tempo estimado ~2 minutos. Vou enviar o link quando finalizar.');
+				await sendWhatsappText(from, '⚡ Gerando e publicando… Aguarde alguns minutos!');
 				const result = await buildAndDeployFromPrompt(text, from);
 				console.log('[WEBHOOK] Deployment result:', {
 					textLength: result.text.length,
@@ -842,17 +1194,18 @@ app.post('/webhook', async (req: Request, res: Response) => {
 				console.log(`[WEBHOOK] Sending deployment result to ${from}`);
 				await sendWhatsappText(from, result.text);
 				
-				// 3. Take and send screenshot if deployment was successful
-				if (result.deploymentUrl) {
-					console.log(`[WEBHOOK] Taking screenshot for ${result.deploymentUrl}`);
-					try {
-						const screenshot = await takeScreenshot(result.deploymentUrl);
-						console.log(`[WEBHOOK] Sending screenshot to ${from}`);
-						await sendWhatsappImage(from, screenshot, result.deploymentUrl);
-					} catch (imageError) {
-						console.error(`[WEBHOOK] Failed to take or send screenshot:`, imageError);
-						await sendWhatsappText(from, '⚠️ Screenshot falhou, mas seu app já está no ar e acessível pelo link acima.');
-					}
+				// 3. Take and send screenshot asynchronously (don't wait)
+				if (result.shouldSendImage && result.previewUrl) {
+					console.log(`[WEBHOOK] Taking screenshot asynchronously for ${from}`);
+					// Don't await - run in background
+					takeScreenshot(result.previewUrl)
+						.then(async (screenshotData) => {
+							console.log(`[WEBHOOK] Screenshot ready, sending to ${from}`);
+							await sendWhatsappImage(from, screenshotData, result.imageCaption || '📸 Preview do seu site');
+						})
+						.catch((screenshotError) => {
+							console.warn(`[WEBHOOK] Screenshot failed for ${from}:`, screenshotError);
+						});
 				}
 				
 				// Return early since we already sent the message(s)

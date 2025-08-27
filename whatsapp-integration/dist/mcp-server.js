@@ -184,6 +184,128 @@ server.tool('mcp__recflux__vercel_deploy', {
         return { content: [{ type: 'text', text: `Deployment failed: ${msg}` }] };
     }
 });
+server.tool('mcp__recflux__codesandbox_deploy', {
+    description: 'Deploy the current project to CodeSandbox instantly and return the sandbox URL',
+    inputSchema: {
+        type: 'object',
+        properties: {},
+        required: []
+    }
+}, async (_args) => {
+    const root = process.env.CLONED_TEMPLATE_DIR || process.cwd();
+    const stat = await fs.stat(root).catch(() => null);
+    if (!stat || !stat.isDirectory()) {
+        return { content: [{ type: 'text', text: `Invalid deploy directory: ${root}. Set CLONED_TEMPLATE_DIR to the cloned template path or run the tool from that directory.` }] };
+    }
+    try {
+        console.error(`[MCP_CODESANDBOX_DEPLOY] Creating instant sandbox from directory: ${root}`);
+        // Read the project files
+        const srcAppPath = path.join(root, 'src', 'App.jsx');
+        const srcCssPath = path.join(root, 'src', 'index.css');
+        const packageJsonPath = path.join(root, 'package.json');
+        let appCode = '';
+        let cssCode = '';
+        let packageJson = '';
+        try {
+            appCode = await fs.readFile(srcAppPath, 'utf8');
+        }
+        catch (e) {
+            appCode = `import React from 'react';
+import './index.css';
+
+function App() {
+  return (
+    <div className="App">
+      <h1>Hello World</h1>
+    </div>
+  );
+}
+
+export default App;`;
+        }
+        try {
+            cssCode = await fs.readFile(srcCssPath, 'utf8');
+        }
+        catch (e) {
+            cssCode = `body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }`;
+        }
+        try {
+            packageJson = await fs.readFile(packageJsonPath, 'utf8');
+        }
+        catch (e) {
+            packageJson = {
+                "name": "recflux-generated-app",
+                "version": "1.0.0",
+                "main": "src/index.js",
+                "dependencies": {
+                    "react": "^18.0.0",
+                    "react-dom": "^18.0.0",
+                    "react-scripts": "5.0.1"
+                },
+                "scripts": {
+                    "start": "react-scripts start",
+                    "build": "react-scripts build"
+                }
+            };
+        }
+        // Parse package.json if it's a string
+        let pkgContent = packageJson;
+        if (typeof packageJson === 'string') {
+            try {
+                pkgContent = JSON.parse(packageJson);
+            }
+            catch (e) {
+                console.warn('[MCP_CODESANDBOX_DEPLOY] Failed to parse package.json, using as string');
+                pkgContent = packageJson;
+            }
+        }
+        // Create the sandbox using CodeSandbox API
+        const axios = require('axios');
+        const sandboxData = {
+            files: {
+                "package.json": { content: pkgContent },
+                "src/index.js": {
+                    content: `import React from 'react';
+import ReactDOM from 'react-dom/client';
+import App from './App';
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);`
+                },
+                "src/App.jsx": { content: appCode },
+                "src/index.css": { content: cssCode }
+            }
+        };
+        // Use GET request with encoded parameters - more reliable than POST
+        const parametersString = JSON.stringify(sandboxData);
+        const encodedParameters = encodeURIComponent(parametersString);
+        // Use GET request which returns JSON response with sandbox ID
+        const response = await axios.get(`https://codesandbox.io/api/v1/sandboxes/define?parameters=${encodedParameters}&json=1`, {
+            timeout: 10000,
+            maxRedirects: 0,
+            validateStatus: (status) => status < 400 || status === 302
+        });
+        console.error(`[MCP_CODESANDBOX_DEPLOY] Response status:`, response.status);
+        console.error(`[MCP_CODESANDBOX_DEPLOY] Response data:`, response.data);
+        // Check if we got JSON response with sandbox ID
+        let sandboxId = '';
+        if (response.data && typeof response.data === 'object') {
+            sandboxId = response.data.sandbox_id || response.data.id;
+        }
+        if (!sandboxId) {
+            console.error('[MCP_CODESANDBOX_DEPLOY] No sandbox ID found in JSON response');
+            throw new Error('CodeSandbox API did not return a valid sandbox ID');
+        }
+        const url = `https://codesandbox.io/s/${sandboxId}`;
+        console.error(`[MCP_CODESANDBOX_DEPLOY] Sandbox created instantly! URL: ${url}`);
+        return { content: [{ type: 'text', text: `Instant deployment successful! Site published at: ${url}` }] };
+    }
+    catch (err) {
+        const msg = err?.message || String(err);
+        console.error(`[MCP_CODESANDBOX_DEPLOY] Deployment failed: ${msg}`);
+        return { content: [{ type: 'text', text: `Instant deployment failed: ${msg}` }] };
+    }
+});
 async function main() {
     await server.connect(new StdioServerTransport());
 }
