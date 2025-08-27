@@ -1,6 +1,8 @@
 import session from 'express-session';
 import passport from 'passport';
 import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
+import { promises as fs } from 'fs';
+import path from 'path';
 export function configureAuth(app) {
     const { GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_CALLBACK_URL, SESSION_SECRET } = process.env;
     if (!GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET || !GOOGLE_CALLBACK_URL) {
@@ -40,9 +42,25 @@ export function configureAuth(app) {
         });
         authenticator(req, res, next);
     });
-    app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/auth/failure' }), (req, res) => {
+    app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/auth/failure' }), async (req, res) => {
         // Store user on session
         req.session.user = req.user;
+        // Initialize or reset project clone at login
+        try {
+            const projectDir = process.env.CLONED_TEMPLATE_DIR || path.resolve(process.cwd(), 'project');
+            const templateDir = path.resolve(process.cwd(), '../code-deploy-service/template');
+            try {
+                await fs.rm(projectDir, { recursive: true, force: true });
+            }
+            catch { }
+            await fs.mkdir(projectDir, { recursive: true });
+            await fs.cp(templateDir, projectDir, { recursive: true });
+            process.env.CLONED_TEMPLATE_DIR = projectDir;
+            console.log(`[AUTH] Project initialized at ${projectDir} from template ${templateDir}`);
+        }
+        catch (e) {
+            console.warn('[AUTH] Failed to initialize project from template:', e?.message || e);
+        }
         // Redirect back to WhatsApp chat using wa.me deep link.
         const from = typeof req.query.state === 'string' ? req.query.state : undefined;
         const businessNumber = process.env.WHATSAPP_PHONE_NUMBER;

@@ -2,159 +2,203 @@ import 'dotenv/config';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import OpenAI from 'openai';
 import axios from 'axios';
+import { promises as fs } from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 
-// Configure OpenAI SDK to point to OpenRouter when available
-const useOpenRouter = Boolean(process.env.OPENROUTER_API_KEY);
-const openai = new OpenAI({
-  apiKey: useOpenRouter ? process.env.OPENROUTER_API_KEY : process.env.OPENAI_API_KEY,
-  baseURL: useOpenRouter ? 'https://openrouter.ai/api/v1' : undefined,
-  defaultHeaders: useOpenRouter
-    ? {
-        'HTTP-Referer': process.env.OPENROUTER_SITE_URL || 'https://example.com',
-        'X-Title': 'WhatsApp Codegen'
-      }
-    : undefined
-});
+// Minimal MCP server exposing ONLY a Vercel deployment tool.
 
-// Base host/scheme for services
-const SERVICES_SCHEME = process.env.SERVICES_SCHEME || 'http';
-const SERVICES_HOST = process.env.SERVICES_HOST || 'localhost'; // set to '4.236.226.138' in prod
+const VERCEL_TOKEN = process.env.VERCEL_TOKEN as string | undefined;
+const VERCEL_ORG_ID = process.env.VERCEL_ORG_ID as string | undefined;
+const VERCEL_TEAM_ID = (process.env.VERCEL_TEAM_ID || VERCEL_ORG_ID) as string | undefined;
+const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID as string | undefined;
+const VERCEL_PROJECT_NAME = process.env.VERCEL_PROJECT_NAME as string | undefined;
 
-// Default ports (can be overridden via env)
-const DEFAULT_TEST_PORT = Number(process.env.TEST_PORT || 3002);
-const DEFAULT_CODE_DEPLOY_PORT = Number(process.env.CODE_DEPLOY_PORT || 3003); // set 3001 to match your mapping
-const DEFAULT_ACCESSIBILITY_PORT = Number(process.env.ACCESSIBILITY_PORT || 3003);
-const DEFAULT_DASHBOARD_PORT = Number(process.env.DASHBOARD_PORT || 3004);
-const DEFAULT_AGENTIC_PORT = Number(process.env.AGENTIC_PORT || 3001);
+type LocalFile = { file: string; data: Buffer; sha: string; size: number };
 
-// Construct service URLs (overridable via full URLs)
-const AGENTIC_SERVICE_URL = process.env.AGENTIC_SERVICE_URL || `${SERVICES_SCHEME}://${SERVICES_HOST}:${DEFAULT_AGENTIC_PORT}`;
-const TEST_SERVICE_URL = process.env.TEST_SERVICE_URL || `${SERVICES_SCHEME}://${SERVICES_HOST}:${DEFAULT_TEST_PORT}`;
-const ACCESSIBILITY_SERVICE_URL = process.env.ACCESSIBILITY_SERVICE_URL || `${SERVICES_SCHEME}://${SERVICES_HOST}:${DEFAULT_ACCESSIBILITY_PORT}`;
-const DEPLOY_SERVICE_URL = process.env.DEPLOY_SERVICE_URL || `${SERVICES_SCHEME}://${SERVICES_HOST}:${DEFAULT_CODE_DEPLOY_PORT}`;
-const DASHBOARD_SERVICE_URL = process.env.DASHBOARD_SERVICE_URL || `${SERVICES_SCHEME}://${SERVICES_HOST}:${DEFAULT_DASHBOARD_PORT}`;
+async function collectFilesFromDir(root: string): Promise<LocalFile[]> {
+	async function walk(dir: string, prefix = ''): Promise<LocalFile[]> {
+		const entries = await fs.readdir(dir, { withFileTypes: true });
+		const files: LocalFile[] = [];
+		for (const ent of entries) {
+			if (ent.name === 'node_modules' || ent.name === '.git' || ent.name === '.vercel') continue;
+			const abs = path.join(dir, ent.name);
+			const rel = path.join(prefix, ent.name).replace(/\\/g, '/');
+			if (ent.isDirectory()) {
+				files.push(...(await walk(abs, rel)));
+			} else {
+				const data = await fs.readFile(abs);
+				const sha = crypto.createHash('sha1').update(data).digest('hex');
+				files.push({ file: rel, data, sha, size: data.length });
+			}
+		}
+		return files;
+	}
+	return walk(root);
+}
+
+async function uploadMissingFilesToVercel(files: LocalFile[], teamId?: string): Promise<void> {
+	if (!VERCEL_TOKEN) throw new Error('VERCEL_TOKEN not set');
+	const base = 'https://api.vercel.com';
+	for (const f of files) {
+		try {
+			await axios.head(`${base}/v2/files/${f.sha}`, {
+				params: teamId ? { teamId } : undefined,
+				headers: { Authorization: `Bearer ${VERCEL_TOKEN}` }
+			});
+		} catch {
+			await axios.post(`${base}/v2/files`, f.data, {
+				params: teamId ? { teamId } : undefined,
+				headers: {
+					Authorization: `Bearer ${VERCEL_TOKEN}`,
+					'Content-Type': 'application/octet-stream',
+					'x-vercel-digest': f.sha,
+				},
+				maxBodyLength: Infinity,
+				maxContentLength: Infinity,
+				timeout: 600000
+			});
+		}
+	}
+}
+
+async function createVercelDeployment(files: LocalFile[], opts: { teamId?: string; projectId?: string; projectName?: string }): Promise<string> {
+	if (!VERCEL_TOKEN) throw new Error('VERCEL_TOKEN not set');
+	const base = 'https://api.vercel.com';
+	const teamId = opts.teamId;
+	await uploadMissingFilesToVercel(files, teamId);
+	const filesSpec = files.map(f => ({ file: f.file, sha: f.sha, size: f.size }));
+	const body: any = {
+		name: opts.projectName || VERCEL_PROJECT_NAME || 'temp-deploy',
+		files: filesSpec,
+		target: 'production'
+	};
+	if (opts.projectId || VERCEL_PROJECT_ID) body.projectId = opts.projectId || VERCEL_PROJECT_ID;
+	const { data } = await axios.post(`${base}/v13/deployments`, body, {
+		params: teamId ? { teamId } : undefined,
+		headers: { Authorization: `Bearer ${VERCEL_TOKEN}`, 'Content-Type': 'application/json' },
+		timeout: 600000
+	});
+	const deploymentId = data?.id as string;
+	if (!deploymentId) throw new Error('Failed to create Vercel deployment');
+	const started = Date.now();
+	while (Date.now() - started < 600000) {
+		const { data: d } = await axios.get(`${base}/v13/deployments/${deploymentId}`, {
+			params: teamId ? { teamId } : undefined,
+			headers: { Authorization: `Bearer ${VERCEL_TOKEN}` }
+		});
+		const state = d?.readyState || d?.state;
+		const url = d?.url;
+		if (state === 'READY' && url) return `https://${url}`;
+		if (state === 'ERROR' || state === 'CANCELED') throw new Error(`Vercel deployment failed: ${state}`);
+		await new Promise(r => setTimeout(r, 3000));
+	}
+	throw new Error('Timed out waiting for Vercel deployment');
+}
 
 const server = new McpServer(
-	{ name: 'codegen-mcp', version: '1.0.0' },
+	{ name: 'recflux-deployer', version: '1.0.0' },
 	{ capabilities: { tools: {} }, requestTimeoutMs: 600000 } as any
 );
 
-function logServiceRequest(service: string, url: string, payload: unknown) {
-	try {
-		console.log(`[SERVICE:${service}] POST ${url}`);
-		console.log(`[SERVICE:${service}] payload=`, JSON.stringify(payload));
-	} catch {
-		console.log(`[SERVICE:${service}] payload=[unserializable]`);
-	}
-}
-
-function logServiceResponse(service: string, status: number, data: unknown) {
-	try {
-		console.log(`[SERVICE:${service}] response status=${status}`);
-		const preview = typeof data === 'string' ? data.slice(0, 500) : JSON.stringify(data).slice(0, 500);
-		console.log(`[SERVICE:${service}] response preview=`, preview);
-	} catch {
-		console.log(`[SERVICE:${service}] response=[unserializable]`);
-	}
-}
-
-// Call agentic-structured-service
 server.tool(
-	'agentic_structured',
-	{
-		prompt: z.string(),
-		actionType: z.string(),
-		currentCode: z.string().optional(),
-		fileName: z.string().optional(),
-		userId: z.string()
-	},
-	async (args: {
-		prompt: string;
-		actionType: string;
-		currentCode?: string;
-		fileName?: string;
-		userId: string;
-	}) => {
-		const url = `${AGENTIC_SERVICE_URL}/api/agentic`;
-		logServiceRequest('agentic_structured', url, args);
+	'project_reset',
+	{},
+	async (_args: {}) => {
+		const projectDir = process.env.CLONED_TEMPLATE_DIR || process.cwd();
+		// Find the template directory - it could be in different locations depending on context
+		let templateDir = path.resolve(process.cwd(), '../code-deploy-service/template');
+		
+		// If template not found, try other locations
+		if (!await fs.stat(templateDir).catch(() => null)) {
+			templateDir = path.resolve(__dirname, '../../code-deploy-service/template');
+		}
+		if (!await fs.stat(templateDir).catch(() => null)) {
+			templateDir = path.resolve(__dirname, '../../../code-deploy-service/template');
+		}
+		
 		try {
-			const { data, status } = await axios.post(url, args, { timeout: 120000 });
-			logServiceResponse('agentic_structured', status, data);
-			const text = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
-			return { content: [{ type: 'text', text }] } as const;
-		} catch (err: any) {
-			const text = `agentic_structured error: ${err?.response?.status || ''} ${err?.message || err}`;
-			return { content: [{ type: 'text', text }] } as const;
+			// Don't delete the entire project dir, just reset key files
+			const templateStat = await fs.stat(templateDir);
+			if (!templateStat.isDirectory()) {
+				throw new Error(`Template directory not found: ${templateDir}`);
+			}
+			
+			// Copy template files to project directory
+			await fs.cp(templateDir, projectDir, { recursive: true, force: true });
+			return { content: [{ type: 'text', text: JSON.stringify({ ok: true, projectDir, templateDir }) }] } as const;
+		} catch (e: any) {
+			return { content: [{ type: 'text', text: `project_reset error: ${e?.message || e}. Template dir: ${templateDir}` }] } as const;
 		}
 	}
 );
 
-// Call recflux-tools-accessibility-service
 server.tool(
-	'accessibility_test',
-	{
-		urls: z.array(z.string()),
-		resolution: z.object({ width: z.number(), height: z.number() }).partial().optional(),
-		actions: z
-			.array(
-				z.object({
-					action: z.string(),
-					selector: z.string().optional(),
-					text: z.string().optional(),
-					duration: z.number().optional(),
-					scrollType: z.string().optional(),
-					x: z.number().optional(),
-					y: z.number().optional()
-				})
-			)
-			.optional()
-	},
-	async (args: {
-		urls: string[];
-		resolution?: { width?: number; height?: number };
-		actions?: Array<{ action: string; selector?: string; text?: string; duration?: number; scrollType?: string; x?: number; y?: number }>;
-	}) => {
-		const url = `${ACCESSIBILITY_SERVICE_URL}/test-accessibility`;
+	'vercel_deploy',
+	{},
+	async (_args: {}) => {
+		const root = process.env.CLONED_TEMPLATE_DIR || process.cwd();
+		const stat = await fs.stat(root).catch(() => null);
+		if (!stat || !stat.isDirectory()) {
+			return { content: [{ type: 'text', text: `Invalid deploy directory: ${root}. Set CLONED_TEMPLATE_DIR to the cloned template path or run the tool from that directory.` }] } as const;
+		}
+		if (!VERCEL_TOKEN) {
+			return { content: [{ type: 'text', text: 'VERCEL_TOKEN not set' }] } as const;
+		}
 		try {
-			const payload = {
-				urls: args.urls,
-				resolution: {
-					width: args.resolution?.width ?? 1366,
-					height: args.resolution?.height ?? 768
-				},
-				actions: args.actions || []
-			};
-			logServiceRequest('accessibility_test', url, payload);
-			const { data, status } = await axios.post(url, payload, { timeout: 180000 });
-			logServiceResponse('accessibility_test', status, data);
-			const text = JSON.stringify(data, null, 2);
-			return { content: [{ type: 'text', text }] } as const;
+			console.error(`[VERCEL_DEPLOY] Deploying from directory: ${root}`);
+			const files = await collectFilesFromDir(root);
+			console.error(`[VERCEL_DEPLOY] Found ${files.length} files to deploy`);
+			const url = await createVercelDeployment(files, {
+				teamId: VERCEL_TEAM_ID,
+				projectId: VERCEL_PROJECT_ID,
+				projectName: VERCEL_PROJECT_NAME
+			});
+			console.error(`[VERCEL_DEPLOY] Deployment successful: ${url}`);
+			return { content: [{ type: 'text', text: JSON.stringify({ deploymentUrl: url }) }] } as const;
 		} catch (err: any) {
-			const text = `accessibility_test error: ${err?.response?.status || ''} ${err?.message || err}`;
-			return { content: [{ type: 'text', text }] } as const;
+			const msg = err?.message || String(err);
+			console.error(`[VERCEL_DEPLOY] Deployment failed: ${msg}`);
+			return { content: [{ type: 'text', text: `deploy error: ${msg}` }] } as const;
 		}
 	}
 );
 
-// Call code-deploy-service
 server.tool(
-	'code_deploy',
+	'mcp__recflux__vercel_deploy',
 	{
-		reactCode: z.string()
+		description: 'Deploy the current project to Vercel and return the deployment URL',
+		inputSchema: {
+			type: 'object',
+			properties: {},
+			required: []
+		}
 	},
-	async (args: { reactCode: string }) => {
-		const url = `${DEPLOY_SERVICE_URL}/deploy`;
-		logServiceRequest('code_deploy', url, { reactCode: args.reactCode });
+	async (_args: {}) => {
+		const root = process.env.CLONED_TEMPLATE_DIR || process.cwd();
+		const stat = await fs.stat(root).catch(() => null);
+		if (!stat || !stat.isDirectory()) {
+			return { content: [{ type: 'text', text: `Invalid deploy directory: ${root}. Set CLONED_TEMPLATE_DIR to the cloned template path or run the tool from that directory.` }] } as const;
+		}
+		if (!VERCEL_TOKEN) {
+			return { content: [{ type: 'text', text: 'VERCEL_TOKEN not set' }] } as const;
+		}
 		try {
-			const { data, status } = await axios.post(url, { reactCode: args.reactCode }, { timeout: 600000 });
-			logServiceResponse('code_deploy', status, data);
-			const text = JSON.stringify(data, null, 2);
-			return { content: [{ type: 'text', text }] } as const;
+			console.error(`[MCP_VERCEL_DEPLOY] Deploying from directory: ${root}`);
+			const files = await collectFilesFromDir(root);
+			console.error(`[MCP_VERCEL_DEPLOY] Found ${files.length} files to deploy`);
+			const url = await createVercelDeployment(files, {
+				teamId: VERCEL_TEAM_ID,
+				projectId: VERCEL_PROJECT_ID,
+				projectName: VERCEL_PROJECT_NAME
+			});
+			console.error(`[MCP_VERCEL_DEPLOY] Deployment successful: ${url}`);
+			return { content: [{ type: 'text', text: `Deployment successful! Site published at: ${url}` }] } as const;
 		} catch (err: any) {
-			const text = `code_deploy error: ${err?.response?.status || ''} ${err?.message || err}`;
-			return { content: [{ type: 'text', text }] } as const;
+			const msg = err?.message || String(err);
+			console.error(`[MCP_VERCEL_DEPLOY] Deployment failed: ${msg}`);
+			return { content: [{ type: 'text', text: `Deployment failed: ${msg}` }] } as const;
 		}
 	}
 );
@@ -164,3 +208,5 @@ async function main(): Promise<void> {
 }
 
 void main();
+
+

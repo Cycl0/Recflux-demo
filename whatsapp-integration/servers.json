@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "recflux": {
+      "command": "node",
+      "args": ["dist/mcp-server.js"],
+      "env": {
+        "VERCEL_TOKEN": "${VERCEL_TOKEN}",
+        "VERCEL_TEAM_ID": "${VERCEL_TEAM_ID}",
+        "VERCEL_ORG_ID": "${VERCEL_ORG_ID}",
+        "VERCEL_PROJECT_ID": "${VERCEL_PROJECT_ID}",
+        "VERCEL_PROJECT_NAME": "${VERCEL_PROJECT_NAME}",
+        "CLONED_TEMPLATE_DIR": "${CLONED_TEMPLATE_DIR}"
+      }
+    }
+  }
+}
+
+
