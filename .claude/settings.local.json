@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "WebSearch",
+      "Bash(timeout:*)",
+      "Bash(npm run build:*)",
+      "Bash(claude --print --mcp-config mcp-config.json --add-dir project --permission-mode bypassPermissions \"Use the tavily_search tool to find ocean waves videos\")",
+      "Bash(docker exec:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

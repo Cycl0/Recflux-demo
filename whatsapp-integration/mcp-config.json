@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "recflux": {
+      "command": "/usr/local/bin/node",
+      "args": ["/app/dist/mcp-server.js"],
+      "env": {
+        "TAVILY_API_KEY": "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",
+        "CLONED_TEMPLATE_DIR": "/workspace/project",
+        "BROWSERBASE_API_KEY": "bb_live_buP2hIj-CQntUpWuYUJnyMEjZgI",
+        "BROWSERBASE_PROJECT_ID": "d6aca8e4-6d58-4fdb-b824-d5f530714693",
+        "PEXELS_API_KEY": "6ow1d4rio6HEFf29iYGzrXo0VbQNM6FcoDCvjltB9HXqrvPdg1TCKpam"
+      }
+    }
+  }
+}

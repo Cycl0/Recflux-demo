@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(A:\\Lucas\\Projects\\Recflux-demo/**)",
+      "Read(A:\\Lucas\\Projects\\Recflux-demo/**)",
+      "Read(A:\\Lucas\\Projects\\Recflux-demo/**)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

@@ -118,3 +118,44 @@ services:
       SUPABASE_SERVICE_ROLE_KEY: ""
       KAFKA_BROKERS: "kafka:9092"
       VERCEL_TOKEN: "" 
+
+  whatsapp-integration:
+    build:
+      context: ./whatsapp-integration
+    ports:
+      - "3005:3005"
+    environment:
+      PORT: 3005
+      # WhatsApp credentials
+      WHATSAPP_TOKEN: "${WHATSAPP_TOKEN}"
+      WHATSAPP_PHONE_NUMBER_ID: "${WHATSAPP_PHONE_NUMBER_ID}"
+      WHATSAPP_VERIFY_TOKEN: "${WHATSAPP_VERIFY_TOKEN}"
+      WHATSAPP_PHONE_NUMBER: "${WHATSAPP_PHONE_NUMBER}"
+      # Supabase (optional, for idempotency and user resolution)
+      NEXT_PUBLIC_SUPABASE_URL: "${NEXT_PUBLIC_SUPABASE_URL}"
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: "${NEXT_PUBLIC_SUPABASE_ANON_KEY}"
+      SUPABASE_SERVICE_ROLE_KEY: "${SUPABASE_SERVICE_ROLE_KEY}"
+      DEFAULT_USER_ID: "${DEFAULT_USER_ID}"
+      # Public base URL for /login links
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL}"
+      # Google OAuth
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
+      GOOGLE_CALLBACK_URL: "${GOOGLE_CALLBACK_URL}"
+      SESSION_SECRET: "${SESSION_SECRET:-dev-secret}"
+      # Claude API 
+      CLAUDE_AUTH_TOKEN: "${CLAUDE_AUTH_TOKEN}"
+      ANTHROPIC_API_KEY: "${CLAUDE_AUTH_TOKEN}"
+      # Browserbase (MCP tools)
+      BROWSERBASE_API_KEY: "${BROWSERBASE_API_KEY}"
+      BROWSERBASE_PROJECT_ID: "${BROWSERBASE_PROJECT_ID}"
+      # Pexels API Key
+      PEXELS_API_KEY: "${PEXELS_API_KEY}"
+      # Project path inside container
+      CLONED_TEMPLATE_DIR: "/workspace/project"
+    volumes:
+      # Persist project workspace outside the image
+      - whatsapp_project:/workspace/project
+
+volumes:
+  whatsapp_project:

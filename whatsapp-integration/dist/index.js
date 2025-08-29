@@ -6,14 +6,13 @@ import FormData from 'form-data';
 import { spawn, execSync } from 'child_process';
 import { promises as fs } from 'fs';
 import fsSync from 'fs';
-import fsExtra from 'fs-extra';
 import path from 'path';
 import crypto from 'crypto';
-import os from 'os';
 import { fileURLToPath } from 'url';
 import puppeteer from 'puppeteer';
 import { configureAuth, getUserByWhatsApp } from './auth.js';
 import { createClient } from '@supabase/supabase-js';
+import { deployToCodeSandbox } from './deploy-codesandbox.js';
 // ESM-compatible __dirname
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -70,60 +69,36 @@ async function ensureFirstProcessDistributed(uniqueId) {
     }
 }
 const { WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_VERIFY_TOKEN, PUBLIC_BASE_URL } = process.env;
-const VERCEL_TOKEN = process.env.VERCEL_TOKEN;
-const VERCEL_ORG_ID = process.env.VERCEL_ORG_ID;
-const VERCEL_TEAM_ID = process.env.VERCEL_TEAM_ID;
-const VERCEL_PROJECT_ID = process.env.VERCEL_PROJECT_ID;
-const VERCEL_PROJECT_NAME = process.env.VERCEL_PROJECT_NAME;
 const DEFAULT_CLAUDE_BIN = process.platform === 'win32' ? 'claude.ps1' : 'claude';
 const CLAUDE_BIN = (process.env.CLAUDE_BIN || process.env.CLAUDE_PATH || DEFAULT_CLAUDE_BIN);
 function runClaudeCLIInDir(cwd, userPrompt, systemAppend) {
     return new Promise((resolve, reject) => {
-        // Create temporary MCP config file
-        const timestamp = Date.now();
-        const mcpConfigPath = path.join(os.tmpdir(), `servers.recflux.${timestamp}.json`);
         // Resolve absolute project directory and prepare prompts
         const absProjectDir = path.resolve(cwd);
         const userArg = userPrompt;
         const systemArg = systemAppend.replace(/"/g, '\'');
-        // Build MCP config with absolute path to the MCP server
-        // When running from compiled JS in dist/, __dirname is dist/, so we need './mcp-server.js'
-        // When running from source, __dirname is src/, so we need 'dist/mcp-server.js'
-        const mcpServerPath = path.resolve(__dirname, __dirname.endsWith('dist') ? './mcp-server.js' : 'dist/mcp-server.js').replace(/\\/g, '/');
-        const mcpConfig = {
-            mcpServers: {
-                recflux: {
-                    command: process.execPath,
-                    args: [mcpServerPath],
-                    env: {
-                        VERCEL_TOKEN: process.env.VERCEL_TOKEN || '',
-                        VERCEL_TEAM_ID: process.env.VERCEL_TEAM_ID || '',
-                        VERCEL_ORG_ID: process.env.VERCEL_ORG_ID || '',
-                        VERCEL_PROJECT_ID: process.env.VERCEL_PROJECT_ID || '',
-                        VERCEL_PROJECT_NAME: process.env.VERCEL_PROJECT_NAME || '',
-                        CLONED_TEMPLATE_DIR: absProjectDir
-                    }
-                }
-            }
-        };
+        // Non-interactive, strict MCP, expanded tools, and explicit directory access
+        const mcpConfigPath = path.resolve(__dirname, '../mcp-config.json');
+        console.log('[CLAUDE] MCP config path:', mcpConfigPath);
+        // Check if MCP config file exists
         try {
-            fsSync.writeFileSync(mcpConfigPath, JSON.stringify(mcpConfig, null, 2), 'utf8');
+            const configExists = fsSync.existsSync(mcpConfigPath);
+            console.log('[CLAUDE] MCP config exists:', configExists);
+            if (configExists) {
+                const configContent = fsSync.readFileSync(mcpConfigPath, 'utf8');
+                console.log('[CLAUDE] MCP config content:', configContent);
+            }
         }
         catch (e) {
-            return reject(new Error(`Failed to write MCP config: ${e.message}`));
+            console.error('[CLAUDE] Error checking MCP config:', e);
         }
-        // Non-interactive, strict MCP, expanded tools, and explicit directory access
         const baseArgs = [
             '--print',
             '--append-system-prompt', systemArg,
-            '--permission-mode', 'acceptEdits',
-            '--dangerously-skip-permissions',
-            '--strict-mcp-config',
+            '--permission-mode', 'bypassPermissions',
             '--output-format', 'text',
             '--add-dir', absProjectDir,
             '--mcp-config', mcpConfigPath,
-            '--allowedTools', 'Read,Write,Edit,MultiEdit,Glob,LS,Grep,mcp__recflux__project_reset,mcp__recflux__codesandbox_deploy'
-            // User prompt will be provided via stdin instead of as argument
         ];
         let cmd = CLAUDE_BIN;
         let args = baseArgs.slice();
@@ -165,26 +140,31 @@ function runClaudeCLIInDir(cwd, userPrompt, systemAppend) {
                 }
             }
         }
-        console.log('[CLAUDE] starting', { cwd: absProjectDir, cmd, mcpConfigPath, mcpServerPath });
-        console.log('[CLAUDE] Full command args:', args.slice(0, 16), '...(truncated)');
-        console.log('[CLAUDE] Environment check:', {
-            VERCEL_TOKEN: !!process.env.VERCEL_TOKEN,
+        console.log('[CLAUDE] starting', { cwd: absProjectDir, cmd });
+        console.log('[CLAUDE] Full command args:', args);
+        console.log('[CLAUDE] System prompt length:', systemArg.length);
+        console.log('[CLAUDE] System prompt preview:', systemArg.substring(0, 200) + '...');
+        console.log('[CLAUDE] User prompt:', userArg);
+        const defaultKey = (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || process.env.CLAUDE_API_KEY);
+        const childEnv = {
+            ...process.env,
+            CI: '1',
+            NO_COLOR: '1',
+            FORCE_COLOR: '0',
             CLONED_TEMPLATE_DIR: absProjectDir,
-            mcpServerExists: fsSync.existsSync(mcpServerPath)
-        });
-        console.log('[CLAUDE] MCP config file contents preview:');
-        try {
-            const configContent = fsSync.readFileSync(mcpConfigPath, 'utf8');
-            console.log(configContent.substring(0, 300) + '...');
-        }
-        catch (e) {
-            console.log('[CLAUDE] Could not read MCP config file');
-        }
+            BROWSERBASE_API_KEY: process.env.BROWSERBASE_API_KEY,
+            BROWSERBASE_PROJECT_ID: process.env.BROWSERBASE_PROJECT_ID,
+            // Ensure Claude CLI sees Anthropic-compatible creds (Moonshot Kimi K2, etc.)
+            ANTHROPIC_API_KEY: defaultKey,
+            CLAUDE_API_KEY: defaultKey,
+            ANTHROPIC_AUTH_TOKEN: defaultKey,
+            PEXELS_API_KEY: process.env.PEXELS_API_KEY
+        };
         const child = spawn(cmd, args, {
             cwd: absProjectDir,
             stdio: ['pipe', 'pipe', 'pipe'],
             shell: useShell,
-            env: { ...process.env, CI: '1', NO_COLOR: '1', FORCE_COLOR: '0', CLONED_TEMPLATE_DIR: absProjectDir }
+            env: childEnv
         });
         // Write the prompt to stdin and close it
         if (child.stdin) {
@@ -195,22 +175,8 @@ function runClaudeCLIInDir(cwd, userPrompt, systemAppend) {
         let stdout = '';
         const killTimer = setTimeout(() => {
             console.log('[CLAUDE] Timeout reached after 5 minutes, letting process continue');
-            cleanup();
             reject(new Error('Claude CLI timed out after 5 minutes'));
         }, 300000);
-        // Add a shorter timeout for debugging
-        const debugTimer = setTimeout(() => {
-            console.log('[CLAUDE] No output after 60 seconds, process may still be working');
-            console.log('[CLAUDE] Process PID:', child.pid);
-            console.log('[CLAUDE] Process killed:', child.killed);
-        }, 60000);
-        const cleanup = () => {
-            clearTimeout(debugTimer);
-            try {
-                fsSync.unlinkSync(mcpConfigPath);
-            }
-            catch { }
-        };
         child.stdout.on('data', (d) => {
             const t = d.toString();
             stdout += t;
@@ -227,7 +193,6 @@ function runClaudeCLIInDir(cwd, userPrompt, systemAppend) {
         });
         child.on('error', (err) => {
             clearTimeout(killTimer);
-            cleanup();
             if (err && (err.code === 'ENOENT' || err.errno === -4058)) {
                 return reject(new Error(`Claude CLI not found (spawn ${cmd}). On Windows, set CLAUDE_BIN to full path of claude.cmd or ensure its folder is on PATH. Docs: https://docs.anthropic.com/en/docs/claude-code/sdk/sdk-headless`));
             }
@@ -236,8 +201,6 @@ function runClaudeCLIInDir(cwd, userPrompt, systemAppend) {
         });
         child.on('close', (code) => {
             clearTimeout(killTimer);
-            clearTimeout(debugTimer);
-            cleanup();
             console.log('[CLAUDE] finished', { code, stdoutLen: stdout.length, stderrLen: stderr.length });
             if (stderr)
                 console.log('[CLAUDE] stderr content:', stderr.substring(0, 500));
@@ -254,6 +217,7 @@ async function takeScreenshot(targetUrl) {
     console.log('Taking screenshot...');
     const browser = await puppeteer.launch({
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
+        executablePath: '/usr/bin/google-chrome-stable',
     });
     const page = await browser.newPage();
     await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 });
@@ -424,272 +388,13 @@ async function takeScreenshot(targetUrl) {
     console.log('Screenshot taken successfully.');
     return screenshotBuffer;
 }
-async function deployToCodeSandbox(projectDir) {
-    console.log(`[CODESANDBOX_DEPLOY] Starting deployment from ${projectDir}`);
-    // Read all files from the project directory
-    async function collectAllFiles(dir, prefix = '') {
-        const files = {};
-        try {
-            const entries = await fs.readdir(dir, { withFileTypes: true });
-            for (const entry of entries) {
-                // Skip certain directories and files
-                if (['node_modules', '.git', '.vercel', 'dist', 'build', '.next'].includes(entry.name)) {
-                    continue;
-                }
-                const fullPath = path.join(dir, entry.name);
-                const relativePath = prefix ? path.join(prefix, entry.name).replace(/\\/g, '/') : entry.name;
-                if (entry.isDirectory()) {
-                    // Recursively read subdirectory
-                    const subFiles = await collectAllFiles(fullPath, relativePath);
-                    Object.assign(files, subFiles);
-                }
-                else if (entry.isFile()) {
-                    try {
-                        // Handle different file types
-                        if (entry.name === 'package.json') {
-                            const content = await fs.readFile(fullPath, 'utf8');
-                            files[relativePath] = { content: JSON.parse(content) };
-                        }
-                        else {
-                            // Read as text file
-                            const content = await fs.readFile(fullPath, 'utf8');
-                            files[relativePath] = { content };
-                        }
-                        console.log(`[CODESANDBOX_DEPLOY] Read ${relativePath}`);
-                    }
-                    catch (readError) {
-                        console.warn(`[CODESANDBOX_DEPLOY] Could not read ${relativePath}:`, readError);
-                    }
-                }
-            }
-        }
-        catch (dirError) {
-            console.warn(`[CODESANDBOX_DEPLOY] Could not read directory ${dir}:`, dirError);
-        }
-        return files;
-    }
-    // Collect all project files
-    const allFiles = await collectAllFiles(projectDir);
-    // Add timestamp to ensure unique sandbox creation
-    const timestamp = Date.now();
-    const uniqueComment = `/* Generated at ${new Date().toISOString()} - ${timestamp} */\n`;
-    // Add unique identifier to package.json name if it exists
-    if (allFiles['package.json'] && typeof allFiles['package.json'].content === 'object') {
-        const pkgContent = allFiles['package.json'].content;
-        allFiles['package.json'].content = { ...pkgContent, name: `recflux-app-${timestamp}` };
-    }
-    // Add timestamp comments to certain file types to ensure uniqueness
-    const codeExtensions = ['.js', '.jsx', '.ts', '.tsx', '.css', '.scss', '.less'];
-    for (const [filePath, fileData] of Object.entries(allFiles)) {
-        const ext = path.extname(filePath).toLowerCase();
-        if (codeExtensions.includes(ext) && typeof fileData.content === 'string') {
-            fileData.content = `${uniqueComment}${fileData.content}`;
-        }
-    }
-    // Ensure we have essential files and proper configuration
-    if (!allFiles['src/index.js'] && !allFiles['src/index.jsx']) {
-        allFiles['src/index.js'] = {
-            content: `${uniqueComment}import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);`
-        };
-    }
-    // Ensure package.json has the correct structure for CodeSandbox
-    if (!allFiles['package.json']) {
-        allFiles['package.json'] = {
-            content: {
-                "name": `recflux-app-${timestamp}`,
-                "version": "1.0.0",
-                "main": "src/index.js",
-                "dependencies": {
-                    "react": "^18.0.0",
-                    "react-dom": "^18.0.0",
-                    "react-scripts": "5.0.1"
-                },
-                "scripts": {
-                    "start": "react-scripts start",
-                    "build": "react-scripts build"
-                },
-                "browserslist": {
-                    "production": [">0.2%", "not dead", "not op_mini all"],
-                    "development": ["last 1 chrome version", "last 1 firefox version", "last 1 safari version"]
-                }
-            }
-        };
-    }
-    // Add CodeSandbox configuration to help with dependency resolution
-    if (!allFiles['sandbox.config.json']) {
-        allFiles['sandbox.config.json'] = {
-            content: {
-                "infiniteLoopProtection": true,
-                "hardReloadOnChange": false,
-                "view": "browser",
-                "template": "create-react-app"
-            }
-        };
-    }
-    console.log(`[CODESANDBOX_DEPLOY] Collected ${Object.keys(allFiles).length} files`);
-    console.log(`[CODESANDBOX_DEPLOY] Files:`, Object.keys(allFiles).join(', '));
-    // Create the sandbox using all project files
-    const sandboxData = {
-        files: allFiles
-    };
-    console.log('[CODESANDBOX_DEPLOY] Creating sandbox...');
-    try {
-        console.log('[CODESANDBOX_DEPLOY] Sending sandbox data with', Object.keys(sandboxData.files).length, 'files');
-        console.log('[CODESANDBOX_DEPLOY] Package.json dependencies:', typeof sandboxData.files['package.json']?.content === 'object'
-            ? JSON.stringify(sandboxData.files['package.json'].content?.dependencies, null, 2)
-            : 'N/A');
-        // Use POST with JSON body per CodeSandbox define API
-        const response = await axios.post('https://codesandbox.io/api/v1/sandboxes/define?json=1', sandboxData, {
-            timeout: 30000, // Increased timeout
-            headers: { 'Content-Type': 'application/json' },
-        });
-        console.log('[CODESANDBOX_DEPLOY] Response status:', response.status);
-        console.log('[CODESANDBOX_DEPLOY] Response data:', response.data);
-        let sandboxId = '';
-        if (response.data && typeof response.data === 'object') {
-            sandboxId = response.data.sandbox_id || response.data.id || '';
-        }
-        if (!sandboxId) {
-            throw new Error('CodeSandbox API did not return a valid sandbox ID');
-        }
-        const editorUrl = `https://codesandbox.io/s/${sandboxId}`;
-        const previewUrl = `https://${sandboxId}.csb.app`;
-        console.log('[CODESANDBOX_DEPLOY] Sandbox created! ID:', sandboxId);
-        console.log('[CODESANDBOX_DEPLOY] Editor URL:', editorUrl);
-        console.log('[CODESANDBOX_DEPLOY] Preview URL:', previewUrl);
-        return {
-            deploymentUrl: editorUrl,
-            previewUrl: previewUrl,
-            editorUrl: editorUrl
-        };
-    }
-    catch (error) {
-        const status = error?.response?.status;
-        const dataPreview = error?.response?.data ? (typeof error.response.data === 'string' ? error.response.data.slice(0, 400) : JSON.stringify(error.response.data).slice(0, 400)) : '';
-        console.error('[CODESANDBOX_DEPLOY] Failed to create sandbox. status=', status, 'message=', error?.message);
-        if (dataPreview)
-            console.error('[CODESANDBOX_DEPLOY] error body=', dataPreview);
-        throw new Error(`CodeSandbox deployment failed: ${error.message}`);
-    }
-}
-async function deployToVercel(projectDir) {
-    if (!VERCEL_TOKEN)
-        throw new Error('VERCEL_TOKEN not set');
-    console.log(`[VERCEL_DEPLOY] Starting deployment from ${projectDir}`);
-    const { execa } = await import('execa');
-    // Verify template integrity (copied from code-deploy-service)
-    const pkgPath = path.join(projectDir, 'package.json');
-    const lockPath = path.join(projectDir, 'package-lock.json');
-    const srcAppPath = path.join(projectDir, 'src', 'App.jsx');
-    console.log('[DEBUG] Checking for package.json at:', pkgPath);
-    if (!(await fsExtra.pathExists(pkgPath))) {
-        throw new Error(`Template package.json missing at ${pkgPath}. Ensure project was initialized.`);
-    }
-    console.log('[DEBUG] Checking for App.jsx at:', srcAppPath);
-    if (!(await fsExtra.pathExists(srcAppPath))) {
-        throw new Error(`Template src/App.jsx missing at ${srcAppPath}.`);
-    }
-    // Link temp dir to a fixed Vercel project if envs are provided (exact copy from code-deploy-service)
-    try {
-        const vercelProjectId = VERCEL_PROJECT_ID;
-        const vercelOrgId = VERCEL_ORG_ID;
-        if (vercelProjectId && vercelOrgId) {
-            const vercelDir = path.join(projectDir, '.vercel');
-            await fsExtra.ensureDir(vercelDir);
-            await fsExtra.writeJson(path.join(vercelDir, 'project.json'), { projectId: vercelProjectId, orgId: vercelOrgId }, { spaces: 2 });
-            // Some CLI versions also read org.json; write defensively
-            await fsExtra.writeJson(path.join(vercelDir, 'org.json'), { orgId: vercelOrgId }, { spaces: 2 });
-            console.log(`[VERCEL_DEPLOY] Linked temp directory to Vercel project ${vercelProjectId} (org ${vercelOrgId}).`);
-        }
-        else {
-            console.log(`[VERCEL_DEPLOY] VERCEL_PROJECT_ID/VERCEL_ORG_ID not set; CLI will create/select project automatically.`);
-        }
-    }
-    catch (linkErr) {
-        console.warn(`[VERCEL_DEPLOY] Failed to write .vercel linking files:`, linkErr?.message || linkErr);
-    }
-    // Runtime toolchain diagnostics (copied from code-deploy-service)
-    try {
-        const npmVer = execSync('npm -v').toString().trim();
-        console.log('[DIAG] Node:', process.version, 'npm:', npmVer);
-    }
-    catch { }
-    // Install dependencies in the directory (exact copy from code-deploy-service logic)
-    console.log('Installing dependencies...');
-    console.log('[DEBUG] Installing dependencies in:', projectDir);
-    // Double-check that package.json exists before running npm
-    if (!(await fsExtra.pathExists(pkgPath))) {
-        throw new Error(`Cannot install dependencies: package.json not found at ${pkgPath}`);
-    }
-    // Use npm from PATH instead of hardcoded path for Windows compatibility
-    const npmCmd = process.platform === 'win32' ? 'npm.cmd' : 'npm';
-    const baseEnv = {
-        ...process.env,
-        NPM_CONFIG_CACHE: path.join(projectDir, '.npm-cache'),
-        NPM_CONFIG_ENGINE_STRICT: 'false'
-    };
-    console.log('[DEBUG] npm command:', npmCmd);
-    console.log('[DEBUG] working directory:', projectDir);
-    console.log('[DEBUG] package.json exists:', await fsExtra.pathExists(pkgPath));
-    try {
-        if (await fsExtra.pathExists(lockPath)) {
-            console.log('Using npm ci');
-            await execa(npmCmd, ['ci', '--no-audit', '--no-fund'], { cwd: projectDir, env: baseEnv });
-        }
-        else {
-            console.log('Lockfile not found; using npm install');
-            await execa(npmCmd, ['install', '--no-audit', '--no-fund'], { cwd: projectDir, env: baseEnv });
-        }
-    }
-    catch (e) {
-        console.error('Primary install failed with error:', e);
-        console.warn('Primary install failed, retrying with legacy peer deps...', e?.message || e);
-        try {
-            await execa(npmCmd, ['install', '--no-audit', '--no-fund', '--legacy-peer-deps'], { cwd: projectDir, env: baseEnv });
-        }
-        catch (retryError) {
-            console.error('Retry install also failed:', retryError);
-            throw new Error(`npm install failed: ${retryError.message}. Working directory: ${projectDir}, package.json exists: ${await fsExtra.pathExists(pkgPath)}`);
-        }
-    }
-    // Run the Vercel deployment command (exact copy from code-deploy-service)
-    console.log('Starting Vercel deployment...');
-    const vercelArgs = ['--prod', '--yes', '--archive', 'tgz', '--token', VERCEL_TOKEN];
-    if (process.env.VERCEL_SCOPE) {
-        vercelArgs.push('--scope', process.env.VERCEL_SCOPE);
-    }
-    if (VERCEL_PROJECT_NAME) {
-        vercelArgs.push('--name', VERCEL_PROJECT_NAME);
-    }
-    const { stdout, stderr } = await execa('vercel', vercelArgs, {
-        cwd: projectDir,
-        // Pass parent environment variables to the child process
-        env: { ...process.env },
-    });
-    console.log('Vercel deployment command output (raw):', stdout || '(empty)');
-    // Extract the first URL-looking token from combined stdio (exact copy)
-    const combined = `${stdout || ''}\n${stderr || ''}`;
-    const urlMatch = combined.match(/https?:\/\/\S+/);
-    const deploymentUrl = urlMatch ? urlMatch[0] : '';
-    if (!deploymentUrl) {
-        throw new Error('Vercel did not return a deployment URL. Check CLI output and credentials.');
-    }
-    console.log(`Deployment successful! URL: ${deploymentUrl}`);
-    return {
-        deploymentUrl
-    };
-}
+// deployToCodeSandbox function is now imported from ./deploy-codesandbox.js
 async function hashDirectory(root) {
     async function walk(dir, prefix = '') {
         const out = [];
         const entries = await fs.readdir(dir, { withFileTypes: true });
         for (const ent of entries) {
-            if (ent.name === 'node_modules' || ent.name === '.git' || ent.name === '.vercel')
+            if (ent.name === 'node_modules' || ent.name === '.git')
                 continue;
             const abs = path.join(dir, ent.name);
             const rel = path.join(prefix, ent.name).replace(/\\/g, '/');
@@ -760,40 +465,59 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
         return { text: '⚠️ Projeto ausente. Use /login ou peça project_reset para recriar a pasta.' };
     }
     const system = `
-        Você é um gerador de código React especializado em criar sites profissionais e modernos.
-        
-        INSTRUÇÕES IMPORTANTES:
-        1. SEMPRE examine os arquivos existentes primeiro usando Read tool
-        2. MODIFIQUE os arquivos src/App.jsx e src/index.css conforme necessário
-        3. Crie um site completo e funcional baseado na solicitação do usuário
-        4. SEMPRE use Write ou Edit tools para salvar suas alterações nos arquivos
-        
-        VISUAL E UX:
-        - Gradientes modernos, sombras elegantes, tipografia profissional
-        - Layout responsivo com flex/grid, espaçamento bem distribuído
-        - Animações e hovers suaves (transition: "all 0.3s ease-in-out")
-        
-        IMAGENS (OBRIGATÓRIO):
-        - Inclua 2-3 imagens válidas:
-        https://images.unsplash.com/photo-1557804506-669a67965ba0?w=1200&h=600&fit=crop
-        https://images.unsplash.com/photo-1486312338219-ce68e2c6b33d?w=800&h=400&fit=crop
-        https://images.unsplash.com/photo-1518709268805-4e9042af2176?w=600&h=400&fit=crop
-        https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face
-        https://images.unsplash.com/photo-1523275335684-37898b6baf30?w=300&h=300&fit=crop
-        https://picsum.photos/400/300?random=1
-        - Sempre use alt significativo e style inline (width/height/objectFit)
-        
-        PADRÕES PROFISSIONAIS:
-        - Estrutura semântica, acessibilidade básica, estado bem gerenciado
-        - Performance e organização do código
-        
-        FLUXO DE TRABALHO:
-        1. Use Read para examinar src/App.jsx e src/index.css
-        2. Modifique os arquivos conforme a solicitação
-        3. Use Write/Edit para salvar as alterações
-		Caso necessário, use a tool mcp__recflux__project_reset para resetar o projeto.
-		Caso necessário, use a tool mcp__recflux__vercel_deploy para publicar o projeto se o usuário pedir.
-    `;
+		Você é um gerador de código focado em React + Tailwind para criar sites profissionais e modernos.
+		
+		STACK (fixo):
+		- React + Tailwind CSS (https://tailwindcss.com/) + Shadcn UI (https://ui.shadcn.com/) + Framer Motion (https://www.framer.com/motion/) + GSAP (https://greensock.com/gsap/)
+		- Use exclusivamente classes utilitárias do Tailwind para layout e estilos.
+		
+		REGRAS DE FERRAMENTAS:
+		1. Use o tool mcp__recflux__browserbase_search para buscar recursos audiovisuais relevantes. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA.
+		2. Atualize package.json quando necessário (dependências Tailwind já estão no template).
+		
+		ARQUIVOS-ALVO PRINCIPAIS:
+		- src/App.jsx (componentes/sections e layout com Tailwind)
+		- src/index.css (diretivas @tailwind já presentes; adicione utilitários @layer se preciso)
+		- src/components/ (componentes reutilizáveis)
+		- src/assets/ (recursos audiovisuais)
+		- src/pages/ (páginas)
+		- src/utils/ (funções auxiliares)
+		- src/styles/ (estilos globais)
+		- src/types/ (tipos)
+		- src/hooks/ (hooks)
+		
+		VISUAL E UX:
+		- Layout responsivo com grid/flex, espaçamento consistente, tipografia clara.
+		- Gradientes sutis e hovers suaves via Tailwind (transition, shadow, ring).
+		- Acessibilidade: semântica, alt de imagens, foco visível.
+		
+		RECURSOS (OBRIGATÓRIOS):
+		- Videos devem ser buscados via mcp__recflux__browserbase_search e colocados no background do hero para um visual mais profissional. . UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA.
+		- Imagens/ícones devem ser buscados via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA.
+		- Fontes devem ser buscadas via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA.
+		- Vectors devem ser buscados via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA.
+		- Icons devem ser buscados via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA.
+		- São obrigatórios para criar o site.
+
+		RECURSOS (OPCIONAIS):
+		- FX podem ser buscados via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA.
+		- Musicas podem ser buscadas via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA.
+		
+		SEÇÕES MÍNIMAS:
+		- Hero, Features (3+ cards), e um CTA.
+		
+		FLUXO DE TRABALHO:
+		1) read_file em src/App.jsx e src/index.css
+		2) Ajuste a UI no src/App.jsx com Tailwind
+		3) Crie componentes reutilizáveis no src/components/ e arquivos nas pastas citadas
+		4) Adicione um video no background do hero para um visual mais profissional
+		5) Adicione imagens
+        6) Adicione fontes
+		7) Adicione icons
+		8) Atualize o package.json com as dependências necessárias
+
+		Se solicitado, publicar com mcp__recflux__codesandbox_deploy
+	`;
     try {
         const before = await hashDirectory(dir);
         const stdout = await runClaudeCLIInDir(dir, nlPrompt, system);
@@ -1055,7 +779,7 @@ app.post('/webhook', async (req, res) => {
 📱 **Preview:**
 ${deploymentResult.previewUrl}
 
-⚙️ **Code:**
+⚙️ **Código:**
 ${deploymentResult.editorUrl}`;
                         }
                         catch (deployError) {
@@ -1155,7 +879,7 @@ ${deploymentResult.editorUrl}`;
             else {
                 console.log(`[WEBHOOK] Processing deployment request from ${from}: "${text.substring(0, 100)}..."`);
                 // Immediate feedback to user about expected duration
-                await sendWhatsappText(from, '⚡ Gerando e publicando… Aguarde alguns segundos!');
+                await sendWhatsappText(from, '⚡ Gerando e publicando… Aguarde alguns minutos!');
                 const result = await buildAndDeployFromPrompt(text, from);
                 console.log('[WEBHOOK] Deployment result:', {
                     textLength: result.text.length,

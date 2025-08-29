@@ -86,7 +86,7 @@ export function configureAuth(app: Express) {
 			// Initialize or reset project clone at login
 			try {
 				const projectDir = process.env.CLONED_TEMPLATE_DIR || path.resolve(process.cwd(), 'project');
-				const templateDir = path.resolve(process.cwd(), '../code-deploy-service/template');
+				const templateDir = '/_template';
 				try { await fs.rm(projectDir, { recursive: true, force: true }); } catch {}
 				await fs.mkdir(projectDir, { recursive: true });
 				await fs.cp(templateDir, projectDir, { recursive: true });
