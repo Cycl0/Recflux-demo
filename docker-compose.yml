@@ -143,9 +143,9 @@ services:
       GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET}"
       GOOGLE_CALLBACK_URL: "${GOOGLE_CALLBACK_URL}"
       SESSION_SECRET: "${SESSION_SECRET:-dev-secret}"
-      # Claude API 
-      CLAUDE_AUTH_TOKEN: "${CLAUDE_AUTH_TOKEN}"
-      ANTHROPIC_API_KEY: "${CLAUDE_AUTH_TOKEN}"
+      # Claude API - Commented out to use mounted Pro subscription credentials
+      # CLAUDE_AUTH_TOKEN: "${CLAUDE_AUTH_TOKEN}"
+      # ANTHROPIC_API_KEY: "${CLAUDE_AUTH_TOKEN}"
       # Browserbase (MCP tools)
       BROWSERBASE_API_KEY: "${BROWSERBASE_API_KEY}"
       BROWSERBASE_PROJECT_ID: "${BROWSERBASE_PROJECT_ID}"
@@ -156,6 +156,8 @@ services:
     volumes:
       # Persist project workspace outside the image
       - whatsapp_project:/workspace/project
+      # Mount Claude Code credentials for Pro subscription
+      - ${USERPROFILE}/.claude:/home/appuser/.claude
 
 volumes:
   whatsapp_project:

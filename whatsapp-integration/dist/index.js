@@ -71,12 +71,30 @@ async function ensureFirstProcessDistributed(uniqueId) {
 const { WHATSAPP_TOKEN, WHATSAPP_PHONE_NUMBER_ID, WHATSAPP_VERIFY_TOKEN, PUBLIC_BASE_URL } = process.env;
 const DEFAULT_CLAUDE_BIN = process.platform === 'win32' ? 'claude.ps1' : 'claude';
 const CLAUDE_BIN = (process.env.CLAUDE_BIN || process.env.CLAUDE_PATH || DEFAULT_CLAUDE_BIN);
-function runClaudeCLIInDir(cwd, userPrompt, systemAppend) {
+function runClaudeCLIInDir(cwd, userPrompt) {
     return new Promise((resolve, reject) => {
         // Resolve absolute project directory and prepare prompts
         const absProjectDir = path.resolve(cwd);
-        const userArg = userPrompt;
-        const systemArg = systemAppend.replace(/"/g, '\'');
+        let userArg = userPrompt;
+        // Try to load system instructions from project root (claude.md or CLAUDE.md)
+        try {
+            const lowerPath = path.join(absProjectDir, 'claude.md');
+            const upperPath = path.join(absProjectDir, 'CLAUDE.md');
+            let systemFilePath = '';
+            if (fsSync.existsSync(lowerPath))
+                systemFilePath = lowerPath;
+            else if (fsSync.existsSync(upperPath))
+                systemFilePath = upperPath;
+            if (systemFilePath) {
+                const systemContent = fsSync.readFileSync(systemFilePath, 'utf8');
+                console.log('[CLAUDE] Loaded system instructions from:', systemFilePath);
+                // Prepend system content to the user prompt to ensure Claude uses it
+                userArg = `SYSTEM INSTRUCTIONS (from ${path.basename(systemFilePath)}):\n\n${systemContent}\n\nUSER REQUEST:\n\n${userPrompt}`;
+            }
+        }
+        catch (e) {
+            console.warn('[CLAUDE] Failed to load system instructions file:', e?.message || e);
+        }
         // Non-interactive, strict MCP, expanded tools, and explicit directory access
         const mcpConfigPath = path.resolve(__dirname, '../mcp-config.json');
         console.log('[CLAUDE] MCP config path:', mcpConfigPath);
@@ -94,7 +112,6 @@ function runClaudeCLIInDir(cwd, userPrompt, systemAppend) {
         }
         const baseArgs = [
             '--print',
-            '--append-system-prompt', systemArg,
             '--permission-mode', 'bypassPermissions',
             '--output-format', 'text',
             '--add-dir', absProjectDir,
@@ -140,20 +157,21 @@ function runClaudeCLIInDir(cwd, userPrompt, systemAppend) {
                 }
             }
         }
+        const defaultKey = (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || process.env.CLAUDE_API_KEY);
         console.log('[CLAUDE] starting', { cwd: absProjectDir, cmd });
         console.log('[CLAUDE] Full command args:', args);
-        console.log('[CLAUDE] System prompt length:', systemArg.length);
-        console.log('[CLAUDE] System prompt preview:', systemArg.substring(0, 200) + '...');
+        console.log('[CLAUDE] Complete command:', `${cmd} ${args.join(' ')}`);
         console.log('[CLAUDE] User prompt:', userArg);
-        const defaultKey = (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || process.env.CLAUDE_API_KEY);
+        console.log('[CLAUDE] API Key status:', defaultKey ? 'SET' : 'NOT SET');
+        console.log('[CLAUDE] Using system instructions if claude.md/CLAUDE.md present in project root');
         const childEnv = {
             ...process.env,
             CI: '1',
             NO_COLOR: '1',
             FORCE_COLOR: '0',
             CLONED_TEMPLATE_DIR: absProjectDir,
-            BROWSERBASE_API_KEY: process.env.BROWSERBASE_API_KEY,
-            BROWSERBASE_PROJECT_ID: process.env.BROWSERBASE_PROJECT_ID,
+            puppeteer_API_KEY: process.env.puppeteer_API_KEY,
+            puppeteer_PROJECT_ID: process.env.puppeteer_PROJECT_ID,
             // Ensure Claude CLI sees Anthropic-compatible creds (Moonshot Kimi K2, etc.)
             ANTHROPIC_API_KEY: defaultKey,
             CLAUDE_API_KEY: defaultKey,
@@ -168,8 +186,10 @@ function runClaudeCLIInDir(cwd, userPrompt, systemAppend) {
         });
         // Write the prompt to stdin and close it
         if (child.stdin) {
+            console.log('[CLAUDE] Writing user prompt to stdin...');
             child.stdin.write(userArg);
             child.stdin.end();
+            console.log('[CLAUDE] Prompt sent, waiting for response...');
         }
         let stderr = '';
         let stdout = '';
@@ -196,16 +216,24 @@ function runClaudeCLIInDir(cwd, userPrompt, systemAppend) {
         child.stdout.on('data', (d) => {
             const t = d.toString();
             stdout += t;
-            const snip = t.length > 400 ? t.slice(0, 400) + '…' : t;
-            if (snip.trim().length)
-                console.log('[CLAUDE][stdout]', snip);
+            // Show full output in real-time, line by line
+            const lines = t.split('\n');
+            lines.forEach((line) => {
+                if (line.trim().length) {
+                    console.log('[CLAUDE][stdout]', line);
+                }
+            });
         });
         child.stderr.on('data', (d) => {
             const t = d.toString();
             stderr += t;
-            const snip = t.length > 400 ? t.slice(0, 400) + '…' : t;
-            if (snip.trim().length)
-                console.warn('[CLAUDE][stderr]', snip);
+            // Show full stderr output in real-time, line by line
+            const lines = t.split('\n');
+            lines.forEach((line) => {
+                if (line.trim().length) {
+                    console.warn('[CLAUDE][stderr]', line);
+                }
+            });
         });
         child.on('error', (err) => {
             clearTimeout(killTimer);
@@ -489,68 +517,9 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
     catch {
         return { text: '⚠️ Projeto ausente. Use /login ou peça project_reset para recriar a pasta.' };
     }
-    const system = `
-		Você é um gerador de código focado em React + Tailwind para criar sites profissionais e modernos.
-		
-		STACK (fixo):
-		- React + Tailwind CSS (https://tailwindcss.com/) + DaisyUI (https://daisyui.com/) + Framer Motion (https://www.framer.com/motion/) + GSAP (https://greensock.com/gsap/)
-		- Use exclusivamente classes utilitárias do Tailwind para layout e estilos.
-		
-		REGRAS DE FERRAMENTAS:
-		1. Use o tool mcp__recflux__browserbase_search para buscar recursos audiovisuais relevantes. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
-		2. Atualize package.json quando necessário (dependências Tailwind já estão no template).
-		
-		ARQUIVOS-ALVO PRINCIPAIS:
-		- src/App.jsx (componentes/sections e layout com Tailwind)
-		- src/index.css (diretivas @tailwind já presentes; adicione utilitários @layer se preciso)
-		- src/components/ (componentes reutilizáveis)
-		- src/assets/ (recursos audiovisuais)
-		- src/pages/ (páginas)
-		- src/utils/ (funções auxiliares)
-		- src/styles/ (estilos globais)
-		- src/types/ (tipos)
-		- src/hooks/ (hooks)
-		
-		VISUAL E UX:
-		- Preste MUITA atenção no contraste de cores e posicionamento de elementos.
-		- Layout responsivo com grid/flex, espaçamento consistente, tipografia clara.
-		- Gradientes sutis e hovers suaves via Tailwind (transition, shadow, ring).
-		- Acessibilidade: semântica, alt de imagens, foco visível.
-		
-		RECURSOS (OBRIGATÓRIOS):
-		- Animations devem ser buscadas via mcp__recflux__browserbase_search e colocadas em partes além do hero. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
-		- Video deve ser buscado via mcp__recflux__browserbase_search e colocado no background do hero para um visual mais profissional. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
-		- Imagens devem ser buscados via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
-		- Fontes devem ser usadas apenas as fontes listadas: Inter, Roboto, Poppins, Montserrat, Fira Sans, Proxima Nova, Raleway, Helvetica, Ubuntu, Lato, Seb Neue, Rust, Arial, Go, Cormorant Garamond, Nunito Sans, Source Serif, Segoe UI, Cascadia Code PL, Chakra Petch, IBM Plex Sans, Avenir, Black Ops One, JetBrains Monospace, Roboto Slab, New Times Roman, Futura
-
-		- São obrigatórios para criar o site.
-
-		RECURSOS (OPCIONAIS):
-		- Vectors devem ser buscados via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
-		- Icons devem ser buscados via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
-		- FX podem ser buscados via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
-		- Musicas podem ser buscadas via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
-		
-		SEÇÕES MÍNIMAS:
-		- Hero com video no background, Features (3+ cards), e um CTA.
-		
-		FLUXO DE TRABALHO:
-		1) read_file em src/App.jsx e src/index.css
-		2) Ajuste a UI no src/App.jsx com Tailwind
-		3) Crie componentes reutilizáveis no src/components/ e arquivos nas pastas citadas
-		4) Adicione um video no background do hero para um visual mais profissional
-		5) Adicione animações para preenchimento de partes mais vazias
-		6) Adicione imagens
-        7) Adicione fontes
-		8) Adicione outros recursos se necessário
-		9) Verifique novamente o contraste de cores, principalmente se houver temas diferentes e veja o posicionamento dos elementos, ajuste se necessário
-		10) Atualize o package.json com as dependências necessárias
-
-		Se solicitado, publicar com mcp__recflux__codesandbox_deploy
-	`;
     try {
         const before = await hashDirectory(dir);
-        const result = await runClaudeCLIInDir(dir, nlPrompt, system);
+        const result = await runClaudeCLIInDir(dir, nlPrompt);
         const stdout = result.stdout;
         console.log('[CLAUDE][NL PROMPT] result:', {
             code: result.code,
@@ -824,7 +793,7 @@ app.post('/webhook', async (req, res) => {
                 const systemDeploy = `Você é um editor de código. Edite o projeto desta pasta conforme o pedido.`;
                 try {
                     const before = await hashDirectory(dir);
-                    const result = await runClaudeCLIInDir(dir, reactCode, systemDeploy);
+                    const result = await runClaudeCLIInDir(dir, reactCode);
                     const stdout = result.stdout;
                     console.log('[CLAUDE][DEPLOY PROMPT] raw output length', stdout?.length || 0);
                     const after = await hashDirectory(dir);

@@ -5,7 +5,9 @@ import { z } from 'zod';
 import axios from 'axios';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { Browserbase } from '@browserbasehq/sdk';
+import puppeteer from 'puppeteer-extra';
+import StealthPlugin from 'puppeteer-extra-plugin-stealth';
+const pptr: any = puppeteer;
 import { deployToCodeSandbox } from './deploy-codesandbox.js';
 
 // Minimal MCP server exposing project_reset and CodeSandbox deployment only.
@@ -69,9 +71,9 @@ server.registerTool(
 );
 
 server.registerTool(
-	'browserbase_search',
+	'puppeteer_search',
 	{
-		description: 'Search for various types of content using BROWSERBASE',
+		description: 'Search for various types of content using PUPPETEER',
 		inputSchema: {
 			searchTerm: z.string().describe('The search term to look for. Use only a single term in english to increase the chances of finding relevant content.'),
 			searchType: z.enum(['images', 'videos', 'icons', 'vectors', 'vfx', 'music', 'fonts', 'animations']).default('images').describe('The type of content to search for')
@@ -80,21 +82,21 @@ server.registerTool(
 	async (args: any) => {
 		const logMessage = (msg: string) => {
 			console.error(msg);
-			fs.appendFile('mcp-browserbase.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => {});
+			fs.appendFile('mcp-puppeteer.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => {});
 		};
 		
-		console.error('[MCP_BROWSERBASE] *** TOOL CALLED! ***');
-		logMessage('[MCP_BROWSERBASE] *** TOOL CALLED! ***');
-		logMessage('[MCP_BROWSERBASE] Called with args: ' + JSON.stringify(args));
-		logMessage('[MCP_BROWSERBASE] Args keys: ' + JSON.stringify(Object.keys(args || {})));
+		console.error('[MCP_PUPPETEER] *** TOOL CALLED! ***');
+		logMessage('[MCP_PUPPETEER] *** TOOL CALLED! ***');
+		logMessage('[MCP_PUPPETEER] Called with args: ' + JSON.stringify(args));
+		logMessage('[MCP_PUPPETEER] Args keys: ' + JSON.stringify(Object.keys(args || {})));
 		
-		// Using Browserbase for all content extraction instead of BROWSERBASE
+		// Using Puppeteer (with stealth + proxy rotation) for all content extraction
 		
 		const searchTerm = args.searchTerm || '';
 		const searchType = args.searchType || 'images';
 		
-		logMessage('[MCP_BROWSERBASE] Parsed searchTerm: ' + searchTerm);
-		logMessage('[MCP_BROWSERBASE] Parsed searchType: ' + searchType);
+		logMessage('[MCP_PUPPETEER] Parsed searchTerm: ' + searchTerm);
+		logMessage('[MCP_PUPPETEER] Parsed searchType: ' + searchType);
 		
 		if (!searchTerm) {
 			return { content: [{ type: 'text', text: 'Error: No search term provided' }] } as const;
@@ -127,18 +129,18 @@ server.registerTool(
 				break;
 		}
 		
-		logMessage(`[MCP_BROWSERBASE] Searching ${searchType} for "${searchTerm}"`);
+		logMessage(`[MCP_PUPPETEER] Searching ${searchType} for "${searchTerm}"`);
 		
 		try {
-			// Use Pexels API for videos only, Browserbase for all other content types including images
+			// Use Pexels API for videos only, PUPPETEER for all other content types including images
 			if (searchType === 'videos') {
-				logMessage(`[MCP_BROWSERBASE] Using Pexels API for ${searchType}`);
+				logMessage(`[MCP_PUPPETEER] Using Pexels API for ${searchType}`);
 				
 				const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
 				if (PEXELS_API_KEY) {
 					const apiUrl = `https://api.pexels.com/videos/search?query=${encodeURIComponent(searchTerm)}&per_page=3`;
 					
-					logMessage(`[MCP_BROWSERBASE] Calling Pexels API: ${apiUrl}`);
+					logMessage(`[MCP_PUPPETEER] Calling Pexels API: ${apiUrl}`);
 					
 					const headers: Record<string, string> = { 'Authorization': PEXELS_API_KEY };
 					const response = await fetch(apiUrl, { headers });
@@ -148,7 +150,7 @@ server.registerTool(
 					}
 					
 					const data = (await response.json()) as { total_results: number; videos?: any[] };
-					logMessage(`[MCP_BROWSERBASE] Pexels API returned ${data.total_results} results`);
+					logMessage(`[MCP_PUPPETEER] Pexels API returned ${data.total_results} results`);
 					
 					const results = data.videos?.map((video: any) => ({
 						title: video.user?.name ? `Video by ${video.user.name}` : 'Untitled Video',
@@ -169,86 +171,111 @@ server.registerTool(
 						results: results
 					}, null, 2) }] } as const;
 				} else {
-					logMessage('[MCP_BROWSERBASE] No Pexels API key found; falling back to Browserbase scraping');
+					logMessage('[MCP_PUPPETEER] No Pexels API key found; falling back to PUPPETEER scraping');
 				}
 			}
 			
-			// Use Browserbase to scrape other content types
-			logMessage(`[MCP_BROWSERBASE] Using Browserbase to scrape ${searchType} from: ${url}`);
+			// Use Puppeteer to scrape other content types
+			logMessage(`[MCP_PUPPETEER] Using Puppeteer to scrape ${searchType} from: ${url}`);
 			
-			const browserbaseApiKey = process.env.BROWSERBASE_API_KEY;
-			logMessage('[MCP_BROWSERBASE] Browserbase API key found: ' + !!browserbaseApiKey);
-			if (!browserbaseApiKey) {
-				logMessage('[MCP_BROWSERBASE] No Browserbase API key found, cannot scrape');
-				return { content: [{ type: 'text', text: JSON.stringify({
-					searchType,
-					searchTerm,
-					error: 'Browserbase API key not configured',
-					results: []
-				}, null, 2) }] } as const;
-			}
+			// Configure stealth and proxy
+			pptr.use(StealthPlugin());
+			
+			const collectProxies = (): string[] => {
+				const proxies: string[] = [];
+				for (let i = 1; i <= 50; i++) {
+					const v = process.env[`PROXY_${i}` as keyof NodeJS.ProcessEnv] as string | undefined;
+					if (v && v.trim()) proxies.push(v.trim());
+				}
+				return proxies;
+			};
+			
+			const pickProxy = (): { server?: string; username?: string; password?: string; raw?: string } => {
+				const list = collectProxies();
+				if (!list.length) return {};
+				const raw = list[Math.floor(Math.random() * list.length)];
+				try {
+					const u = new URL(raw);
+					const server = `${u.protocol}//${u.hostname}:${u.port}`;
+					return { server, username: decodeURIComponent(u.username || ''), password: decodeURIComponent(u.password || ''), raw };
+				} catch {
+					return { raw } as any;
+				}
+			};
+			
+			const proxy = pickProxy();
+			logMessage(`[MCP_PUPPETEER] Proxy selected: ${proxy.server || 'none'} (raw=${proxy.raw ? 'yes' : 'no'})`);
+			
+			const launchArgs: string[] = [
+				'--no-sandbox',
+				'--disable-setuid-sandbox',
+				'--disable-blink-features=AutomationControlled'
+			];
+			if (proxy.server) launchArgs.push(`--proxy-server=${proxy.server}`);
+			
+			const browser = await pptr.launch({
+				headless: true,
+				args: launchArgs,
+				executablePath: '/usr/bin/google-chrome-stable'
+			});
 			
 			try {
-				const bb = new Browserbase({
-					apiKey: browserbaseApiKey,
+				const page = await browser.newPage();
+				
+				if (proxy.username) {
+					try { await page.authenticate({ username: proxy.username, password: proxy.password || '' }); } catch {}
+				}
+				
+				const userAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36';
+				await page.setUserAgent(userAgent);
+				await page.setViewport({
+					width: Math.floor(1024 + Math.random() * 120),
+					height: Math.floor(768 + Math.random() * 120)
 				});
 				
-				// Create a session to scrape the target URL
-				logMessage('[MCP_BROWSERBASE] Attempting to create Browserbase session...');
-				const session = await bb.sessions.create({
-					projectId: process.env.BROWSERBASE_PROJECT_ID || 'd6aca8e4-6d58-4fdb-b824-d5f530714693',
-				});
-				
-				const sessionId = session.id;
-				logMessage(`[MCP_BROWSERBASE] Created Browserbase session: ${sessionId}`);
-				
-				// Connect to Browserbase session and scrape content
-				const { connect } = await import('puppeteer-core');
-				const browser = await connect({
-					browserWSEndpoint: `wss://connect.browserbase.com?apiKey=${browserbaseApiKey}&sessionId=${sessionId}`,
+				// Capture console output from page.evaluate
+				page.on('console', (msg: any) => {
+					logMessage('[MCP_PUPPETEER] Browser console: ' + msg.text());
 				});
 				
 				try {
-					const page = await browser.newPage();
-					
-					// Capture console output from page.evaluate
-					page.on('console', (msg) => {
-						logMessage('[MCP_BROWSERBASE] Browser console: ' + msg.text());
-					});
-					
-					await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
-					
-					// Wait for Cloudflare and page content to load
-					logMessage('[MCP_BROWSERBASE] Waiting for page challenge to be solved...');
-					await new Promise(resolve => setTimeout(resolve, 15000));
-					
-					let title = await page.title();
-					logMessage(`[MCP_BROWSERBASE] Current page title after 15s: ${title}`);
-					
-					// Keep waiting until we get past protection pages
-					let attempts = 0;
-					while ((title.includes('Just a moment') || title.includes('Cloudflare') || title.includes('Please wait')) && attempts < 6) {
-						attempts++;
-						logMessage(`[MCP_BROWSERBASE] Still on protection page, attempt ${attempts}/6. Waiting 10 more seconds...`);
-						await new Promise(resolve => setTimeout(resolve, 10000));
-						title = await page.title();
-						logMessage(`[MCP_BROWSERBASE] Page title after wait ${attempts}: ${title}`);
-					}
-					
-					// Additional wait for page content to fully render
-					logMessage('[MCP_BROWSERBASE] Waiting for page content to fully render...');
+					await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30000 });
+				} catch (e) {
+					logMessage('[MCP_PUPPETEER] Initial navigation failed, retrying with networkidle2');
+					try { await page.goto(url, { waitUntil: 'networkidle2', timeout: 45000 }); } catch {}
+				}
+				
+				// Wait for Cloudflare and page content to load
+				logMessage('[MCP_PUPPETEER] Waiting for page challenge to be solved...');
+				await new Promise(resolve => setTimeout(resolve, 10000));
+				
+				let title = await page.title();
+				logMessage(`[MCP_PUPPETEER] Current page title after wait: ${title}`);
+				
+				// Keep waiting until we get past protection pages
+				let attempts = 0;
+				while ((title.includes('Just a moment') || title.includes('Cloudflare') || title.includes('Please wait')) && attempts < 6) {
+					attempts++;
+					logMessage(`[MCP_PUPPETEER] Still on protection page, attempt ${attempts}/6. Waiting 8 more seconds...`);
 					await new Promise(resolve => setTimeout(resolve, 8000));
-					
-					// Extract content based on type
-					let contentData = [];
+					title = await page.title();
+					logMessage(`[MCP_PUPPETEER] Page title after wait ${attempts}: ${title}`);
+				}
+				
+				// Additional wait for page content to fully render
+				logMessage('[MCP_PUPPETEER] Waiting for page content to fully render...');
+				await new Promise(resolve => setTimeout(resolve, 6000));
+				
+				// Extract content based on type
+				let contentData = [] as any[];
 					if (searchType === 'videos') {
-						logMessage('[MCP_BROWSERBASE] Extracting video content...');
+						logMessage('[MCP_PUPPETEER] Extracting video content...');
 						
 						// Wait for video elements to load
 						try {
 							await page.waitForSelector('video, a[href*="/video/"], .video', { timeout: 30000 });
 						} catch (e) {
-							logMessage('[MCP_BROWSERBASE] Timeout waiting for video selectors, continuing anyway...');
+							logMessage('[MCP_PUPPETEER] Timeout waiting for video selectors, continuing anyway...');
 						}
 						
 						// Extract video content
@@ -363,7 +390,7 @@ server.registerTool(
 						});
 						
 					} else if (searchType === 'animations') {
-						logMessage('[MCP_BROWSERBASE] Extracting animation content...');
+						logMessage('[MCP_PUPPETEER] Extracting animation content...');
 						
 						// Extract animation content
 						contentData = await page.evaluate(() => {
@@ -393,13 +420,13 @@ server.registerTool(
 						});
 						
 					} else if (searchType === 'images') {
-						logMessage('[MCP_BROWSERBASE] Extracting image content...');
+						logMessage('[MCP_PUPPETEER] Extracting image content...');
 						
 						// Wait for image elements to load
 						try {
 							await page.waitForSelector('img, a[href*=".jpg"], a[href*=".png"], .photo', { timeout: 20000 });
 						} catch (e) {
-							logMessage('[MCP_BROWSERBASE] Timeout waiting for image selectors, continuing anyway...');
+							logMessage('[MCP_PUPPETEER] Timeout waiting for image selectors, continuing anyway...');
 						}
 						
 						// Extract image content
@@ -433,7 +460,7 @@ server.registerTool(
 						});
 						
 					} else if (searchType === 'icons') {
-						logMessage('[MCP_BROWSERBASE] Extracting icon content...');
+						logMessage('[MCP_PUPPETEER] Extracting icon content...');
 						
 						// Extract icon/SVG content
 						contentData = await page.evaluate(() => {
@@ -465,7 +492,7 @@ server.registerTool(
 						});
 						
 					} else if (searchType === 'vectors') {
-						logMessage('[MCP_BROWSERBASE] Extracting vector content from Freepik...');
+						logMessage('[MCP_PUPPETEER] Extracting vector content from Freepik...');
 						
 						// Extract vector content from Freepik
 						contentData = await page.evaluate(() => {
@@ -498,7 +525,7 @@ server.registerTool(
 						});
 						
 					} else if (searchType === 'vfx') {
-						logMessage('[MCP_BROWSERBASE] Extracting VFX content from ProductionCrate...');
+						logMessage('[MCP_PUPPETEER] Extracting VFX content from ProductionCrate...');
 						
 						// Extract VFX content from ProductionCrate
 						contentData = await page.evaluate(() => {
@@ -531,7 +558,7 @@ server.registerTool(
 						});
 						
 					} else if (searchType === 'music') {
-						logMessage('[MCP_BROWSERBASE] Extracting music content from Bensound...');
+						logMessage('[MCP_PUPPETEER] Extracting music content from Bensound...');
 						
 						// Extract music content from Bensound
 						contentData = await page.evaluate(() => {
@@ -564,10 +591,10 @@ server.registerTool(
 						});
 						
 					} else {
-						logMessage(`[MCP_BROWSERBASE] Extracting general content for ${searchType}...`);
+						logMessage(`[MCP_PUPPETEER] Extracting general content for ${searchType}...`);
 						
 						// General content extraction
-						contentData = await page.evaluate((searchType) => {
+						contentData = await page.evaluate((searchType: string) => {
 							const content: any[] = [];
 							
 							// Look for download links, media files, or relevant content
@@ -597,33 +624,23 @@ server.registerTool(
 						}, searchType);
 					}
 					
-					logMessage(`[MCP_BROWSERBASE] Extracted ${contentData.length} items via Browserbase`);
+					logMessage(`[MCP_PUPPETEER] Extracted ${contentData.length} items via Puppeteer`);
 					
 					return { content: [{ type: 'text', text: JSON.stringify({
 						searchType,
 						searchTerm,
 						results: contentData.slice(0, 10),
 						totalFound: contentData.length,
-						source: 'browserbase-extracted'
+						source: 'puppeteer-extracted'
 					}, null, 2) }] } as const;
 					
 				} finally {
 					// Always close the browser to free up the session
 					await browser.close();
 				}
-				
-			} catch (browserbaseError: any) {
-				logMessage('[MCP_BROWSERBASE] Browserbase error: ' + (browserbaseError.message || browserbaseError));
-				
-				return { content: [{ type: 'text', text: JSON.stringify({
-					searchType,
-					searchTerm,
-					error: 'Failed to scrape content: ' + (browserbaseError.message || browserbaseError),
-					results: []
-				}, null, 2) }] } as const;
-			}
+			
 		} catch (error: any) {
-			logMessage('[MCP_BROWSERBASE] General error: ' + (error?.message || error));
+			logMessage('[MCP_PUPPETEER] General error: ' + (error?.message || error));
 			return { content: [{ type: 'text', text: `Content extraction failed: ${error?.message || error}` }] } as const;
 		}
 	}
@@ -633,11 +650,11 @@ async function main(): Promise<void> {
 	console.error('[MCP_SERVER] Starting MCP server with tools:');
 	console.error('- project_reset');
 	console.error('- codesandbox_deploy');
-	console.error('- browserbase_search');
+	console.error('- PUPPETEER_search');
 	console.error('[MCP_SERVER] Process starting...');
 	console.error('[MCP_SERVER] Working directory:', process.cwd());
 	console.error('[MCP_SERVER] Environment CLONED_TEMPLATE_DIR:', process.env.CLONED_TEMPLATE_DIR);
-	console.error('[MCP_SERVER] Environment BROWSERBASE_API_KEY present:', !!process.env.BROWSERBASE_API_KEY);
+	console.error('[MCP_SERVER] Environment PUPPETEER_API_KEY present:', !!process.env.PUPPETEER_API_KEY);
 	
 	try {
 		await server.connect(new StdioServerTransport());

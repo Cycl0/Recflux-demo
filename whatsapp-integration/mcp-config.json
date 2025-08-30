@@ -8,7 +8,17 @@
         "CLONED_TEMPLATE_DIR": "/workspace/project",
         "BROWSERBASE_API_KEY": "bb_live_buP2hIj-CQntUpWuYUJnyMEjZgI",
         "BROWSERBASE_PROJECT_ID": "d6aca8e4-6d58-4fdb-b824-d5f530714693",
-        "PEXELS_API_KEY": "6ow1d4rio6HEFf29iYGzrXo0VbQNM6FcoDCvjltB9HXqrvPdg1TCKpam"
+        "PEXELS_API_KEY": "6ow1d4rio6HEFf29iYGzrXo0VbQNM6FcoDCvjltB9HXqrvPdg1TCKpam",
+        "PROXY_1": "http://mpxgbkeh:9uh5mitdatdc@23.95.150.145:6114/",
+        "PROXY_2": "http://mpxgbkeh:9uh5mitdatdc@198.23.239.134:6540/",
+        "PROXY_3": "http://mpxgbkeh:9uh5mitdatdc@45.38.107.97:6014/",
+        "PROXY_4": "http://mpxgbkeh:9uh5mitdatdc@107.172.163.27:6543/",
+        "PROXY_5": "http://mpxgbkeh:9uh5mitdatdc@64.137.96.74:6641/",
+        "PROXY_6": "http://mpxgbkeh:9uh5mitdatdc@45.43.186.39:6257/",
+        "PROXY_7": "http://mpxgbkeh:9uh5mitdatdc@154.203.43.247:5536/",
+        "PROXY_8": "http://mpxgbkeh:9uh5mitdatdc@216.10.27.159:6837/",
+        "PROXY_9": "http://mpxgbkeh:9uh5mitdatdc@136.0.207.84:6661/",
+        "PROXY_10": "http://mpxgbkeh:9uh5mitdatdc@142.147.128.93:6593/"
       }
     }
   }
