@@ -74,7 +74,7 @@ server.registerTool(
 		description: 'Search for various types of content using BROWSERBASE',
 		inputSchema: {
 			searchTerm: z.string().describe('The search term to look for. Use only a single term in english to increase the chances of finding relevant content.'),
-			searchType: z.enum(['images', 'videos', 'icons', 'vectors', 'vfx', 'music', 'fonts']).default('images').describe('The type of content to search for')
+			searchType: z.enum(['images', 'videos', 'icons', 'vectors', 'vfx', 'music', 'fonts', 'animations']).default('images').describe('The type of content to search for')
 		}
 	},
 	async (args: any) => {
@@ -108,6 +108,9 @@ server.registerTool(
 			case 'images':
 				url = `https://unsplash.com/s/photos/${encodeURIComponent(searchTerm)}`;
 				break;
+			case 'animations':
+				url = `https://creattie.com/all-items/${encodeURIComponent(searchTerm)}?type=all&orderBy=order&page=1`;
+				break;
 			case 'icons':
 				url = `https://thenounproject.com/search/icons/?q=${encodeURIComponent(searchTerm)}`;
 				break;
@@ -120,11 +123,7 @@ server.registerTool(
 			case 'music':
 				url = `https://www.bensound.com/royalty-free-music?tag[]=${encodeURIComponent(searchTerm)}&sort=relevance`;
 				break;
-			case 'fonts':
-				url = `https://www.google.com/fonts?q=${encodeURIComponent(searchTerm)}`;
-				break;
 			default:
-				url = `https://www.google.com/search?q=${encodeURIComponent(searchTerm)}`;
 				break;
 		}
 		
@@ -363,6 +362,36 @@ server.registerTool(
 							return videos;
 						});
 						
+					} else if (searchType === 'animations') {
+						logMessage('[MCP_BROWSERBASE] Extracting animation content...');
+						
+						// Extract animation content
+						contentData = await page.evaluate(() => {
+							const animations: any[] = [];
+							
+							// Look for animation elements
+							const animationElements = (globalThis as any).document.querySelectorAll('video');
+							console.log(`[DEBUG] Found ${animationElements.length} animation elements`);
+							
+							Array.from(animationElements).forEach((element: any, index: number) => {
+								
+								const src = element.querySelector('source').getAttribute('src');
+								const alt = element.parentElement.querySelector('span').textContent;
+								
+								if (src && !src.includes('placeholder') && !src.includes('loading')) {
+									console.log(`[DEBUG] Animation ${index + 1}: ${src}`);
+									animations.push({
+										title: alt || `Animation ${index + 1}`,
+										animationUrl: src,
+										source: 'extracted-animation',
+										elementIndex: index
+									});
+								}
+							});
+							
+							return animations;
+						});
+						
 					} else if (searchType === 'images') {
 						logMessage('[MCP_BROWSERBASE] Extracting image content...');
 						
@@ -532,38 +561,6 @@ server.registerTool(
 							});
 							
 							return musicItems;
-						});
-						
-					} else if (searchType === 'fonts') {
-						logMessage('[MCP_BROWSERBASE] Extracting font content from Google Fonts...');
-						
-						// Extract font content from Google Fonts
-						contentData = await page.evaluate(() => {
-							const fonts: any[] = [];
-							
-							// Look for Google Fonts-specific elements
-							const fontElements = (globalThis as any).document.querySelectorAll('.font-card, .family, a[href*="/specimen/"]');
-							
-							console.log(`[DEBUG] Found ${fontElements.length} font elements`);
-							
-							Array.from(fontElements).slice(0, 10).forEach((element: any, index: number) => {
-								const href = element.href || element.getAttribute('href');
-								const fontName = element.querySelector('.font-name')?.textContent || element.textContent;
-								const designer = element.querySelector('.designer')?.textContent;
-								
-								if (href || fontName) {
-									console.log(`[DEBUG] Font ${index + 1}: ${fontName}`);
-									fonts.push({
-										title: fontName || `Font ${index + 1}`,
-										fontUrl: href,
-										designer: designer,
-										source: 'google-fonts',
-										elementIndex: index
-									});
-								}
-							});
-							
-							return fonts;
 						});
 						
 					} else {

@@ -23,6 +23,8 @@
 *.jks*
 whatsapp-integration/project
 
+whatsapp-integration/mcp-config.json
+
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

@@ -80,7 +80,16 @@ const {
 const DEFAULT_CLAUDE_BIN = process.platform === 'win32' ? 'claude.ps1' : 'claude';
 const CLAUDE_BIN = (process.env.CLAUDE_BIN || process.env.CLAUDE_PATH || DEFAULT_CLAUDE_BIN) as string;
 
-function runClaudeCLIInDir(cwd: string, userPrompt: string, systemAppend: string): Promise<string> {
+interface ClaudeResult {
+	code: number;
+	stderr: string;
+	stdout: string;
+	stdoutLen: number;
+	stderrLen: number;
+	timedOut?: boolean;
+}
+
+function runClaudeCLIInDir(cwd: string, userPrompt: string, systemAppend: string): Promise<ClaudeResult> {
 	return new Promise((resolve, reject) => {
 		// Resolve absolute project directory and prepare prompts
 		const absProjectDir = path.resolve(cwd);
@@ -190,9 +199,28 @@ function runClaudeCLIInDir(cwd: string, userPrompt: string, systemAppend: string
 		let stderr = '';
 		let stdout = '';
 		const killTimer = setTimeout(() => {
-			console.log('[CLAUDE] Timeout reached after 5 minutes, letting process continue');
-			reject(new Error('Claude CLI timed out after 5 minutes'));
-		}, 300000);
+			console.log('[CLAUDE] Timeout reached after 10 minutes, extracting any deployment info');
+			clearTimeout(killTimer);
+			
+			// Try to extract deployment URLs from stdout before timing out
+			const deploymentMatch = stdout.match(/https:\/\/\w+\.csb\.app/);
+			const editorMatch = stdout.match(/https:\/\/codesandbox\.io\/s\/\w+/);
+			
+			console.log('[CLAUDE] Timeout - checking stdout for deployment info...');
+			console.log('[CLAUDE] Stdout length:', stdout.length);
+			console.log('[CLAUDE] Found deployment URL:', deploymentMatch?.[0] || 'none');
+			console.log('[CLAUDE] Found editor URL:', editorMatch?.[0] || 'none');
+			
+			// Always resolve with what we have - let the caller handle the timeout
+			resolve({
+				code: 124, // timeout code  
+				stderr,
+				stdout,
+				stdoutLen: stdout.length,
+				stderrLen: stderr.length,
+				timedOut: true
+			});
+		}, 600000);
 		
 		
 		
@@ -226,7 +254,15 @@ function runClaudeCLIInDir(cwd: string, userPrompt: string, systemAppend: string
 			if (stdout) console.log('[CLAUDE] stdout preview:', stdout.substring(0, 500));
 			// Handle null exit code as success (happens when process is terminated gracefully)
 			if (code !== null && code !== 0) return reject(new Error(`Claude CLI exited with code ${code}: ${stderr}`));
-			resolve(stdout);
+			
+			// Return detailed result object
+			resolve({
+				code: code || 0,
+				stderr,
+				stdout,
+				stdoutLen: stdout.length,
+				stderrLen: stderr.length
+			});
 		});
 	});
 }
@@ -381,11 +417,14 @@ async function takeScreenshot(targetUrl: string): Promise<string> {
 	// Final small settle to ensure painting
 	await page.evaluate(() => new Promise(r => (globalThis as any).requestAnimationFrame(() => (globalThis as any).requestAnimationFrame(r))));
 
-	let screenshotBuffer = await page.screenshot({ encoding: 'base64', fullPage: true });
+	// Wait a bit for any animations to settle
+	await new Promise(res => setTimeout(res, 1000));
+	
+	let screenshotBuffer = await page.screenshot({ encoding: 'base64', fullPage: false });
 	// If image is suspiciously small (possibly blank), retry once after short wait
 	if (!screenshotBuffer || (screenshotBuffer as any as string).length < 1000) {
 		await new Promise(res => setTimeout(res, 2000));
-		screenshotBuffer = await page.screenshot({ encoding: 'base64', fullPage: true });
+		screenshotBuffer = await page.screenshot({ encoding: 'base64', fullPage: false });
 	}
 	await browser.close();
 	console.log('Screenshot taken successfully.');
@@ -466,7 +505,7 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		Você é um gerador de código focado em React + Tailwind para criar sites profissionais e modernos.
 		
 		STACK (fixo):
-		- React + Tailwind CSS (https://tailwindcss.com/) + HeroUI (https://hero-ui.com/) + GSAP (https://greensock.com/gsap/)
+		- React + Tailwind CSS (https://tailwindcss.com/) + DaisyUI (https://daisyui.com/) + Framer Motion (https://www.framer.com/motion/) + GSAP (https://greensock.com/gsap/)
 		- Use exclusivamente classes utilitárias do Tailwind para layout e estilos.
 		
 		REGRAS DE FERRAMENTAS:
@@ -485,41 +524,51 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		- src/hooks/ (hooks)
 		
 		VISUAL E UX:
+		- Preste MUITA atenção no contraste de cores e posicionamento de elementos.
 		- Layout responsivo com grid/flex, espaçamento consistente, tipografia clara.
 		- Gradientes sutis e hovers suaves via Tailwind (transition, shadow, ring).
 		- Acessibilidade: semântica, alt de imagens, foco visível.
 		
 		RECURSOS (OBRIGATÓRIOS):
-		- Videos devem ser buscados via mcp__recflux__browserbase_search e colocados no background do hero para um visual mais profissional. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
-		- Imagens/ícones devem ser buscados via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
-		- Fontes devem ser buscadas via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
-		- Vectors devem ser buscados via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
-		- Icons devem ser buscados via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
+		- Animations devem ser buscadas via mcp__recflux__browserbase_search e colocadas em partes além do hero. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
+		- Video deve ser buscado via mcp__recflux__browserbase_search e colocado no background do hero para um visual mais profissional. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
+		- Imagens devem ser buscados via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
+		- Fontes devem ser usadas apenas as fontes listadas: Inter, Roboto, Poppins, Montserrat, Fira Sans, Proxima Nova, Raleway, Helvetica, Ubuntu, Lato, Seb Neue, Rust, Arial, Go, Cormorant Garamond, Nunito Sans, Source Serif, Segoe UI, Cascadia Code PL, Chakra Petch, IBM Plex Sans, Avenir, Black Ops One, JetBrains Monospace, Roboto Slab, New Times Roman, Futura
+
 		- São obrigatórios para criar o site.
 
 		RECURSOS (OPCIONAIS):
+		- Vectors devem ser buscados via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
+		- Icons devem ser buscados via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
 		- FX podem ser buscados via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
 		- Musicas podem ser buscadas via mcp__recflux__browserbase_search. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
 		
 		SEÇÕES MÍNIMAS:
-		- Hero, Features (3+ cards), e um CTA.
+		- Hero com video no background, Features (3+ cards), e um CTA.
 		
 		FLUXO DE TRABALHO:
 		1) read_file em src/App.jsx e src/index.css
 		2) Ajuste a UI no src/App.jsx com Tailwind
 		3) Crie componentes reutilizáveis no src/components/ e arquivos nas pastas citadas
 		4) Adicione um video no background do hero para um visual mais profissional
-		5) Adicione imagens
-        6) Adicione fontes
-		7) Adicione icons
-		8) Atualize o package.json com as dependências necessárias
+		5) Adicione animações para preenchimento de partes mais vazias
+		6) Adicione imagens
+        7) Adicione fontes
+		8) Adicione outros recursos se necessário
+		9) Verifique novamente o contraste de cores, principalmente se houver temas diferentes e veja o posicionamento dos elementos, ajuste se necessário
+		10) Atualize o package.json com as dependências necessárias
 
 		Se solicitado, publicar com mcp__recflux__codesandbox_deploy
 	`;
     try {
         const before = await hashDirectory(dir);
-        const stdout = await runClaudeCLIInDir(dir, nlPrompt, system);
-        console.log('[CLAUDE][NL PROMPT] raw output length', stdout?.length || 0);
+        const result = await runClaudeCLIInDir(dir, nlPrompt, system);
+        const stdout = result.stdout;
+        console.log('[CLAUDE][NL PROMPT] result:', { 
+            code: result.code, 
+            stdoutLen: result.stdoutLen, 
+            timedOut: (result as any).timedOut 
+        });
         const after = await hashDirectory(dir);
         let changed = false;
         if (before.size !== after.size) changed = true; else { for (const [k,v] of after.entries()) { if (before.get(k) !== v) { changed = true; break; } } }
@@ -562,9 +611,50 @@ ${deployment.editorUrl}`;
         }
     } catch (e) {
         console.error('[CLAUDE] Error or timeout:', e);
+        
+        // Check if we have a timeout case with partial results
+        const claudeResult = e as ClaudeResult;
+        const isTimeout = (e instanceof Error && e.message.includes('timeout')) || 
+                         claudeResult.timedOut === true;
+        
+        if (isTimeout && claudeResult.stdout) {
+            const stdout = claudeResult.stdout;
+            console.log('[CLAUDE] Timeout case - analyzing stdout for deployment URLs...');
+            console.log('[CLAUDE] Stdout length:', stdout.length);
+            
+            // Look for deployment URLs in various formats from the logs
+            const previewMatch = stdout.match(/\*\*[^*]*Acesse o site:\*\* (https:\/\/\w+\.csb\.app)/i) ||
+                                stdout.match(/https:\/\/\w+\.csb\.app/);
+            const editorMatch = stdout.match(/\*\*[^*]*Editar código:\*\* (https:\/\/codesandbox\.io\/s\/\w+)/i) ||
+                               stdout.match(/https:\/\/codesandbox\.io\/s\/\w+/);
+            
+            console.log('[CLAUDE] Preview match:', previewMatch);
+            console.log('[CLAUDE] Editor match:', editorMatch);
+            
+            if (previewMatch || editorMatch) {
+                const deploymentUrl = previewMatch ? previewMatch[1] || previewMatch[0] : '';
+                const editorUrl = editorMatch ? editorMatch[1] || editorMatch[0] : '';
+                
+                console.log('[CLAUDE] Found deployment URLs after timeout:', { deploymentUrl, editorUrl });
+                return {
+                    text: `🚀 Site publicado! (Claude timeout mas deploy funcionou)
+
+📱 *Preview:*
+${deploymentUrl}
+
+⚙️ *Code:*
+${editorUrl}
+
+⚠️ *Nota:* Claude foi interrompido por timeout mas o deploy foi realizado com sucesso.`,
+                    deploymentUrl: deploymentUrl,
+                    previewUrl: deploymentUrl,
+                    editorUrl: editorUrl,
+                    claudeOutput: stdout.substring(0, 1000) + (stdout.length > 1000 ? '...' : '')
+                };
+            }
+        }
+        
         // If Claude times out but we have changes, still try to deploy
-        const before = await hashDirectory(dir);
-        const after = await hashDirectory(dir);
         let changed = false;
         // For timeout case, assume there were changes if files exist
         try {
@@ -751,7 +841,8 @@ app.post('/webhook', async (req: Request, res: Response) => {
 				const systemDeploy = `Você é um editor de código. Edite o projeto desta pasta conforme o pedido.`;
 				try {
 					const before = await hashDirectory(dir);
-					const stdout = await runClaudeCLIInDir(dir, reactCode, systemDeploy);
+					const result = await runClaudeCLIInDir(dir, reactCode, systemDeploy);
+					const stdout = result.stdout;
 					console.log('[CLAUDE][DEPLOY PROMPT] raw output length', stdout?.length || 0);
 					const after = await hashDirectory(dir);
 					let changed = false;
