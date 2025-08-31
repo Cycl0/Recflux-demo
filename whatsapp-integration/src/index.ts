@@ -583,80 +583,80 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 
 				Buttons colors
 
-				<button className="btn btn-neutral">Neutral</button>
-				<button className="btn btn-primary">Primary</button>
-				<button className="btn btn-secondary">Secondary</button>
-				<button className="btn btn-accent">Accent</button>
-				<button className="btn btn-info">Info</button>
-				<button className="btn btn-success">Success</button>
-				<button className="btn btn-warning">Warning</button>
-				<button className="btn btn-error">Error</button>
+				<button className="btn btn-neutral px-4">Neutral</button>
+				<button className="btn btn-primary px-4">Primary</button>
+				<button className="btn btn-secondary px-4">Secondary</button>
+				<button className="btn btn-accent px-4">Accent</button>
+				<button className="btn btn-info px-4">Info</button>
+				<button className="btn btn-success px-4">Success</button>
+				<button className="btn btn-warning px-4">Warning</button>
+				<button className="btn btn-error px-4">Error</button>
 
 				Soft buttons
 
-				<button className="btn btn-soft">Default</button>
-				<button className="btn btn-soft btn-primary">Primary</button>
-				<button className="btn btn-soft btn-secondary">Secondary</button>
-				<button className="btn btn-soft btn-accent">Accent</button>
-				<button className="btn btn-soft btn-info">Info</button>
-				<button className="btn btn-soft btn-success">Success</button>
-				<button className="btn btn-soft btn-warning">Warning</button>
-				<button className="btn btn-soft btn-error">Error</button>
+				<button className="btn btn-soft px-4">Default</button>
+				<button className="btn btn-soft btn-primary px-4">Primary</button>
+				<button className="btn btn-soft btn-secondary px-4">Secondary</button>
+				<button className="btn btn-soft btn-accent px-4">Accent</button>
+				<button className="btn btn-soft btn-info px-4">Info</button>
+				<button className="btn btn-soft btn-success px-4">Success</button>
+				<button className="btn btn-soft btn-warning px-4">Warning</button>
+				<button className="btn btn-soft btn-error px-4">Error</button>
 
 				Outline buttons
 
-				<button className="btn btn-outline">Default</button>
-				<button className="btn btn-outline btn-primary">Primary</button>
-				<button className="btn btn-outline btn-secondary">Secondary</button>
-				<button className="btn btn-outline btn-accent">Accent</button>
-				<button className="btn btn-outline btn-info">Info</button>
-				<button className="btn btn-outline btn-success">Success</button>
-				<button className="btn btn-outline btn-warning">Warning</button>
-				<button className="btn btn-outline btn-error">Error</button>
+				<button className="btn btn-outline px-4">Default</button>
+				<button className="btn btn-outline btn-primary px-4">Primary</button>
+				<button className="btn btn-outline btn-secondary px-4">Secondary</button>
+				<button className="btn btn-outline btn-accent px-4">Accent</button>
+				<button className="btn btn-outline btn-info px-4">Info</button>
+				<button className="btn btn-outline btn-success px-4">Success</button>
+				<button className="btn btn-outline btn-warning px-4">Warning</button>
+				<button className="btn btn-outline btn-error px-4">Error</button>
 
 				Dash buttons
 
-				<button className="btn btn-dash">Default</button>
-				<button className="btn btn-dash btn-primary">Primary</button>
-				<button className="btn btn-dash btn-secondary">Secondary</button>
-				<button className="btn btn-dash btn-accent">Accent</button>
-				<button className="btn btn-dash btn-info">Info</button>
-				<button className="btn btn-dash btn-success">Success</button>
-				<button className="btn btn-dash btn-warning">Warning</button>
-				<button className="btn btn-dash btn-error">Error</button>
+				<button className="btn btn-dash px-4">Default</button>
+				<button className="btn btn-dash btn-primary px-4">Primary</button>
+				<button className="btn btn-dash btn-secondary px-4">Secondary</button>
+				<button className="btn btn-dash btn-accent px-4">Accent</button>
+				<button className="btn btn-dash btn-info px-4">Info</button>
+				<button className="btn btn-dash btn-success px-4">Success</button>
+				<button className="btn btn-dash btn-warning px-4">Warning</button>
+				<button className="btn btn-dash btn-error px-4">Error</button>
 
 				neutral button with outline or dash style
 				These buttons use dark text, only use them on light backgrounds
 
 				<div className="bg-white p-6">
-				<button className="btn btn-neutral btn-outline">Outline</button>
-				<button className="btn btn-neutral btn-dash">Dash</button>
+				<button className="btn btn-neutral btn-outline px-4">Outline</button>
+				<button className="btn btn-neutral btn-dash px-4">Dash</button>
 				</div>
 
 				Active buttons
 
-				<button className="btn btn-active">Default</button>
-				<button className="btn btn-active btn-primary">Primary</button>
-				<button className="btn btn-active btn-secondary">Secondary</button>
-				<button className="btn btn-active btn-accent">Accent</button>
-				<button className="btn btn-active btn-info">Info</button>
-				<button className="btn btn-active btn-success">Success</button>
-				<button className="btn btn-active btn-warning">Warning</button>
-				<button className="btn btn-active btn-error">Error</button>
+				<button className="btn btn-active px-4">Default</button>
+				<button className="btn btn-active btn-primary px-4">Primary</button>
+				<button className="btn btn-active btn-secondary px-4">Secondary</button>
+				<button className="btn btn-active btn-accent px-4">Accent</button>
+				<button className="btn btn-active btn-info px-4">Info</button>
+				<button className="btn btn-active btn-success px-4">Success</button>
+				<button className="btn btn-active btn-warning px-4">Warning</button>
+				<button className="btn btn-active btn-error px-4">Error</button>
 
 				Buttons ghost and button link
 
-				<button className="btn btn-ghost">Ghost</button>
-				<button className="btn btn-link">Link</button>
+				<button className="btn btn-ghost px-4">Ghost</button>
+				<button className="btn btn-link px-4">Link</button>
 
 				Wide button
 
-				<button className="btn btn-wide">Wide</button>
+				<button className="btn btn-wide px-4">Wide</button>
 
 				Buttons with any HTML tags
 
 				<a role="button" className="btn">Link</a>
-				<button type="submit" className="btn">Button</button>
+				<button type="submit" className="btn px-4">Button</button>
 				<input type="button" value="Input" className="btn" />
 				<input type="submit" value="Submit" className="btn" />
 				<input type="radio" aria-label="Radio" className="btn" />
@@ -665,8 +665,8 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 
 				Disabled buttons
 
-				<button className="btn" disabled="disabled">Disabled using attribute</button>
-				<button className="btn btn-disabled" tabIndex="-1" role="button" aria-disabled="true">
+				<button className="btn px-4" disabled="disabled">Disabled using attribute</button>
+				<button className="btn btn-disabled px-4" tabIndex="-1" role="button" aria-disabled="true">
 				Disabled using class name
 				</button>
 
@@ -809,7 +809,7 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 						<h2 className="card-title">Shoes!</h2>
 						<p>If a dog chews shoes whose shoes does he choose?</p>
 						<div className="card-actions justify-end">
-							<button className="btn btn-primary">Buy Now</button>
+							<button className="btn btn-primary px-4">Buy Now</button>
 						</div>
 					</div>
 				</div>
@@ -1175,8 +1175,9 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 
 
 		REGRAS DE FERRAMENTAS:
-		1. Use o tool mcp__recflux__puppeteer_search para buscar recursos audiovisuais relevantes. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
-		2. Atualize package.json quando necessário (dependências Tailwind já estão no template).
+		1. Use o tool mcp__recflux__color_palette_generator para gerar paletas de cores harmoniosas e profissionais antes de começar o design.
+		2. Use o tool mcp__recflux__puppeteer_search para buscar recursos audiovisuais relevantes. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
+		3. Atualize package.json quando necessário (dependências Tailwind já estão no template).
 		
 		ARQUIVOS-ALVO PRINCIPAIS:
 		- src/App.jsx (componentes/sections e layout com DaisyUI e Tailwind CSS)
@@ -1191,9 +1192,13 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		
 		VISUAL E UX:
 		- Preste MUITA atenção no contraste de cores e posicionamento de elementos.
+		- Não esqueca de aplicar margin no hero para o navbar não sobrepor a seção.
+		- CRUCIAL: Não esqueca de colocar o texto com fontes escuras em background claro e fontes claras em background escuro.
+		- Use mcp__recflux__color_palette_generator para gerar paletas de cores harmoniosas e profissionais. Configure mode='transformer' para IA inteligente, temperature=1.2 para criatividade equilibrada, e numColors=3 por padrão (ou 4-5 para projetos mais complexos).
 		- Layout responsivo com grid/flex, espaçamento consistente, tipografia clara.
 		- Gradientes sutis e hovers suaves via Tailwind (transition, shadow, ring).
 		- Acessibilidade: semântica, alt de imagens, foco visível.
+		- Aplicar cores geradas da paleta em: backgrounds, text colors, accent colors, button styles, borders, e gradients.
 		
 		RECURSOS (OBRIGATÓRIOS):
 		- Animations devem ser buscadas via mcp__recflux__puppeteer_search e colocadas em partes além do hero. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
@@ -1214,16 +1219,18 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		
 		FLUXO DE TRABALHO:
 		1) read_file em src/App.jsx e src/index.css
-		2) Ajuste a UI no src/App.jsx com Tailwind
-		3) Pesquise na internet e use componentes da DaisyUI como hero, navbar, footer, como em (https://github.com/willpinha/daisy-components) e crie arquivos nas pastas citadas como componentes, hooks e utils
-		4) Adicione um video no background do hero para um visual mais profissional
-		5) Adicione animações para preenchimento de partes mais vazias
-		6) Adicione imagens para ilustrar o conteúdo
-        7) Adicione fontes
-		8) Adicione outros recursos se necessário
-		9) Verifique novamente o contraste de cores, principalmente se houver temas diferentes e veja o posicionamento dos elementos, ajuste se necessário
-		10) Sempre verifique o padding e margin, ajuste se necessário
-		11) Atualize o package.json com as dependências necessárias
+		2) Gere uma paleta de cores profissional com mcp__recflux__color_palette_generator (mode='transformer', temperature=1.2, numColors=3)
+		3) Ajuste a UI no src/App.jsx com DaisyUI, aplicando as cores da paleta gerada
+		4) Pesquise na internet e use componentes da DaisyUI como hero, navbar, footer, como em (https://github.com/willpinha/daisy-components) e crie arquivos nas pastas citadas como componentes, hooks e utils
+		5) Adicione um video no background do hero para um visual mais profissional
+		6) Adicione animações para preenchimento de partes mais vazias
+		7) Adicione imagens para ilustrar o conteúdo
+		8) Adicione fontes da lista permitida
+		9) Implemente a paleta de cores em todos os elementos (backgrounds, texto, botões, bordas, gradients)
+		10) Adicione outros recursos se necessário
+		11) Verifique novamente o contraste de cores, principalmente se houver temas diferentes e veja o posicionamento dos elementos, ajuste se necessário
+		12) Verifique o padding (Adicione padding nos botões) e o contraste de cores do site inteiro, se necessário ajuste
+		13) Atualize o package.json com as dependências necessárias
 
 		Se solicitado, publicar com mcp__recflux__codesandbox_deploy
 	`;

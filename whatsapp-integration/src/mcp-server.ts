@@ -71,6 +71,108 @@ server.registerTool(
 );
 
 server.registerTool(
+	'color_palette_generator',
+	{
+		description: 'Generate color palettes using Huemint AI API for design projects',
+		inputSchema: {
+			mode: z.enum(['transformer', 'diffusion', 'random']).default('transformer').describe('Generation mode - transformer (smart AI), diffusion (artistic), or random'),
+			numColors: z.number().min(2).max(12).default(3).describe('Number of colors in palette (2-12)'),
+			temperature: z.number().min(0).max(2.4).default(1.2).describe('Creativity level (0-2.4, higher = more creative)'),
+			baseColors: z.array(z.string()).optional().describe('Optional base colors as hex codes (e.g. ["#FF0000", "#00FF00"])')
+		}
+	},
+	async (args: any) => {
+		const logMessage = (msg: string) => {
+			console.error(msg);
+			fs.appendFile('mcp-color-palette.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => {});
+		};
+		
+		logMessage('[MCP_COLOR_PALETTE] *** TOOL CALLED! ***');
+		logMessage('[MCP_COLOR_PALETTE] Called with args: ' + JSON.stringify(args));
+		
+		const mode = args.mode || 'transformer';
+		const numColors = Math.min(12, Math.max(2, args.numColors || 3));
+		const temperature = Math.min(2.4, Math.max(0, args.temperature || 1.2));
+		const baseColors = args.baseColors || [];
+		
+		// Create adjacency matrix (colors that work well together)
+		// Higher values mean better compatibility
+		const adjacencyMatrix = [];
+		for (let i = 0; i < numColors; i++) {
+			for (let j = 0; j < numColors; j++) {
+				if (i === j) {
+					adjacencyMatrix.push("0");
+				} else {
+					// Default medium compatibility
+					adjacencyMatrix.push("65");
+				}
+			}
+		}
+		
+		// Build palette array with locked colors or blanks
+		const palette = [];
+		for (let i = 0; i < numColors; i++) {
+			if (i < baseColors.length) {
+				palette.push(baseColors[i]);
+			} else {
+				palette.push("-");
+			}
+		}
+		
+		const requestData = {
+			mode: mode,
+			num_colors: numColors,
+			temperature: temperature.toString(),
+			num_results: 1,
+			adjacency: adjacencyMatrix,
+			palette: palette
+		};
+		
+		logMessage(`[MCP_COLOR_PALETTE] Requesting palette: ${JSON.stringify(requestData)}`);
+		
+		try {
+			const response = await fetch('https://api.huemint.com/color', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json; charset=utf-8'
+				},
+				body: JSON.stringify(requestData)
+			});
+			
+			if (!response.ok) {
+				throw new Error(`Huemint API error: ${response.status} ${response.statusText}`);
+			}
+			
+			const data = await response.json() as { results?: Array<{ palette: string[]; score: number }> };
+			logMessage(`[MCP_COLOR_PALETTE] API response received: ${data.results?.length || 0} palettes`);
+			
+			// Return single palette result
+			const bestResult = data.results?.[0];
+			if (!bestResult) {
+				throw new Error('No palette generated');
+			}
+			
+			const formattedResult = {
+				mode,
+				numColors,
+				temperature,
+				baseColors: baseColors.length > 0 ? baseColors : null,
+				colors: bestResult.palette || [],
+				score: bestResult.score,
+				preview: `https://www.color-hex.com/palettes/${bestResult.palette?.map(c => c.replace('#', '')).join('-') || 'default'}`,
+				source: 'huemint-ai'
+			};
+			
+			return { content: [{ type: 'text', text: JSON.stringify(formattedResult, null, 2) }] } as const;
+			
+		} catch (error: any) {
+			logMessage('[MCP_COLOR_PALETTE] Error: ' + (error?.message || error));
+			return { content: [{ type: 'text', text: `Color palette generation failed: ${error?.message || error}` }] } as const;
+		}
+	}
+);
+
+server.registerTool(
 	'puppeteer_search',
 	{
 		description: 'Search for various types of content using PUPPETEER',
@@ -649,7 +751,8 @@ server.registerTool(
 async function main(): Promise<void> {
 	console.error('[MCP_SERVER] Starting MCP server with tools:');
 	console.error('- project_reset');
-	console.error('- codesandbox_deploy');
+	console.error('- codesandbox_deploy'); 
+	console.error('- color_palette_generator');
 	console.error('- PUPPETEER_search');
 	console.error('[MCP_SERVER] Process starting...');
 	console.error('[MCP_SERVER] Working directory:', process.cwd());
