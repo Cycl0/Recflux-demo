@@ -1,0 +1,21 @@
+{
+  "globalState": {
+    "apiProvider": "openrouter",
+    "modelId": "moonshotai/kimi-k2",
+    "openRouterModelId": "moonshotai/kimi-k2",
+    "openRouterModelInfo": { "supportsPromptCache": false, "inputPrice": 0.14, "outputPrice": 2.49  },
+    "autoApprovalSettings": {
+      "enabled": true,
+      "actions": {
+        "readFiles": true,
+        "editFiles": true,
+        "executeSafeCommands": true,
+        "useMcp": true
+      },
+      "maxRequests": 30
+    }
+  },
+  "settings": {
+    "cline.enableCheckpoints": false
+  }
+}

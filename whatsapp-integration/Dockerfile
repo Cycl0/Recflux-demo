@@ -10,6 +10,8 @@ RUN npm ci
 COPY tsconfig.json ./
 COPY src ./src
 COPY mcp-config.json ./
+COPY cline-config.json ./
+COPY cline-mcp-settings.json ./
 COPY template ./_template
 RUN npx tsc -p tsconfig.json
 
@@ -21,8 +23,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-# Install Claude Code CLI globally (provides `claude` binary)
-RUN npm i -g @anthropic-ai/claude-code@latest
+# Install cline CLI globally (provides `cline-cli` binary)
+RUN npm i -g @yaegaki/cline-cli
 
 # Install gosu and Chrome dependencies for Puppeteer
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -82,6 +84,11 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/mcp-config.json ./mcp-config.json
 COPY --from=builder /app/_template /_template
 
+# Create cline CLI config directories and copy configs
+RUN mkdir -p /home/appuser/.cline_cli/storage/settings
+COPY --from=builder /app/cline-config.json /home/appuser/.cline_cli/cline_cli_settings.json
+COPY --from=builder /app/cline-mcp-settings.json /home/appuser/.cline_cli/storage/settings/cline_mcp_settings.json
+
 # Add entrypoint to seed project directory if empty
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
@@ -101,7 +108,7 @@ ENV WHATSAPP_VERIFY_TOKEN=""
 ENV MCP_COMMAND="node"
 ENV MCP_ARGS="dist/mcp-server.js"
 ENV OPENAI_API_KEY=""
-ENV OPENAI_MODEL="gpt-4o-mini"
+ENV OPEN_ROUTER_API_KEY=""
 ENV SERVICES_HOST="localhost"
 ENV SERVICES_SCHEME="http"
 ENV PORT=3005

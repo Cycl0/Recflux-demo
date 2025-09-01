@@ -22,7 +22,7 @@
 .env.production.local
 *.jks*
 whatsapp-integration/project
-
+whatsapp-integration/cline-mcp-settings.json
 whatsapp-integration/mcp-config.json
 
 npm-debug.log*

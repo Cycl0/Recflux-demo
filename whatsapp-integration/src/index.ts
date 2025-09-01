@@ -77,10 +77,10 @@ const {
 	PUBLIC_BASE_URL
 } = process.env as Record<string, string | undefined>;
 
-const DEFAULT_CLAUDE_BIN = process.platform === 'win32' ? 'claude.ps1' : 'claude';
-const CLAUDE_BIN = (process.env.CLAUDE_BIN || process.env.CLAUDE_PATH || DEFAULT_CLAUDE_BIN) as string;
+const DEFAULT_CLINE_BIN = 'cline-cli';
+const CLINE_BIN = (process.env.CLINE_BIN || process.env.CLINE_PATH || DEFAULT_CLINE_BIN) as string;
 
-interface ClaudeResult {
+interface ClineResult {
 	code: number;
 	stderr: string;
 	stdout: string;
@@ -89,84 +89,49 @@ interface ClaudeResult {
 	timedOut?: boolean;
 }
 
-function runClaudeCLIInDir(cwd: string, userPrompt: string, systemAppend: string): Promise<ClaudeResult> {
+function runClineCLIInDir(cwd: string, userPrompt: string, systemAppend: string): Promise<ClineResult> {
 	return new Promise((resolve, reject) => {
 		// Resolve absolute project directory and prepare prompts
 		const absProjectDir = path.resolve(cwd);
 		const userArg = userPrompt;
-		const systemArg = systemAppend.replace(/"/g, '\'');
 		
-		// Non-interactive, strict MCP, expanded tools, and explicit directory access
-		const mcpConfigPath = path.resolve(__dirname, '../mcp-config.json');
-		console.log('[CLAUDE] MCP config path:', mcpConfigPath);
+		// Create cline config path
+		const clineConfigPath = path.resolve(__dirname, '../cline-config.json');
+		console.log('[CLINE] Config path:', clineConfigPath);
 		
-		// Check if MCP config file exists
+		// Check if cline config file exists
 		try {
-			const configExists = fsSync.existsSync(mcpConfigPath);
-			console.log('[CLAUDE] MCP config exists:', configExists);
+			const configExists = fsSync.existsSync(clineConfigPath);
+			console.log('[CLINE] Config exists:', configExists);
 			if (configExists) {
-				const configContent = fsSync.readFileSync(mcpConfigPath, 'utf8');
-				console.log('[CLAUDE] MCP config content:', configContent);
+				const configContent = fsSync.readFileSync(clineConfigPath, 'utf8');
+				console.log('[CLINE] Config content:', configContent);
 			}
 		} catch (e) {
-			console.error('[CLAUDE] Error checking MCP config:', e);
+			console.error('[CLINE] Error checking config:', e);
 		}
 		
+		// cline-cli uses 'task' command with automation flags
 		const baseArgs = [
-			'--print',
-			'--append-system-prompt', systemArg,
-			'--permission-mode', 'bypassPermissions',
-			'--output-format', 'text',
-			'--add-dir', absProjectDir,
-			'--mcp-config', mcpConfigPath,
+			'task',
+			'--full-auto',
+			'--auto-approve-mcp',
+			'--settings', '/home/appuser/.cline_cli/cline_cli_settings.json',
+			'--workspace', absProjectDir,
+			'--custom-instructions', systemAppend,
+			userArg
 		];
-		let cmd = CLAUDE_BIN;
+		let cmd = CLINE_BIN;
 		let args = baseArgs.slice();
 		let useShell = false;
 		
-		if (process.platform === 'win32') {
-			if (/\.ps1$/i.test(cmd)) {
-				// Resolve the full path for PowerShell scripts
-				let ps1Path = cmd;
-				if (!path.isAbsolute(cmd)) {
-					try {
-						const result = execSync(`powershell.exe -NoProfile -Command "Get-Command ${cmd} | Select-Object -ExpandProperty Source"`, { encoding: 'utf8' });
-						ps1Path = result.trim();
-						console.log('[CLAUDE] Resolved PowerShell path:', ps1Path);
-					} catch (e) {
-						console.warn('[CLAUDE] Could not resolve PowerShell script path, using original:', cmd);
-					}
-				}
-				args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1Path, ...baseArgs];
-				cmd = 'powershell.exe';
-			} else if (/\.(cmd|bat)$/i.test(cmd) || !/\.[a-z0-9]+$/i.test(cmd)) {
-				// For bare commands like 'claude', try to resolve to claude.ps1 first
-				if (cmd === 'claude') {
-					try {
-						const result = execSync(`powershell.exe -NoProfile -Command "Get-Command claude.ps1 | Select-Object -ExpandProperty Source"`, { encoding: 'utf8' });
-						const ps1Path = result.trim();
-						args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps1Path, ...baseArgs];
-						cmd = 'powershell.exe';
-						console.log('[CLAUDE] Resolved claude to PowerShell script:', ps1Path);
-					} catch (e) {
-						console.warn('[CLAUDE] Could not resolve claude to PowerShell script, using shell execution');
-						useShell = true;
-					}
-				} else {
-					useShell = true;
-				}
-			}
-		}
-		
 		const defaultKey = (process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN || process.env.CLAUDE_API_KEY) as string | undefined;
 		
-		console.log('[CLAUDE] starting', { cwd: absProjectDir, cmd });
-		console.log('[CLAUDE] Full command args:', args);
-		console.log('[CLAUDE] Complete command:', `${cmd} ${args.join(' ')}`);
-		console.log('[CLAUDE] System prompt length:', systemArg.length);
-		console.log('[CLAUDE] System prompt preview:', systemArg.substring(0, 200) + '...');
-		console.log('[CLAUDE] User prompt:', userArg);
-		console.log('[CLAUDE] API Key status:', defaultKey ? 'SET' : 'NOT SET');
+		console.log('[CLINE] starting', { cwd: absProjectDir, cmd });
+		console.log('[CLINE] Full command args:', args);
+		console.log('[CLINE] Complete command:', `${cmd} ${args.join(' ')}`);
+		console.log('[CLINE] User prompt:', userArg);
+		console.log('[CLINE] API Key status:', defaultKey ? 'SET' : 'NOT SET');
 
 		const childEnv = { 
 			...process.env, 
@@ -176,7 +141,7 @@ function runClaudeCLIInDir(cwd: string, userPrompt: string, systemAppend: string
 			CLONED_TEMPLATE_DIR: absProjectDir, 
 			puppeteer_API_KEY: process.env.puppeteer_API_KEY,
 			puppeteer_PROJECT_ID: process.env.puppeteer_PROJECT_ID,
-			// Ensure Claude CLI sees Anthropic-compatible creds (Moonshot Kimi K2, etc.)
+			// Ensure cline CLI sees Anthropic-compatible creds
 			ANTHROPIC_API_KEY: defaultKey,
 			CLAUDE_API_KEY: defaultKey,
 			ANTHROPIC_AUTH_TOKEN: defaultKey,
@@ -192,28 +157,23 @@ function runClaudeCLIInDir(cwd: string, userPrompt: string, systemAppend: string
 			env: childEnv 
 		});
 		
-		// Write the prompt to stdin and close it
-		if (child.stdin) {
-			console.log('[CLAUDE] Writing user prompt to stdin...');
-			child.stdin.write(userArg);
-			child.stdin.end();
-			console.log('[CLAUDE] Prompt sent, waiting for response...');
-		}
+		// cline-cli doesn't need stdin input like Claude Code
+		console.log('[CLINE] Task started, waiting for response...');
 		
 		let stderr = '';
 		let stdout = '';
 		const killTimer = setTimeout(() => {
-			console.log('[CLAUDE] Timeout reached after 10 minutes, extracting any deployment info');
+			console.log('[CLINE] Timeout reached after 20 minutes, extracting any deployment info');
 			clearTimeout(killTimer);
 			
 			// Try to extract deployment URLs from stdout before timing out
 			const deploymentMatch = stdout.match(/https:\/\/\w+\.csb\.app/);
 			const editorMatch = stdout.match(/https:\/\/codesandbox\.io\/s\/\w+/);
 			
-			console.log('[CLAUDE] Timeout - checking stdout for deployment info...');
-			console.log('[CLAUDE] Stdout length:', stdout.length);
-			console.log('[CLAUDE] Found deployment URL:', deploymentMatch?.[0] || 'none');
-			console.log('[CLAUDE] Found editor URL:', editorMatch?.[0] || 'none');
+			console.log('[CLINE] Timeout - checking stdout for deployment info...');
+			console.log('[CLINE] Stdout length:', stdout.length);
+			console.log('[CLINE] Found deployment URL:', deploymentMatch?.[0] || 'none');
+			console.log('[CLINE] Found editor URL:', editorMatch?.[0] || 'none');
 			
 			// Always resolve with what we have - let the caller handle the timeout
 			resolve({
@@ -224,7 +184,7 @@ function runClaudeCLIInDir(cwd: string, userPrompt: string, systemAppend: string
 				stderrLen: stderr.length,
 				timedOut: true
 			});
-		}, 600000);
+		}, 1200000);
 		
 		
 		
@@ -235,7 +195,7 @@ function runClaudeCLIInDir(cwd: string, userPrompt: string, systemAppend: string
 			const lines = t.split('\n');
 			lines.forEach((line: string) => {
 				if (line.trim().length) {
-					console.log('[CLAUDE][stdout]', line);
+					console.log('[CLINE][stdout]', line);
 				}
 			});
 		});
@@ -247,7 +207,7 @@ function runClaudeCLIInDir(cwd: string, userPrompt: string, systemAppend: string
 			const lines = t.split('\n');
 			lines.forEach((line: string) => {
 				if (line.trim().length) {
-					console.warn('[CLAUDE][stderr]', line);
+					console.warn('[CLINE][stderr]', line);
 				}
 			});
 		});
@@ -255,19 +215,19 @@ function runClaudeCLIInDir(cwd: string, userPrompt: string, systemAppend: string
 		child.on('error', (err: any) => {
 			clearTimeout(killTimer);
 			if (err && (err.code === 'ENOENT' || err.errno === -4058)) {
-				return reject(new Error(`Claude CLI not found (spawn ${cmd}). On Windows, set CLAUDE_BIN to full path of claude.cmd or ensure its folder is on PATH. Docs: https://docs.anthropic.com/en/docs/claude-code/sdk/sdk-headless`));
+				return reject(new Error(`cline CLI not found (spawn ${cmd}). Make sure cline-cli is installed: npm install -g @yaegaki/cline-cli`));
 			}
-			console.error('[CLAUDE] Process error:', err);
+			console.error('[CLINE] Process error:', err);
 			reject(err);
 		});
 		
 		child.on('close', (code) => {
 			clearTimeout(killTimer);
-			console.log('[CLAUDE] finished', { code, stdoutLen: stdout.length, stderrLen: stderr.length });
-			if (stderr) console.log('[CLAUDE] stderr content:', stderr.substring(0, 500));
-			if (stdout) console.log('[CLAUDE] stdout preview:', stdout.substring(0, 500));
+			console.log('[CLINE] finished', { code, stdoutLen: stdout.length, stderrLen: stderr.length });
+			if (stderr) console.log('[CLINE] stderr content:', stderr.substring(0, 500));
+			if (stdout) console.log('[CLINE] stdout preview:', stdout.substring(0, 500));
 			// Handle null exit code as success (happens when process is terminated gracefully)
-			if (code !== null && code !== 0) return reject(new Error(`Claude CLI exited with code ${code}: ${stderr}`));
+			if (code !== null && code !== 0) return reject(new Error(`cline CLI exited with code ${code}: ${stderr}`));
 			
 			// Return detailed result object
 			resolve({
@@ -481,7 +441,7 @@ if (!WHATSAPP_TOKEN || !WHATSAPP_PHONE_NUMBER_ID || !WHATSAPP_VERIFY_TOKEN) {
 }
 // Removed direct deploy helpers; MCP server handles deployment
 
-async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string): Promise<{ text: string; shouldSendImage?: boolean; imageData?: string; imageCaption?: string; claudeOutput?: string; deploymentUrl?: string; previewUrl?: string; editorUrl?: string }> {
+async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string): Promise<{ text: string; shouldSendImage?: boolean; imageData?: string; imageCaption?: string; clineOutput?: string; deploymentUrl?: string; previewUrl?: string; editorUrl?: string }> {
     const mappedUser = getUserByWhatsApp(whatsappFrom);
     let userId = 'dev-user';
     if (mappedUser?.email) {
@@ -1236,9 +1196,9 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 	`;
     try {
         const before = await hashDirectory(dir);
-        const result = await runClaudeCLIInDir(dir, nlPrompt, system);
+        const result = await runClineCLIInDir(dir, nlPrompt, system);
         const stdout = result.stdout;
-        console.log('[CLAUDE][NL PROMPT] result:', { 
+        console.log('[CLINE][NL PROMPT] result:', { 
             code: result.code, 
             stdoutLen: result.stdoutLen, 
             timedOut: (result as any).timedOut 
@@ -1262,7 +1222,7 @@ ${deployment.editorUrl}`;
                 
                 return { 
                     text: messageText,
-                    claudeOutput: stdout,
+                    clineOutput: stdout,
                     deploymentUrl: deployment.previewUrl,
                     previewUrl: deployment.previewUrl,
                     editorUrl: deployment.editorUrl,
@@ -1274,27 +1234,27 @@ ${deployment.editorUrl}`;
                 console.error('[DEPLOY] Error:', deployError);
                 return { 
                     text: '❌ Código gerado mas falha no deploy.',
-                    claudeOutput: stdout
+                    clineOutput: stdout
                 };
             }
         } else {
             return { 
                 text: '✅ Nenhuma alteração detectada. Não publicarei.',
-                claudeOutput: stdout
+                clineOutput: stdout
             };
         }
     } catch (e) {
-        console.error('[CLAUDE] Error or timeout:', e);
+        console.error('[CLINE] Error or timeout:', e);
         
         // Check if we have a timeout case with partial results
-        const claudeResult = e as ClaudeResult;
+        const clineResult = e as ClineResult;
         const isTimeout = (e instanceof Error && e.message.includes('timeout')) || 
-                         claudeResult.timedOut === true;
+                         clineResult.timedOut === true;
         
-        if (isTimeout && claudeResult.stdout) {
-            const stdout = claudeResult.stdout;
-            console.log('[CLAUDE] Timeout case - analyzing stdout for deployment URLs...');
-            console.log('[CLAUDE] Stdout length:', stdout.length);
+        if (isTimeout && clineResult.stdout) {
+            const stdout = clineResult.stdout;
+            console.log('[CLINE] Timeout case - analyzing stdout for deployment URLs...');
+            console.log('[CLINE] Stdout length:', stdout.length);
             
             // Look for deployment URLs in various formats from the logs
             const previewMatch = stdout.match(/\*\*[^*]*Acesse o site:\*\* (https:\/\/\w+\.csb\.app)/i) ||
@@ -1302,16 +1262,16 @@ ${deployment.editorUrl}`;
             const editorMatch = stdout.match(/\*\*[^*]*Editar código:\*\* (https:\/\/codesandbox\.io\/s\/\w+)/i) ||
                                stdout.match(/https:\/\/codesandbox\.io\/s\/\w+/);
             
-            console.log('[CLAUDE] Preview match:', previewMatch);
-            console.log('[CLAUDE] Editor match:', editorMatch);
+            console.log('[CLINE] Preview match:', previewMatch);
+            console.log('[CLINE] Editor match:', editorMatch);
             
             if (previewMatch || editorMatch) {
                 const deploymentUrl = previewMatch ? previewMatch[1] || previewMatch[0] : '';
                 const editorUrl = editorMatch ? editorMatch[1] || editorMatch[0] : '';
                 
-                console.log('[CLAUDE] Found deployment URLs after timeout:', { deploymentUrl, editorUrl });
+                console.log('[CLINE] Found deployment URLs after timeout:', { deploymentUrl, editorUrl });
                 return {
-                    text: `🚀 Site publicado! (Claude timeout mas deploy funcionou)
+                    text: `🚀 Site publicado! (Cline timeout mas deploy funcionou)
 
 📱 *Preview:*
 ${deploymentUrl}
@@ -1319,11 +1279,11 @@ ${deploymentUrl}
 ⚙️ *Code:*
 ${editorUrl}
 
-⚠️ *Nota:* Claude foi interrompido por timeout mas o deploy foi realizado com sucesso.`,
+⚠️ *Nota:* Cline foi interrompido por timeout mas o deploy foi realizado com sucesso.`,
                     deploymentUrl: deploymentUrl,
                     previewUrl: deploymentUrl,
                     editorUrl: editorUrl,
-                    claudeOutput: stdout.substring(0, 1000) + (stdout.length > 1000 ? '...' : '')
+                    clineOutput: stdout.substring(0, 1000) + (stdout.length > 1000 ? '...' : '')
                 };
             }
         }
@@ -1340,11 +1300,11 @@ ${editorUrl}
         }
         
         if (changed) {
-            console.log('[DEPLOY] Claude timed out but changes detected, attempting deploy anyway...');
+            console.log('[DEPLOY] Cline timed out but changes detected, attempting deploy anyway...');
             try {
                 const deployment = await deployToCodeSandbox(dir);
                 return { 
-                    text: `🚀 Site publicado! (Claude timeout mas deploy funcionou)
+                    text: `🚀 Site publicado! (Cline timeout mas deploy funcionou)
 
 📱 *Preview:*
 ${deployment.previewUrl}
@@ -1356,7 +1316,7 @@ ${deployment.editorUrl}`,
                     editorUrl: deployment.editorUrl
                 };
             } catch (deployError) {
-                return { text: '❌ Claude timeout e falha no deploy. Tente novamente.' };
+                return { text: '❌ Cline timeout e falha no deploy. Tente novamente.' };
             }
         }
         return { text: '❌ Erro ao gerar código. Tente um prompt mais simples.' };
@@ -1515,9 +1475,9 @@ app.post('/webhook', async (req: Request, res: Response) => {
 				const systemDeploy = `Você é um editor de código. Edite o projeto desta pasta conforme o pedido.`;
 				try {
 					const before = await hashDirectory(dir);
-					const result = await runClaudeCLIInDir(dir, reactCode, systemDeploy);
+					const result = await runClineCLIInDir(dir, reactCode, systemDeploy);
 					const stdout = result.stdout;
-					console.log('[CLAUDE][DEPLOY PROMPT] raw output length', stdout?.length || 0);
+					console.log('[CLINE][DEPLOY PROMPT] raw output length', stdout?.length || 0);
 					const after = await hashDirectory(dir);
 					let changed = false;
 					if (before.size !== after.size) changed = true;
@@ -1548,9 +1508,9 @@ ${deploymentResult.editorUrl}`;
 					
 					// Send messages in order: comment → link → screenshot
 					
-					// 1. Send Claude's commentary first if available
+					// 1. Send Cline's commentary first if available
 					if (stdout && stdout.trim().length > 0) {
-						console.log(`[WEBHOOK] Sending Claude commentary to ${from} for /deploy command`);
+						console.log(`[WEBHOOK] Sending Cline commentary to ${from} for /deploy command`);
 						await sendWhatsappText(from, stdout.trim());
 					}
 					
@@ -1636,15 +1596,15 @@ ${deploymentResult.editorUrl}`;
 				console.log('[WEBHOOK] Deployment result:', {
 					textLength: result.text.length,
 					hasDeploymentUrl: !!result.deploymentUrl,
-					hasClaudeOutput: !!result.claudeOutput
+					hasClineOutput: !!result.clineOutput
 				});
 				
 				// Send messages in order: comment → link → screenshot
 				
-				// 1. Send Claude's commentary first if available
-				if (result.claudeOutput && result.claudeOutput.trim().length > 0) {
-					console.log(`[WEBHOOK] Sending Claude commentary to ${from}`);
-					await sendWhatsappText(from, result.claudeOutput.trim());
+				// 1. Send Cline's commentary first if available
+				if (result.clineOutput && result.clineOutput.trim().length > 0) {
+					console.log(`[WEBHOOK] Sending Cline commentary to ${from}`);
+					await sendWhatsappText(from, result.clineOutput.trim());
 				}
 				
 				// 2. Send the link immediately when ready
