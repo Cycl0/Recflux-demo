@@ -1,8 +1,30 @@
 import { promises as fs } from 'fs';
 import path from 'path';
 import axios from 'axios';
+import { validateProject, generateErrorReport } from './validation.js';
 export async function deployToCodeSandbox(projectDir) {
     console.log(`[CODESANDBOX_DEPLOY] Starting deployment from ${projectDir}`);
+    // Pre-deployment validation
+    console.log(`[CODESANDBOX_DEPLOY] Running pre-deployment validation...`);
+    try {
+        const validation = await validateProject(projectDir);
+        if (!validation.isValid) {
+            const errorReport = generateErrorReport(validation);
+            console.error(`[CODESANDBOX_DEPLOY] ❌ Pre-deployment validation failed:`);
+            console.error(errorReport);
+            // For now, we'll warn but still allow deployment
+            // In a stricter environment, you could throw an error here
+            console.warn(`[CODESANDBOX_DEPLOY] ⚠️ Deploying despite validation errors. Fix these issues for better reliability:`);
+            console.warn(`[CODESANDBOX_DEPLOY] ${validation.errors.length} errors, ${validation.warnings.length} warnings`);
+        }
+        else {
+            console.log(`[CODESANDBOX_DEPLOY] ✅ Pre-deployment validation passed`);
+        }
+    }
+    catch (validationError) {
+        console.warn(`[CODESANDBOX_DEPLOY] ⚠️ Pre-deployment validation failed to run: ${validationError}`);
+        console.warn(`[CODESANDBOX_DEPLOY] Continuing with deployment...`);
+    }
     const allFiles = {};
     // Read package.json first
     let pkgContent = {};

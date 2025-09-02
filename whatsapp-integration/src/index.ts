@@ -16,6 +16,12 @@ import puppeteer from 'puppeteer';
 import { configureAuth, getUserByWhatsApp } from './auth.js';
 import { createClient } from '@supabase/supabase-js';
 import { deployToCodeSandbox } from './deploy-codesandbox.js';
+import { 
+    validateProject, 
+    autoFixProject, 
+    generateErrorReport, 
+    type ValidationResult 
+} from './validation.js';
 
 // ESM-compatible __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -87,6 +93,83 @@ interface ClineResult {
 	stdoutLen: number;
 	stderrLen: number;
 	timedOut?: boolean;
+}
+
+/**
+ * Enhanced version of runClineCLIInDir with automated validation and error fixing
+ */
+async function runClineCLIInDirWithValidation(cwd: string, userPrompt: string, systemAppend: string, maxRetries = 3): Promise<ClineResult & { validationResult?: ValidationResult }> {
+    let attempt = 0;
+    let lastValidation: ValidationResult | null = null;
+
+    while (attempt < maxRetries) {
+        attempt++;
+        console.log(`[ENHANCED_CLINE] Attempt ${attempt}/${maxRetries}`);
+        
+        // Run the original Cline CLI
+        const clineResult = await runClineCLIInDir(cwd, userPrompt, systemAppend);
+        
+        // If Cline CLI failed, return immediately
+        if (clineResult.code !== 0) {
+            console.log(`[ENHANCED_CLINE] Cline CLI failed with code ${clineResult.code}, skipping validation`);
+            return { ...clineResult, validationResult: lastValidation || undefined };
+        }
+        
+        console.log(`[ENHANCED_CLINE] Cline CLI completed, running validation...`);
+        
+        // Validate the generated code
+        const validation = await validateProject(cwd);
+        lastValidation = validation;
+        
+        if (validation.isValid) {
+            console.log(`[ENHANCED_CLINE] ✅ Validation passed on attempt ${attempt}`);
+            return { ...clineResult, validationResult: validation };
+        }
+        
+        console.log(`[ENHANCED_CLINE] ❌ Validation failed on attempt ${attempt}: ${validation.errors.length} errors found`);
+        
+        // Try auto-fixing
+        if (validation.canAutoFix) {
+            console.log(`[ENHANCED_CLINE] 🔧 Attempting auto-fix...`);
+            const fixResult = await autoFixProject(cwd);
+            
+            if (fixResult.success && fixResult.changedFiles.length > 0) {
+                console.log(`[ENHANCED_CLINE] ✅ Auto-fixed ${fixResult.changedFiles.length} files`);
+                
+                // Re-validate after auto-fix
+                const postFixValidation = await validateProject(cwd);
+                if (postFixValidation.isValid) {
+                    console.log(`[ENHANCED_CLINE] ✅ Validation passed after auto-fix`);
+                    return { ...clineResult, validationResult: postFixValidation };
+                } else if (postFixValidation.errors.length < validation.errors.length) {
+                    console.log(`[ENHANCED_CLINE] 🔧 Auto-fix reduced errors from ${validation.errors.length} to ${postFixValidation.errors.length}`);
+                    lastValidation = postFixValidation;
+                }
+            }
+        }
+        
+        // If we have remaining errors and attempts left, ask Cline to fix them
+        if (attempt < maxRetries) {
+            const errorReport = generateErrorReport(lastValidation || validation);
+            const fixPrompt = `The previous code generation resulted in errors. Please fix the following issues and ensure the code is valid:\n\n${errorReport}\n\nOriginal request: ${userPrompt}`;
+            
+            console.log(`[ENHANCED_CLINE] 🔄 Asking Cline to fix errors on attempt ${attempt + 1}...`);
+            userPrompt = fixPrompt; // Update prompt for next iteration
+        }
+    }
+    
+    // All attempts exhausted
+    console.log(`[ENHANCED_CLINE] ❌ All ${maxRetries} attempts exhausted. Final validation result:`);
+    console.log(generateErrorReport(lastValidation!));
+    
+    return { 
+        code: lastValidation?.isValid ? 0 : 1, 
+        stderr: generateErrorReport(lastValidation!), 
+        stdout: `Validation failed after ${maxRetries} attempts`, 
+        stdoutLen: 0, 
+        stderrLen: generateErrorReport(lastValidation!).length,
+        validationResult: lastValidation || undefined
+    };
 }
 
 function runClineCLIInDir(cwd: string, userPrompt: string, systemAppend: string): Promise<ClineResult> {
@@ -534,12 +617,13 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		❌ PROIBIDO PLACEHOLDER IMAGES: Nunca use "placeholder.jpg", "image1.jpg", URLs genéricas
 		❌ PROIBIDO BOTÕES SEM PADDING: Todo botão DEVE ter px-4 py-2 obrigatoriamente
 		❌ PROIBIDO CONTRASTE RUIM: NUNCA texto escuro em fundo escuro, NUNCA texto claro em fundo claro
-		❌ EXEMPLOS PROIBIDOS: text-white em bg-white, text-black em bg-black, text-gray-900 em bg-gray-800
+		❌ EXEMPLOS PROIBIDOS: text-white em bg-white, text-black em bg-black, text-white em btn-primary
 		✅ OBRIGATÓRIO: Use mcp__recflux__puppeteer_search para ícones/vetores/animações reais
 		✅ OBRIGATÓRIO: Use mcp__recflux__freepik_ai_image_generator para todas as imagens
 		✅ OBRIGATÓRIO: Substitua qualquer emoji encontrado por ícone real imediatamente
 		✅ OBRIGATÓRIO: Todo elemento button ou .btn DEVE incluir classes px-4 py-2
-		✅ OBRIGATÓRIO CONTRASTE: Fundos escuros = texto claro (text-white), Fundos claros = texto escuro (text-gray-900)
+		✅ OBRIGATÓRIO CONTRASTE: Fundos personalizados escuros = texto claro, Fundos claros = texto escuro
+		✅ OBRIGATÓRIO BOTÕES DAISYUI: Deixe btn-primary/btn-secondary sem cores de texto explícitas
 
 		FLUXO DE TRABALHO:
 		1) read_file em src/App.jsx e src/index.css
@@ -568,13 +652,15 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		3) Ajuste a UI no src/App.jsx com DaisyUI, aplicando as cores da paleta gerada
 		   REGRAS CRÍTICAS:
 		   - TODO botão DaisyUI deve incluir px-4 py-2 (exemplo: "btn btn-primary px-4 py-2")
-		   - SEMPRE verifique contraste: fundo claro = texto escuro, fundo escuro = texto claro
-		   - NUNCA use text-white em bg-white ou text-black em bg-black
+		   - DEIXE O DAISYUI CONTROLAR AS CORES DOS BOTÕES: NÃO adicione text-white em botões DaisyUI
+		   - SÓ use cores de texto explícitas quando tiver fundo explícito (exemplo: bg-blue-600 text-white)
+		   - NUNCA use text-white em btn-primary, btn-secondary, btn-accent - DaisyUI já cuida das cores
 		4) EXPLORAÇÃO COMPLETA DE COMPONENTES DaisyUI:
 		   a) Use mcp__recflux__web_crawler com url="https://daisyui.com/components/", deepCrawl=true, deepCrawlStrategy='bfs', maxPages=8
 		   b) Analise TODOS os componentes descobertos (Actions, Data Display, Data Input, Feedback, Layout, Navigation, etc.)
 		   c) Escolha os componentes mais apropriados para o tema do site solicitado
 		   d) Crie arquivos organizados nas pastas components/, hooks/, e utils/ baseado nos componentes encontrados
+		5) TOME INSPIRAC
 		5) ADICIONE VÍDEOS PROFISSIONAIS: Use mcp__recflux__puppeteer_search com searchType='videos' para encontrar vídeos de background relevantes ao tema para o hero
 		6) ADICIONE CONTEÚDO VISUAL PROFISSIONAL - Execute estes passos:
 		   a) ANIMAÇÕES: Use mcp__recflux__puppeteer_search com searchType='animations' para encontrar animações relevantes ao tema
@@ -612,25 +698,28 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		    b) VERIFICAÇÕES ESPECÍFICAS:
 		       - Se bg-white/bg-gray-100/bg-base-100 → DEVE usar text-gray-900/text-black
 		       - Se bg-black/bg-gray-900/bg-primary (escuro) → DEVE usar text-white/text-gray-100
-		       - Se botão claro (btn-ghost, bg-white) → DEVE usar text-gray-900
-		       - Se botão escuro (btn-primary, bg-black) → DEVE usar text-white
+		       - Se bg-custom claro (bg-white, bg-gray-100) → adicione text-gray-900/text-black
+		       - Se bg-custom escuro (bg-black, bg-gray-900, bg-blue-600) → adicione text-white
+		       - Se btn-daisyui (btn-primary, btn-secondary) → NÃO adicione cores de texto
 		    c) CORREÇÃO IMEDIATA: Substitua TODAS as combinações ruins encontradas
 		    d) EXEMPLOS DE CORREÇÃO:
 		       - ❌ "bg-white text-white" → ✅ "bg-white text-gray-900"
 		       - ❌ "bg-black text-black" → ✅ "bg-black text-white"
-		       - ❌ "btn-primary text-gray-900" → ✅ "btn-primary text-white"
+		       - ❌ "btn-primary text-white" → ✅ "btn-primary" (remover text-white)
+		       - ❌ "btn btn-primary text-gray-900" → ✅ "btn btn-primary" (remover cor de texto)
 		    
 		    FASE 2 - BOTÕES:
 		    e) INSPEÇÃO: Encontre TODOS os elementos button, .btn, .btn-primary, .btn-secondary no código
-		    f) CORREÇÃO: Cada botão encontrado DEVE ter px-4 py-2 (exemplo: "btn btn-primary px-4 py-2 text-white")
-		    g) VALIDAÇÃO FINAL: Confirme que não há botão sem padding adequado e sem contraste adequado
+		    f) CORREÇÃO: Cada botão encontrado DEVE ter px-4 py-2 (exemplo: "btn btn-primary px-4 py-2")
+		    g) REMOVER CORES DE TEXTO: Se encontrar btn-primary/btn-secondary com text-white/text-*, REMOVA a cor de texto
+		    h) VALIDAÇÃO FINAL: Confirme que não há botão sem padding e que botões DaisyUI não têm cores de texto explícitas
 		13) Atualize o package.json com as dependências necessárias
 
 		Se solicitado, publicar com mcp__recflux__codesandbox_deploy
 	`;
     try {
         const before = await hashDirectory(dir);
-        const result = await runClineCLIInDir(dir, nlPrompt, system);
+        const result = await runClineCLIInDirWithValidation(dir, nlPrompt, system);
         const stdout = result.stdout;
         console.log('[CLINE][NL PROMPT] result:', { 
             code: result.code, 
@@ -909,7 +998,7 @@ app.post('/webhook', async (req: Request, res: Response) => {
 				const systemDeploy = `Você é um editor de código. Edite o projeto desta pasta conforme o pedido.`;
 				try {
 					const before = await hashDirectory(dir);
-					const result = await runClineCLIInDir(dir, reactCode, systemDeploy);
+					const result = await runClineCLIInDirWithValidation(dir, reactCode, systemDeploy);
 					const stdout = result.stdout;
 					console.log('[CLINE][DEPLOY PROMPT] raw output length', stdout?.length || 0);
 					const after = await hashDirectory(dir);
