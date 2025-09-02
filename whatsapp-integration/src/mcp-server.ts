@@ -178,7 +178,7 @@ server.registerTool(
 		description: 'Search for various types of content using PUPPETEER',
 		inputSchema: {
 			searchTerm: z.string().describe('The search term to look for. Use only a single term in english to increase the chances of finding relevant content.'),
-			searchType: z.enum(['images', 'videos', 'icons', 'vectors', 'vfx', 'music', 'fonts', 'animations']).default('images').describe('The type of content to search for')
+			searchType: z.enum(['videos', 'icons', 'vectors', 'vfx', 'music', 'animations']).default('videos').describe('The type of content to search for')
 		}
 	},
 	async (args: any) => {
@@ -195,7 +195,7 @@ server.registerTool(
 		// Using Puppeteer (with stealth + proxy rotation) for all content extraction
 		
 		const searchTerm = args.searchTerm || '';
-		const searchType = args.searchType || 'images';
+		const searchType = args.searchType || 'videos';
 		
 		logMessage('[MCP_PUPPETEER] Parsed searchTerm: ' + searchTerm);
 		logMessage('[MCP_PUPPETEER] Parsed searchType: ' + searchType);
@@ -209,9 +209,6 @@ server.registerTool(
 			case 'videos':
 				url = `https://www.pexels.com/search/videos/${encodeURIComponent(searchTerm)}`;
 				break;
-			case 'images':
-				url = `https://unsplash.com/s/photos/${encodeURIComponent(searchTerm)}`;
-				break;
 			case 'animations':
 				url = `https://creattie.com/all-items/${encodeURIComponent(searchTerm)}?type=all&orderBy=order&page=1`;
 				break;
@@ -219,7 +216,7 @@ server.registerTool(
 				url = `https://thenounproject.com/search/icons/?q=${encodeURIComponent(searchTerm)}`;
 				break;
 			case 'vectors':
-				url = `https://www.freepik.com/search?format=search&last_filter=query&last_value=${encodeURIComponent(searchTerm)}&query=${encodeURIComponent(searchTerm)}`;
+				url = `https://www.freepik.com/search?format=search&last_filter=type&last_value=vector&query=${encodeURIComponent(searchTerm)}&type=vector`;
 				break;
 			case 'vfx':
 				url = `https://www.productioncrate.com/search/${encodeURIComponent(searchTerm)}?main_category=vfx`;
@@ -521,46 +518,6 @@ server.registerTool(
 							return animations;
 						});
 						
-					} else if (searchType === 'images') {
-						logMessage('[MCP_PUPPETEER] Extracting image content...');
-						
-						// Wait for image elements to load
-						try {
-							await page.waitForSelector('img, a[href*=".jpg"], a[href*=".png"], .photo', { timeout: 20000 });
-						} catch (e) {
-							logMessage('[MCP_PUPPETEER] Timeout waiting for image selectors, continuing anyway...');
-						}
-						
-						// Extract image content
-						contentData = await page.evaluate(() => {
-							const images: any[] = [];
-							
-							console.log('[DEBUG] Current URL:', (globalThis as any).location.href);
-							console.log('[DEBUG] Page title:', (globalThis as any).document.title);
-							
-							// Find all img elements with high-quality sources
-							const imgElements = (globalThis as any).document.querySelectorAll('img[src*="images"], img[src*="photo"], img[data-src]');
-							console.log(`[DEBUG] Found ${imgElements.length} image elements`);
-							
-							Array.from(imgElements).slice(0, 10).forEach((img: any, index: number) => {
-								const src = img.src || img.getAttribute('data-src') || img.getAttribute('data-lazy');
-								const alt = img.alt || img.getAttribute('alt');
-								
-								if (src && !src.includes('placeholder') && !src.includes('loading')) {
-									console.log(`[DEBUG] Image ${index + 1}: ${src}`);
-									images.push({
-										title: alt || `Image ${index + 1}`,
-										imageUrl: src,
-										thumbnailUrl: src,
-										source: 'extracted-image',
-										elementIndex: index
-									});
-								}
-							});
-							
-							return images;
-						});
-						
 					} else if (searchType === 'icons') {
 						logMessage('[MCP_PUPPETEER] Extracting icon content...');
 						
@@ -568,30 +525,31 @@ server.registerTool(
 						contentData = await page.evaluate(() => {
 							const icons: any[] = [];
 							
-							// Look for SVG elements, icon links, or downloadable assets
-							const svgElements = (globalThis as any).document.querySelectorAll('svg, a[href*=".svg"], [data-icon], .icon');
-							const downloadLinks = (globalThis as any).document.querySelectorAll('a[href*="download"], a[download]');
+							// Look for various icon selectors on Noun Project
+							const iconElements = (globalThis as any).document.querySelectorAll('img[src*="icon"], img[src*="svg"], .icon img, [data-testid*="icon"] img, .search-result img');
+							console.log(`[DEBUG] Found ${iconElements.length} potential icon elements`);
 							
-							console.log(`[DEBUG] Found ${svgElements.length} SVG/icon elements, ${downloadLinks.length} download links`);
-							
-							Array.from(downloadLinks).slice(0, 10).forEach((link: any, index: number) => {
-								const href = link.href || link.getAttribute('href');
-								const text = link.textContent || link.innerText;
+							Array.from(iconElements).slice(0, 15).forEach((element: any, index: number) => {
+								const src = element.src || element.getAttribute('src');
+								const alt = element.alt || element.getAttribute('alt');
+								const title = alt || `Icon ${index + 1}`;
 								
-								if (href && (href.includes('.svg') || href.includes('icon') || href.includes('download'))) {
-									console.log(`[DEBUG] Icon link ${index + 1}: ${href}`);
+								if (src && !src.includes('placeholder') && !src.includes('loading')) {
+									console.log(`[DEBUG] Icon ${index + 1}: ${title} - ${src}`);
 									icons.push({
-										title: text || `Icon ${index + 1}`,
-										iconUrl: href,
-										downloadUrl: href,
-										source: 'extracted-icon',
+										title: title,
+										imageUrl: src,
+										iconUrl: src,
+										description: `Icon: ${title}`,
+										source: 'noun-project-extracted',
 										elementIndex: index
 									});
 								}
 							});
 							
+							console.log(`[DEBUG] Extracted ${icons.length} icon elements`);
 							return icons;
-						});
+						}, searchTerm);
 						
 					} else if (searchType === 'vectors') {
 						logMessage('[MCP_PUPPETEER] Extracting vector content from Freepik...');
@@ -601,28 +559,33 @@ server.registerTool(
 							const vectors: any[] = [];
 							
 							// Look for Freepik-specific vector elements
-							const vectorElements = (globalThis as any).document.querySelectorAll('a[href*="/vector/"], .resource, [data-resource]');
-							const downloadLinks = (globalThis as any).document.querySelectorAll('a[href*="download"], .download-btn');
+							const vectorElements = (globalThis as any).document.querySelectorAll('img[src*="freepik"], img[src*="vector"], .resource img, [data-testid*="resource"] img, .figure img');
+							console.log(`[DEBUG] Found ${vectorElements.length} potential vector elements`);
 							
-							console.log(`[DEBUG] Found ${vectorElements.length} vector elements, ${downloadLinks.length} download links`);
-							
-							Array.from(vectorElements).slice(0, 10).forEach((element: any, index: number) => {
-								const href = element.href || element.getAttribute('href');
-								const img = element.querySelector('img');
-								const title = element.getAttribute('title') || element.getAttribute('alt') || img?.alt;
+							Array.from(vectorElements).slice(0, 15).forEach((element: any, index: number) => {
+								const src = element.src || element.getAttribute('src');
+								const alt = element.alt || element.getAttribute('alt');
+								const title = alt || `Vector ${index + 1}`;
 								
-								if (href) {
-									console.log(`[DEBUG] Vector ${index + 1}: ${href}`);
+								// Get parent link if available
+								const parentLink = element.closest('a');
+								const linkUrl = parentLink ? parentLink.href : null;
+								
+								if (src && !src.includes('placeholder') && !src.includes('loading')) {
+									console.log(`[DEBUG] Vector ${index + 1}: ${title} - ${src}`);
 									vectors.push({
-										title: title || `Vector ${index + 1}`,
-										vectorUrl: href,
-										thumbnailUrl: img?.src,
-										source: 'freepik-vector',
+										title: title,
+										imageUrl: src,
+										vectorUrl: src,
+										pageUrl: linkUrl,
+										description: `Vector: ${title}`,
+										source: 'freepik-extracted',
 										elementIndex: index
 									});
 								}
 							});
 							
+							console.log(`[DEBUG] Extracted ${vectors.length} vector elements`);
 							return vectors;
 						});
 						
@@ -634,61 +597,119 @@ server.registerTool(
 							const vfxItems: any[] = [];
 							
 							// Look for ProductionCrate-specific VFX elements
-							const vfxElements = (globalThis as any).document.querySelectorAll('.product-item, .asset-item, a[href*="/vfx/"], a[href*="/effect/"]');
-							const downloadLinks = (globalThis as any).document.querySelectorAll('a[href*="download"], .download');
+							const vfxElements = (globalThis as any).document.querySelectorAll('video, .vfx-item video, .product video, [data-video-src], img[src*="vfx"], img[src*="effect"]');
+							console.log(`[DEBUG] Found ${vfxElements.length} potential VFX elements`);
 							
-							console.log(`[DEBUG] Found ${vfxElements.length} VFX elements, ${downloadLinks.length} download links`);
-							
-							Array.from(vfxElements).slice(0, 10).forEach((element: any, index: number) => {
-								const href = element.href || element.getAttribute('href');
-								const img = element.querySelector('img');
-								const title = element.querySelector('.title')?.textContent || img?.alt;
+							Array.from(vfxElements).slice(0, 15).forEach((element: any, index: number) => {
+								let videoSrc = null;
+								let title = `VFX ${index + 1}`;
+								let thumbnailSrc = null;
 								
-								if (href) {
-									console.log(`[DEBUG] VFX ${index + 1}: ${href}`);
+								if (element.tagName === 'VIDEO') {
+									videoSrc = element.src || element.getAttribute('src');
+									// Check for source elements
+									if (!videoSrc) {
+										const source = element.querySelector('source');
+										videoSrc = source ? source.src : null;
+									}
+									thumbnailSrc = element.poster;
+								} else if (element.tagName === 'IMG') {
+									thumbnailSrc = element.src;
+									// Try to find associated video
+									const videoElement = element.closest('.product, .vfx-item')?.querySelector('video');
+									videoSrc = videoElement ? (videoElement.src || videoElement.querySelector('source')?.src) : null;
+								} else {
+									// Element with data-video-src
+									videoSrc = element.getAttribute('data-video-src');
+								}
+								
+								// Try to get title from alt, data attributes, or parent elements
+								title = element.alt || element.getAttribute('data-title') || 
+								       element.closest('.product, .vfx-item')?.querySelector('.title, h3, h4')?.textContent?.trim() || title;
+								
+								if (videoSrc || thumbnailSrc) {
+									console.log(`[DEBUG] VFX ${index + 1}: ${title} - Video: ${videoSrc}, Thumbnail: ${thumbnailSrc}`);
 									vfxItems.push({
-										title: title || `VFX ${index + 1}`,
-										vfxUrl: href,
-										thumbnailUrl: img?.src,
-										source: 'productioncrate-vfx',
+										title: title,
+										videoUrl: videoSrc,
+										thumbnailUrl: thumbnailSrc,
+										description: `VFX: ${title}`,
+										source: 'productioncrate-extracted',
 										elementIndex: index
 									});
 								}
 							});
 							
+							console.log(`[DEBUG] Extracted ${vfxItems.length} VFX elements`);
 							return vfxItems;
 						});
 						
 					} else if (searchType === 'music') {
 						logMessage('[MCP_PUPPETEER] Extracting music content from Bensound...');
 						
-						// Extract music content from Bensound
+						// Extract music content from Bensound using the correct selectors
 						contentData = await page.evaluate(() => {
 							const musicItems: any[] = [];
 							
-							// Look for Bensound-specific music elements
-							const musicElements = (globalThis as any).document.querySelectorAll('.track, .song, a[href*="/music/"], a[href*=".mp3"]');
-							const downloadLinks = (globalThis as any).document.querySelectorAll('a[href*="download"], .download-btn');
+							// Find all music blocks (bloc_produit or bloc_produit1)
+							const musicBlocks = (globalThis as any).document.querySelectorAll('.bloc_produit, .bloc_produit1');
+							console.log(`[DEBUG] Found ${musicBlocks.length} music blocks on Bensound`);
 							
-							console.log(`[DEBUG] Found ${musicElements.length} music elements, ${downloadLinks.length} download links`);
-							
-							Array.from(musicElements).slice(0, 10).forEach((element: any, index: number) => {
-								const href = element.href || element.getAttribute('href');
-								const title = element.querySelector('.title')?.textContent || element.textContent;
-								const duration = element.querySelector('.duration')?.textContent;
-								
-								if (href) {
-									console.log(`[DEBUG] Music ${index + 1}: ${href}`);
-									musicItems.push({
-										title: title || `Music ${index + 1}`,
-										musicUrl: href,
-										duration: duration,
-										source: 'bensound-music',
-										elementIndex: index
-									});
+							Array.from(musicBlocks).forEach((block: any, index: number) => {
+								try {
+									// Extract title from .titre p
+									const titleElement = block.querySelector('.titre p');
+									const title = titleElement ? titleElement.textContent.trim() : `Music ${index + 1}`;
+									
+									// Extract audio URL from audio src attribute
+									const audioElement = block.querySelector('audio');
+									const audioSrc = audioElement ? audioElement.getAttribute('src') : null;
+									
+									// Extract duration from .totime
+									const durationElement = block.querySelector('.totime');
+									const duration = durationElement ? durationElement.textContent.trim() : '';
+									
+									// Extract description from .description
+									const descriptionElement = block.querySelector('.description');
+									const description = descriptionElement ? descriptionElement.textContent.trim() : '';
+									
+									// Extract image URL from .img_mini img
+									const imageElement = block.querySelector('.img_mini img');
+									const imageSrc = imageElement ? imageElement.getAttribute('src') : null;
+									
+									// Check if available for download
+									const downloadButton = block.querySelector('.bouton_download');
+									const forDownload = !!downloadButton;
+									
+									// Check if available for purchase
+									const purchaseButton = block.querySelector('.bouton_purchase');
+									const forPurchase = !!purchaseButton;
+									
+									if (audioSrc && title) {
+										// Construct full URLs (Bensound uses relative paths)
+										const fullAudioUrl = audioSrc.startsWith('http') ? audioSrc : 'https://www.bensound.com/' + audioSrc;
+										const fullImageUrl = imageSrc ? (imageSrc.startsWith('http') ? imageSrc : 'https://www.bensound.com/' + imageSrc) : null;
+										
+										console.log(`[DEBUG] Music ${index + 1}: ${title}, Duration: ${duration}, Audio: ${fullAudioUrl}`);
+										
+										musicItems.push({
+											title: title,
+											audioUrl: fullAudioUrl,
+											duration: duration,
+											description: description,
+											imageUrl: fullImageUrl,
+											forDownload: forDownload,
+											forPurchase: forPurchase,
+											source: 'bensound-extracted',
+											elementIndex: index
+										});
+									}
+								} catch (e) {
+									console.log(`[DEBUG] Error processing music block ${index}: ${e}`);
 								}
 							});
 							
+							console.log(`[DEBUG] Extracted ${musicItems.length} music items from Bensound`);
 							return musicItems;
 						});
 						
@@ -748,12 +769,400 @@ server.registerTool(
 	}
 );
 
+// Freepik AI Image Generation Tool
+server.registerTool(
+	'freepik_ai_image_generator',
+	{
+		description: 'Generate images using Freepik AI text-to-image with flux-dev model',
+		inputSchema: {
+			prompt: z.string().describe('The text prompt to generate an image from'),
+			htmlContext: z.string().describe('REQUIRED: The HTML/component structure where this image will be placed (for contextual analysis). Must include titles, descriptions, and surrounding context.'),
+			componentContext: z.string().optional().describe('Description of the component/use case where this image will be used (e.g., "hero section for a travel website", "card image for a restaurant app")'),
+			imageRole: z.string().optional().describe('Specific role of the image (e.g., "background", "icon", "illustration", "photo", "avatar")'),
+			aspect_ratio: z.enum(['square_1_1', 'classic_4_3', 'traditional_3_4', 'widescreen_16_9', 'social_story_9_16', 'standard_3_2', 'portrait_2_3', 'horizontal_2_1', 'vertical_1_2']).default('square_1_1').optional().describe('Aspect ratio of the generated image'),
+			num_images: z.number().min(1).max(4).default(1).optional().describe('Number of images to generate (1-4)'),
+			seed: z.number().min(1).max(4294967295).optional().describe('Seed for reproducible generation')
+		}
+	},
+	async (args: any) => {
+		const logMessage = (msg: string) => {
+			console.error(msg);
+			fs.appendFile('mcp-freepik-ai-image-generator.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => {});
+		};
+		logMessage('[FREEPIK_AI] *** TOOL CALLED! ***');
+		logMessage('[FREEPIK_AI] Called with args: ' + JSON.stringify(args));
+		logMessage('[FREEPIK_AI] Args keys: ' + JSON.stringify(Object.keys(args || {})));
+		try {
+			const freepikApiKey = process.env.FREEPIK_API_KEY;
+
+			if (!freepikApiKey) {
+				return { content: [{ type: 'text', text: 'Error: Freepik API key not configured' }] } as const;
+			}
+
+			const prompt = args.prompt || '';
+			const htmlContext = args.htmlContext || '';
+			const componentContext = args.componentContext || '';
+			const imageRole = args.imageRole || '';
+			const aspectRatio = args.aspect_ratio || 'square_1_1';
+			const numImages = args.num_images || 1;
+			const seed = args.seed || Math.floor(Math.random() * 4294967295);
+			
+			if (!prompt) {
+				return { content: [{ type: 'text', text: 'Error: No prompt provided' }] } as const;
+			}
+			
+			if (!htmlContext) {
+				return { content: [{ type: 'text', text: 'Error: HTML context is required for contextual image generation. Please provide the HTML/component structure where this image will be placed.' }] } as const;
+			}
+
+			// Simple prompt - let the system prompt handle the contextual analysis
+			const contextualPrompt = prompt;
+			
+			logMessage(`[FREEPIK_AI] Original prompt: "${prompt}"`);
+			logMessage(`[FREEPIK_AI] HTML context provided: ${!!htmlContext}`);
+			logMessage(`[FREEPIK_AI] HTML context length: ${htmlContext.length}`);
+			logMessage(`[FREEPIK_AI] HTML context preview: ${htmlContext.substring(0, 300)}...`);
+			logMessage(`[FREEPIK_AI] Component context: "${componentContext}"`);
+			logMessage(`[FREEPIK_AI] Image role: "${imageRole}"`);
+			logMessage(`[FREEPIK_AI] Aspect ratio: "${aspectRatio}"`);
+
+			console.error(`[FREEPIK_AI] Generating image with contextual prompt: "${contextualPrompt}"`);
+
+			const requestBody = {
+				prompt: contextualPrompt,
+				aspect_ratio: aspectRatio,
+				seed: seed
+			};
+
+			logMessage(`[FREEPIK_AI] Request body: ${JSON.stringify(requestBody)}`);
+
+			const response = await axios.post(
+				'https://api.freepik.com/v1/ai/text-to-image/flux-dev',
+				requestBody,
+				{
+					headers: {
+						'x-freepik-api-key': freepikApiKey,
+						'Content-Type': 'application/json'
+					}
+				}
+			);
+
+			logMessage('[FREEPIK_AI] API returned status: ' + response.status);
+			if (response.status === 200 || response.status === 202) {
+				logMessage('[FREEPIK_AI] Image generation request submitted successfully');
+				logMessage(`[FREEPIK_AI] Response data: ${JSON.stringify(response.data)}`);
+				
+				// Freepik returns a task_id for async processing
+				const taskId = response.data?.data?.task_id;
+				if (!taskId) {
+					return { content: [{ type: 'text', text: 'Error: No task ID returned from Freepik API' }] } as const;
+				}
+				
+				logMessage(`[FREEPIK_AI] Task ID: ${taskId}`);
+				
+				// Poll for job completion (simplified approach - in production you'd use webhooks)
+				let attempts = 0;
+				const maxAttempts = 30; // 30 attempts with 2 second intervals = 1 minute max wait
+				let imageUrl = null;
+				let allGeneratedImages = [];
+				
+				while (attempts < maxAttempts && !imageUrl) {
+					attempts++;
+					logMessage(`[FREEPIK_AI] Polling attempt ${attempts}/${maxAttempts}`);
+					
+					await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+					
+					try {
+						const statusResponse = await axios.get(
+							`https://api.freepik.com/v1/ai/text-to-image/flux-dev/${taskId}`,
+							{
+								headers: {
+									'x-freepik-api-key': freepikApiKey
+								}
+							}
+						);
+						
+						logMessage(`[FREEPIK_AI] Status check ${attempts}: ${statusResponse.data?.data?.status}`);
+						logMessage(`[FREEPIK_AI] Full status response: ${JSON.stringify(statusResponse.data)}`);
+						
+						if (statusResponse.data?.data?.status === 'COMPLETED' && statusResponse.data?.data?.generated?.length > 0) {
+							allGeneratedImages = statusResponse.data.data.generated;
+							imageUrl = allGeneratedImages[0];
+							logMessage(`[FREEPIK_AI] Generated ${allGeneratedImages.length} images`);
+							logMessage(`[FREEPIK_AI] All image URLs: ${JSON.stringify(allGeneratedImages)}`);
+							logMessage(`[FREEPIK_AI] First image URL: ${imageUrl}`);
+							break;
+						} else if (statusResponse.data?.data?.status === 'FAILED') {
+							logMessage(`[FREEPIK_AI] Image generation failed: ${statusResponse.data?.data?.error || 'Unknown error'}`);
+							return { content: [{ type: 'text', text: `Image generation failed: ${statusResponse.data?.data?.error || 'Unknown error'}` }] } as const;
+						}
+					} catch (statusError: any) {
+						logMessage(`[FREEPIK_AI] Status check error: ${statusError?.message || statusError}`);
+					}
+				}
+				
+				if (!imageUrl) {
+					return { content: [{ type: 'text', text: 'Error: Image generation timed out or failed' }] } as const;
+				}
+				
+				// Return the direct Freepik URL - no need for additional upload
+				const timestamp = Date.now();
+				const sanitizedPrompt = prompt.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 50);
+				const filename = `freepik_${sanitizedPrompt}_${timestamp}.jpg`;
+				
+				logMessage(`[FREEPIK_AI] Image generation completed successfully!`);
+				logMessage(`[FREEPIK_AI] Direct image URL: ${imageUrl}`);
+				
+				return { 
+					content: [{ 
+						type: 'text', 
+						text: JSON.stringify({
+							success: true,
+							imageUrl: imageUrl,
+							allImages: allGeneratedImages,
+							totalImages: allGeneratedImages.length,
+							filename: filename,
+							format: 'jpeg',
+							model: 'freepik-flux-dev',
+							hosting: 'Freepik CDN',
+							aspectRatio: aspectRatio,
+							seed: seed,
+							taskId: taskId
+						}, null, 2)
+					}] 
+				} as const;
+			} else {
+				console.error('[FREEPIK_AI] API returned error:', response.status, response.statusText);
+				return { content: [{ type: 'text', text: `Error: Freepik API returned ${response.status}` }] } as const;
+			}
+
+		} catch (error: any) {
+			console.error('[FREEPIK_AI] Error generating image:', error?.message || error);
+			logMessage(`[FREEPIK_AI] Full error details: ${JSON.stringify({
+				message: error?.message,
+				status: error?.response?.status,
+				statusText: error?.response?.statusText,
+				data: error?.response?.data
+			})}`);
+			return { content: [{ type: 'text', text: `Image generation failed: ${error?.message || error}` }] } as const;
+		}
+	}
+);
+
+// Web Crawler Tool using native Crawl4AI CLI
+server.registerTool(
+	'web_crawler',
+	{
+		description: 'Crawl and extract content from web pages using native Crawl4AI CLI for advanced text, markdown, links, images, and structured data extraction with deep crawling support',
+		inputSchema: {
+			url: z.string().url().describe('The URL to crawl'),
+			outputFormat: z.enum(['markdown', 'cleaned_html', 'raw_html', 'json']).default('markdown').optional().describe('Output format for extracted content'),
+			deepCrawl: z.boolean().default(false).optional().describe('Enable deep crawling to follow links'),
+			deepCrawlStrategy: z.enum(['bfs', 'dfs']).default('bfs').optional().describe('Deep crawl strategy: breadth-first or depth-first'),
+			maxPages: z.number().min(1).max(50).default(5).optional().describe('Maximum pages to crawl in deep crawl mode'),
+			cssSelector: z.string().optional().describe('CSS selector to extract specific elements'),
+			extractionQuery: z.string().optional().describe('Specific question/query for LLM-based extraction (e.g., "Extract all product prices")'),
+			userAgent: z.string().optional().describe('Custom user agent string'),
+			timeout: z.number().min(10).max(120).default(30).optional().describe('Timeout in seconds')
+		}
+	},
+	async (args: any) => {
+		const logMessage = (msg: string) => {
+			console.error(msg);
+			fs.appendFile('mcp-crawl4ai-cli.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => {});
+		};
+
+		logMessage('[CRAWL4AI_CLI] *** TOOL CALLED! ***');
+		logMessage('[CRAWL4AI_CLI] Called with args: ' + JSON.stringify(args));
+
+		try {
+			const {
+				url,
+				outputFormat = 'markdown',
+				deepCrawl = false,
+				deepCrawlStrategy = 'bfs',
+				maxPages = 5,
+				cssSelector,
+				extractionQuery,
+				userAgent,
+				timeout = 30
+			} = args;
+
+			logMessage(`[CRAWL4AI_CLI] Starting Crawl4AI CLI crawl for: ${url}`);
+
+			// Build crwl command arguments - note: crwl requires 'crawl' subcommand
+			const crwlArgs = ['crawl', url];
+			
+			// Output format
+			crwlArgs.push('-o', outputFormat);
+			
+			// Deep crawl options
+			if (deepCrawl) {
+				crwlArgs.push('--deep-crawl', deepCrawlStrategy);
+				crwlArgs.push('--max-pages', maxPages.toString());
+			}
+			
+			// Skip LLM extraction to avoid external API calls and timeouts
+			// if (extractionQuery) {
+			//	crwlArgs.push('-q', extractionQuery);
+			// }
+			
+			// CSS selector would need to be handled via crawler config, skip for now
+			// Browser user agent can be set via browser config if needed
+			
+			// Bypass cache for fresh results
+			crwlArgs.push('--bypass-cache');
+
+			logMessage(`[CRAWL4AI_CLI] Command: crwl ${crwlArgs.join(' ')}`);
+
+			// Compute a generous timeout for deep crawls
+			const baseTimeoutSec = typeof timeout === 'number' ? timeout : 300;
+			const pagesForTimeout = typeof maxPages === 'number' ? maxPages : 5;
+			let computedTimeoutSec = baseTimeoutSec;
+			if (deepCrawl) {
+				// ~10s per page plus a small base, capped at 5 minutes for better reliability
+				computedTimeoutSec = Math.max(baseTimeoutSec, Math.min(300, 15 + pagesForTimeout * 10));
+			}
+			logMessage(`[CRAWL4AI_CLI] Using timeout ${computedTimeoutSec}s for crwl process`);
+
+			// Execute crwl command with manual timeout/kill guard
+			const { spawn } = await import('child_process');
+			
+			return new Promise((resolve) => {
+				const crwlProcess = spawn('crwl', crwlArgs, {
+					stdio: ['pipe', 'pipe', 'pipe'],
+					env: { 
+						...process.env, 
+						PYTHONIOENCODING: 'utf-8',
+						LANG: 'en_US.UTF-8',
+						LC_ALL: 'en_US.UTF-8'
+					}
+				});
+
+				let stdout = '';
+				let stderr = '';
+				let killedByTimeout = false;
+
+				const killTimer = setTimeout(() => {
+					killedByTimeout = true;
+					logMessage('[CRAWL4AI_CLI] Killing crwl process due to timeout');
+					try { crwlProcess.kill('SIGTERM'); } catch {}
+					setTimeout(() => { try { crwlProcess.kill('SIGKILL'); } catch {} }, 5000);
+				}, computedTimeoutSec * 1000);
+
+				crwlProcess.stdout.on('data', (data) => {
+					stdout += data.toString();
+				});
+
+				crwlProcess.stderr.on('data', (data) => {
+					stderr += data.toString();
+				});
+
+				crwlProcess.on('close', (code, signal) => {
+					clearTimeout(killTimer);
+					logMessage(`[CRAWL4AI_CLI] crwl process exited with code: ${code}${signal ? `, signal: ${signal}` : ''}`);
+					
+					if (stderr) {
+						logMessage(`[CRAWL4AI_CLI] stderr: ${stderr}`);
+					}
+
+					if (!killedByTimeout && code === 0 && stdout.trim()) {
+						logMessage(`[CRAWL4AI_CLI] Crawl completed successfully`);
+						logMessage(`[CRAWL4AI_CLI] Output size: ${stdout.length} characters`);
+						
+						const result = {
+							success: true,
+							url: url,
+							outputFormat: outputFormat,
+							deepCrawl: deepCrawl,
+							timestamp: new Date().toISOString(),
+							crawler: 'crawl4ai-cli',
+							content: stdout.trim(),
+							...(deepCrawl && { 
+								crawlStrategy: deepCrawlStrategy, 
+								maxPages: maxPages 
+							}),
+							...(extractionQuery && { extractionQuery }),
+							...(cssSelector && { cssSelector })
+						};
+						
+						resolve({
+							content: [{
+								type: 'text',
+								text: JSON.stringify(result, null, 2)
+							}]
+						} as const);
+					} else {
+						const reason = killedByTimeout ? `timeout after ${computedTimeoutSec}s` : `code ${code}${signal ? `, signal ${signal}` : ''}`;
+						const errorResult = {
+							success: false,
+							error: `crwl command failed (${reason})`,
+							stderr: stderr,
+							url: url,
+							timestamp: new Date().toISOString(),
+							crawler: 'crawl4ai-cli',
+							command: `crwl ${crwlArgs.join(' ')}`
+						};
+						
+						logMessage(`[CRAWL4AI_CLI] Error: ${JSON.stringify(errorResult)}`);
+						
+						resolve({
+							content: [{
+								type: 'text',
+								text: JSON.stringify(errorResult, null, 2)
+							}]
+						} as const);
+					}
+				});
+
+				crwlProcess.on('error', (error) => {
+					clearTimeout(killTimer);
+					const errorResult = {
+						success: false,
+						error: `Failed to spawn crwl command: ${error.message}`,
+						url: url,
+						timestamp: new Date().toISOString(),
+						crawler: 'crawl4ai-cli',
+						suggestion: 'Make sure Crawl4AI CLI is installed: pip install crawl4ai'
+					};
+					
+					logMessage(`[CRAWL4AI_CLI] Spawn error: ${JSON.stringify(errorResult)}`);
+					
+					resolve({
+						content: [{
+							type: 'text',
+							text: JSON.stringify(errorResult, null, 2)
+						}]
+					} as const);
+				});
+			});
+
+		} catch (error: any) {
+			logMessage(`[CRAWL4AI_CLI] Error during setup: ${error?.message || error}`);
+			return {
+				content: [{
+					type: 'text',
+					text: JSON.stringify({
+						success: false,
+						error: error?.message || 'Unknown error occurred',
+						url: args.url,
+						timestamp: new Date().toISOString(),
+						crawler: 'crawl4ai-cli'
+					}, null, 2)
+				}]
+			} as const;
+		}
+	}
+);
+
 async function main(): Promise<void> {
 	console.error('[MCP_SERVER] Starting MCP server with tools:');
 	console.error('- project_reset');
 	console.error('- codesandbox_deploy'); 
 	console.error('- color_palette_generator');
-	console.error('- PUPPETEER_search');
+	console.error('- puppeteer_search');
+	console.error('- freepik_ai_image_generator');
+	console.error('- web_crawler');
 	console.error('[MCP_SERVER] Process starting...');
 	console.error('[MCP_SERVER] Working directory:', process.cwd());
 	console.error('[MCP_SERVER] Environment CLONED_TEMPLATE_DIR:', process.env.CLONED_TEMPLATE_DIR);

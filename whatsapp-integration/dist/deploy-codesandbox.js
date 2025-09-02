@@ -61,6 +61,7 @@ export async function deployToCodeSandbox(projectDir) {
             console.warn(`[CODESANDBOX_DEPLOY] Could not read ${file}:`, readError.message);
         }
     }
+    // Note: Images are now hosted on 0x0.st, so no need to include assets directory
     // Debug: Log all collected files
     console.log(`[CODESANDBOX_DEPLOY] === DEBUG: All collected files ===`);
     for (const [filePath, fileData] of Object.entries(allFiles)) {

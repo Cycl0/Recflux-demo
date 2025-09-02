@@ -1,4 +1,4 @@
-FROM node:22.12.0-bullseye AS builder
+FROM node:22.12.0-bookworm AS builder
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ COPY cline-mcp-settings.json ./
 COPY template ./_template
 RUN npx tsc -p tsconfig.json
 
-FROM node:22.12.0-bullseye AS runtime
+FROM node:22.12.0-bookworm AS runtime
 
 WORKDIR /app
 
@@ -26,8 +26,13 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Install cline CLI globally (provides `cline-cli` binary)
 RUN npm i -g @yaegaki/cline-cli
 
-# Install gosu and Chrome dependencies for Puppeteer
+# Install Python, gosu and Chrome dependencies for Puppeteer and Crawl4AI
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-venv \
+    python3-dev \
+    build-essential \
     gosu \
     wget \
     gnupg \
@@ -76,6 +81,12 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --d
     && apt-get install -y google-chrome-stable \
     && rm -rf /var/lib/apt/lists/*
 
+# Install Crawl4AI in a dedicated virtualenv (avoid PEP 668 system site-packages restrictions)
+RUN python3 -m venv /opt/crawl4ai-venv \
+    && /opt/crawl4ai-venv/bin/pip install --upgrade pip \
+    && /opt/crawl4ai-venv/bin/pip install crawl4ai \
+    && ln -sf /opt/crawl4ai-venv/bin/crwl /usr/local/bin/crwl
+
 # Create non-root user with home directory
 RUN groupadd -r appuser && useradd -r -g appuser -m appuser
 
@@ -108,7 +119,9 @@ ENV WHATSAPP_VERIFY_TOKEN=""
 ENV MCP_COMMAND="node"
 ENV MCP_ARGS="dist/mcp-server.js"
 ENV OPENAI_API_KEY=""
+ENV OPEN_AI_API_KEY=""
 ENV OPEN_ROUTER_API_KEY=""
+ENV GROQ_API_KEY=""
 ENV SERVICES_HOST="localhost"
 ENV SERVICES_SCHEME="http"
 ENV PORT=3005

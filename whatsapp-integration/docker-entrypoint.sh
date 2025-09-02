@@ -27,6 +27,31 @@ fi
 chown -R appuser:appuser "/workspace" || true
 chown -R appuser:appuser "/app" || true
 
+if [ -x "/opt/crawl4ai-venv/bin/crawl4ai-setup" ]; then
+  if [ ! -f "/root/.crawl4ai/.post_install_done" ]; then
+    echo "[ENTRYPOINT] Running crawl4ai-setup (first run)"
+    /opt/crawl4ai-venv/bin/crawl4ai-setup || true
+    mkdir -p /root/.crawl4ai
+    touch /root/.crawl4ai/.post_install_done
+  else
+    echo "[ENTRYPOINT] Skipping crawl4ai-setup (already completed)"
+  fi
+else
+  echo "[ENTRYPOINT] crawl4ai-setup not found; skipping"
+fi
+
+# Ensure Playwright browsers are installed for appuser (needed by Crawl4AI CLI)
+if [ -x "/opt/crawl4ai-venv/bin/playwright" ]; then
+  if [ ! -d "/home/appuser/.cache/ms-playwright" ] || [ -z "$(ls -A /home/appuser/.cache/ms-playwright 2>/dev/null)" ]; then
+    echo "[ENTRYPOINT] Installing Playwright browsers for appuser"
+    gosu appuser:appuser /opt/crawl4ai-venv/bin/playwright install chromium || true
+  else
+    echo "[ENTRYPOINT] Playwright browsers already present; skipping install"
+  fi
+else
+  echo "[ENTRYPOINT] Playwright CLI not found; skipping browser install"
+fi
+
 echo "[ENTRYPOINT] Dropping privileges to appuser"
 exec gosu appuser:appuser "$@"
 
