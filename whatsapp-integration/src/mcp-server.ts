@@ -1155,6 +1155,306 @@ server.registerTool(
 	}
 );
 
+// Gemini 2.0 Flash Vision Tool for Website Design Analysis
+server.registerTool(
+	'gemini_vision_analyzer',
+	{
+		description: 'Analyze website screenshots using Gemini 2.5 Flash for design inspiration extraction',
+		inputSchema: {
+			screenshotPath: z.string().describe('Path to the screenshot file to analyze'),
+			analysisType: z.enum(['full', 'color', 'layout', 'component']).default('full').describe('Type of analysis to perform'),
+			customPrompt: z.string().optional().describe('Optional custom prompt for specific analysis needs')
+		}
+	},
+	async (args: any) => {
+		const logMessage = (msg: string) => {
+			console.error(msg);
+			fs.appendFile('mcp-gemini-vision.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => {});
+		};
+
+		logMessage('[GEMINI_VISION] *** TOOL CALLED! ***');
+		logMessage('[GEMINI_VISION] Called with args: ' + JSON.stringify(args));
+
+		const { screenshotPath, analysisType = 'full', customPrompt } = args;
+
+		if (!screenshotPath) {
+			return { content: [{ type: 'text', text: 'Error: No screenshot path provided' }] } as const;
+		}
+
+		const openRouterApiKey = process.env.OPENROUTER_API_KEY;
+		logMessage(`[GEMINI_VISION] API Key found: ${openRouterApiKey ? 'YES' : 'NO'}`);
+		logMessage(`[GEMINI_VISION] API Key length: ${openRouterApiKey?.length || 0}`);
+		logMessage(`[GEMINI_VISION] API Key starts with: ${openRouterApiKey?.substring(0, 20) || 'N/A'}...`);
+		if (!openRouterApiKey) {
+			return { content: [{ type: 'text', text: 'Error: OPENROUTER_API_KEY environment variable is required' }] } as const;
+		}
+
+		try {
+			// Read and encode screenshot
+			const imageBuffer = await fs.readFile(screenshotPath);
+			const base64Image = imageBuffer.toString('base64');
+			const mimeType = screenshotPath.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
+
+			// Design analysis prompts
+			const prompts = {
+				full: `DESIGN ANALYSIS TASK - WEBSITE SCREENSHOT
+
+Analyze this website screenshot and provide detailed technical specifications for replication using modern web technologies.
+
+REQUIRED ANALYSIS SECTIONS:
+
+1. COLOR PALETTE EXTRACTION:
+   - Primary colors (provide exact hex codes where possible)
+   - Secondary colors and accents
+   - Background colors and gradients
+   - Text colors and contrast ratios
+
+2. LAYOUT & STRUCTURE:
+   - Grid system (12-column, flexbox, CSS grid)
+   - Container widths and section spacing
+   - Content organization and hierarchy
+   - Responsive design patterns
+
+3. TYPOGRAPHY ANALYSIS:
+   - Font families (serif, sans-serif, monospace)
+   - Font weights and sizes observed
+   - Text hierarchy patterns
+
+4. COMPONENT SPECIFICATIONS:
+   - Button styles (shapes, colors, hover states)
+   - Card designs (borders, shadows, spacing)
+   - Navigation patterns
+
+5. TAILWIND CSS IMPLEMENTATION:
+   - Specific Tailwind classes for replication
+   - Custom CSS requirements
+
+Provide specific, actionable technical details for accurate replication.`,
+				
+				color: `COLOR EXTRACTION TASK - WEBSITE SCREENSHOT
+
+Analyze this screenshot and extract detailed color information:
+1. Extract exact hex codes for all visible colors
+2. Identify color usage patterns (backgrounds, text, accents)
+3. Note any gradients with their properties
+4. Provide recommendations for implementation`,
+
+				layout: `LAYOUT ANALYSIS TASK - WEBSITE SCREENSHOT
+
+Analyze this screenshot for layout specifications:
+1. Grid system identification
+2. Section spacing and arrangements
+3. Content hierarchy and organization
+4. Responsive design patterns
+5. Element positioning and alignment`,
+
+				component: `COMPONENT ANALYSIS TASK - WEBSITE SCREENSHOT
+
+Identify and analyze UI components in this screenshot:
+1. Button variations and states
+2. Card components structure
+3. Navigation elements
+4. Form elements and styling
+5. Typography components`
+			};
+
+			const prompt = customPrompt || prompts[analysisType as keyof typeof prompts] || prompts.full;
+
+			logMessage(`[GEMINI_VISION] Using analysis type: ${analysisType}`);
+			logMessage(`[GEMINI_VISION] Screenshot path: ${screenshotPath}`);
+			logMessage(`[GEMINI_VISION] Image size: ${Math.round(imageBuffer.length / 1024)}KB`);
+
+			// Prepare OpenRouter API request for Gemini 2.5 Flash
+			const openRouterRequest = {
+				model: 'google/gemini-2.5-flash-image-preview',
+				max_tokens: 4000,
+				temperature: 0.1,
+				messages: [
+					{
+						role: 'user',
+						content: [
+							{
+								type: 'text',
+								text: prompt
+							},
+							{
+								type: 'image_url',
+								image_url: {
+									url: `data:${mimeType};base64,${base64Image}`
+								}
+							}
+						]
+					}
+				]
+			};
+
+			logMessage('[GEMINI_VISION] Calling OpenRouter API...');
+
+			// Make API call to OpenRouter
+			const response = await axios.post(
+				'https://openrouter.ai/api/v1/chat/completions',
+				openRouterRequest,
+				{
+					headers: {
+						'Authorization': `Bearer ${openRouterApiKey}`,
+						'Content-Type': 'application/json',
+						'HTTP-Referer': 'https://recflux-demo.com',
+						'X-Title': 'Website Design Analysis Tool'
+					}
+				}
+			);
+
+			logMessage(`[GEMINI_VISION] API response status: ${response.status}`);
+
+			if (response.status === 200) {
+				const analysis = response.data.choices[0].message.content;
+				const tokensUsed = response.data.usage?.total_tokens || 0;
+
+				logMessage(`[GEMINI_VISION] Analysis completed successfully`);
+				logMessage(`[GEMINI_VISION] Tokens used: ${tokensUsed}`);
+				logMessage(`[GEMINI_VISION] Analysis length: ${analysis.length} characters`);
+
+				// Calculate confidence score
+				const keywords = ['color', 'layout', 'typography', 'component', 'spacing', 'design'];
+				const foundKeywords = keywords.filter(keyword => 
+					analysis.toLowerCase().includes(keyword)
+				).length;
+				const confidence = Math.round((foundKeywords / keywords.length + Math.min(analysis.length / 1000, 1)) / 2 * 100) / 100;
+
+				const result = {
+					success: true,
+					analysis: analysis,
+					confidence: confidence,
+					analysisType: analysisType,
+					metadata: {
+						model: 'google/gemini-2.5-flash-image-preview',
+						tokensUsed: tokensUsed,
+						screenshotPath: screenshotPath,
+						timestamp: new Date().toISOString()
+					}
+				};
+
+				return {
+					content: [{
+						type: 'text',
+						text: JSON.stringify(result, null, 2)
+					}]
+				} as const;
+
+			} else {
+				logMessage(`[GEMINI_VISION] API error: ${response.status} ${response.statusText}`);
+				return { content: [{ type: 'text', text: `OpenRouter API error: ${response.status} ${response.statusText}` }] } as const;
+			}
+
+		} catch (error: any) {
+			logMessage(`[GEMINI_VISION] Error: ${error?.message || error}`);
+			console.error('[GEMINI_VISION] Full error:', error);
+
+			return {
+				content: [{
+					type: 'text',
+					text: JSON.stringify({
+						success: false,
+						error: error?.message || 'Unknown error occurred',
+						screenshotPath: screenshotPath,
+						timestamp: new Date().toISOString()
+					}, null, 2)
+				}]
+			} as const;
+		}
+	}
+);
+
+// Design Inspiration Analyzer - Complete Workflow Tool
+server.registerTool(
+	'design_inspiration_analyzer',
+	{
+		description: 'Complete design inspiration analysis combining web crawling, screenshot capture, and AI vision analysis',
+		inputSchema: {
+			theme: z.string().describe('Project theme/category (e.g., "tech", "saas", "finance", "creative", "landing", etc.)'),
+			includeVisualAnalysis: z.boolean().default(true).describe('Whether to include screenshot capture and Gemini vision analysis'),
+			includeTextualAnalysis: z.boolean().default(true).describe('Whether to include web crawling for textual content analysis'),
+			customSites: z.array(z.string()).optional().describe('Optional custom inspiration sites to analyze in addition to auto-selected ones')
+		}
+	},
+	async ({ theme, includeVisualAnalysis = true, includeTextualAnalysis = true, customSites = [] }) => {
+		const startTime = Date.now();
+		
+		function logWithTimestamp(msg: string): void {
+			fs.appendFile('mcp-design-analyzer.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => {});
+		}
+		
+		logWithTimestamp(`[DESIGN_ANALYZER] Starting analysis for theme: ${theme}`);
+		
+		try {
+			// Dynamic import to handle the new module
+			const { DesignInspirationAnalyzer } = await import('./design-inspiration-analyzer.js');
+			const analyzer = new DesignInspirationAnalyzer();
+			
+			// Perform the complete analysis
+			const result = await analyzer.analyzeDesignInspiration(theme);
+			
+			// Clean up temporary files
+			await analyzer.cleanup();
+			
+			const processingTime = Date.now() - startTime;
+			logWithTimestamp(`[DESIGN_ANALYZER] Analysis completed in ${processingTime}ms`);
+			logWithTimestamp(`[DESIGN_ANALYZER] Results: ${result.summary.successfulTextual}/${result.summary.totalSites} textual, ${result.summary.successfulVisual}/${result.summary.totalSites} visual`);
+			
+			return {
+				content: [
+					{
+						type: 'text',
+						text: JSON.stringify({
+							success: true,
+							theme,
+							analysis: {
+								selectedSites: result.sites.map((site: any) => ({
+									url: site.url,
+									category: site.category,
+									theme: site.theme,
+									priority: site.priority
+								})),
+								consolidatedInsights: result.consolidatedInsights,
+								summary: result.summary,
+								processingTime,
+								timestamp: new Date().toISOString()
+							},
+							textualResults: includeTextualAnalysis ? result.textualResults : undefined,
+							visualResults: includeVisualAnalysis ? result.visualResults : undefined,
+							recommendations: [
+								...result.consolidatedInsights.recommendations,
+								`Analysis completed with ${result.summary.analysisConfidence.toFixed(2)} average confidence`,
+								`${result.summary.totalScreenshots} screenshots captured for visual analysis`,
+								`${result.consolidatedInsights.inspirationSources.length} successful inspiration sources analyzed`
+							]
+						}, null, 2)
+					}
+				]
+			} as const;
+			
+		} catch (error: any) {
+			const errorMsg = `Design inspiration analysis failed: ${error?.message || error}`;
+			logWithTimestamp(`[DESIGN_ANALYZER] ERROR: ${errorMsg}`);
+			
+			return {
+				content: [
+					{
+						type: 'text',
+						text: JSON.stringify({
+							success: false,
+							error: errorMsg,
+							theme,
+							timestamp: new Date().toISOString(),
+							processingTime: Date.now() - startTime
+						}, null, 2)
+					}
+				]
+			} as const;
+		}
+	}
+);
+
 async function main(): Promise<void> {
 	console.error('[MCP_SERVER] Starting MCP server with tools:');
 	console.error('- project_reset');
@@ -1163,6 +1463,8 @@ async function main(): Promise<void> {
 	console.error('- puppeteer_search');
 	console.error('- freepik_ai_image_generator');
 	console.error('- web_crawler');
+	console.error('- gemini_vision_analyzer');
+	console.error('- design_inspiration_analyzer');
 	console.error('[MCP_SERVER] Process starting...');
 	console.error('[MCP_SERVER] Working directory:', process.cwd());
 	console.error('[MCP_SERVER] Environment CLONED_TEMPLATE_DIR:', process.env.CLONED_TEMPLATE_DIR);

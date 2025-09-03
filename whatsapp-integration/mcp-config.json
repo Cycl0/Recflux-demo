@@ -1,14 +1,19 @@
 {
   "mcpServers": {
     "recflux": {
-      "command": "/usr/local/bin/node",
-      "args": ["/app/dist/mcp-server.js"],
+      "command": "node",
+      "args": ["./dist/mcp-server.js"],
       "env": {
         "TAVILY_API_KEY": "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",
         "CLONED_TEMPLATE_DIR": "/workspace/project",
         "BROWSERBASE_API_KEY": "bb_live_buP2hIj-CQntUpWuYUJnyMEjZgI",
         "BROWSERBASE_PROJECT_ID": "d6aca8e4-6d58-4fdb-b824-d5f530714693",
         "PEXELS_API_KEY": "6ow1d4rio6HEFf29iYGzrXo0VbQNM6FcoDCvjltB9HXqrvPdg1TCKpam",
+        "CLOUDFLARE_API_TOKEN": "HzxPtzJsPd5zg6Nkaf9RQ4apLO_TU_Th53WAL9xS",
+        "CLOUDFLARE_ACCOUNT_ID": "902b7dc1572cde9e2275792758c9bc90",
+        "IMGBB_API_KEY": "d5932b452ef433eaf5cfdc64fefa2fd3",
+        "FREEPIK_API_KEY": "FPSXb231ce92eb2bd274b71d6517b1d31335",
+        "OPENROUTER_API_KEY": "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",
         "PROXY_1": "http://mpxgbkeh:9uh5mitdatdc@23.95.150.145:6114/",
         "PROXY_2": "http://mpxgbkeh:9uh5mitdatdc@198.23.239.134:6540/",
         "PROXY_3": "http://mpxgbkeh:9uh5mitdatdc@45.38.107.97:6014/",
