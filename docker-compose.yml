@@ -126,6 +126,11 @@ services:
       - "3005:3005"
     environment:
       PORT: 3005
+      # Redis Cloud connection
+      REDIS_URL: "${REDIS_URL}"
+      REDIS_PASSWORD: "${REDIS_PASSWORD}"
+      REDIS_USER: "${REDIS_USER}"
+      LANGCACHE_API_KEY: "${LANGCACHE_API_KEY}"
       # WhatsApp credentials
       WHATSAPP_TOKEN: "${WHATSAPP_TOKEN}"
       WHATSAPP_PHONE_NUMBER_ID: "${WHATSAPP_PHONE_NUMBER_ID}"

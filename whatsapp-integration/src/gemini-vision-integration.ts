@@ -8,6 +8,7 @@
 import axios from 'axios';
 import { promises as fs } from 'fs';
 import FormData from 'form-data';
+import { getRedisCache } from './redis-cache.js';
 
 function logWithTimestamp(msg: string): void {
     fs.appendFile('mcp-design-analyzer.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => {});
@@ -24,6 +25,8 @@ interface GeminiVisionRequest {
   screenshotPath: string;
   prompt: string;
   config?: Partial<GeminiVisionConfig>;
+  bypassCache?: boolean;
+  analysisType?: string;
 }
 
 interface GeminiVisionResponse {
@@ -33,6 +36,7 @@ interface GeminiVisionResponse {
     model: string;
     tokens_used: number;
     processing_time: number;
+    cached?: boolean | string;
   };
 }
 
@@ -55,6 +59,41 @@ export class GeminiVisionAnalyzer {
     const startTime = Date.now();
 
     try {
+      // Initialize Redis cache
+      const cache = getRedisCache();
+      
+      // Try to connect to Redis (non-blocking)
+      try {
+        await cache.connect();
+      } catch (redisError) {
+        logWithTimestamp(`[GEMINI_VISION] Redis connection failed, proceeding without cache: ${redisError}`);
+      }
+
+      // Check cache first (unless bypassing cache)
+      if (!request.bypassCache) {
+        logWithTimestamp(`[GEMINI_VISION] Checking cache for screenshot: ${request.screenshotPath}`);
+        const cachedResult = await cache.getVisualAnalysis(request.screenshotPath, request.analysisType);
+        
+        if (cachedResult) {
+          logWithTimestamp(`[GEMINI_VISION] Cache hit! Returning cached result for: ${request.screenshotPath}`);
+          const processingTime = Date.now() - startTime;
+          
+          return {
+            analysis: cachedResult.visualAnalysis,
+            confidence: cachedResult.confidence,
+            metadata: {
+              ...cachedResult.metadata,
+              processing_time: processingTime,
+              cached: true,
+              cacheTimestamp: cachedResult.timestamp
+            }
+          };
+        } else {
+          logWithTimestamp(`[GEMINI_VISION] Cache miss, proceeding with fresh analysis for: ${request.screenshotPath}`);
+        }
+      } else {
+        logWithTimestamp(`[GEMINI_VISION] Cache bypass requested, proceeding with fresh analysis for: ${request.screenshotPath}`);
+      }
       // Read screenshot
       const imageBuffer = await fs.readFile(request.screenshotPath);
       let base64Image = imageBuffer.toString('base64');
@@ -141,16 +180,42 @@ export class GeminiVisionAnalyzer {
 
       const analysis = response.data.choices[0].message.content;
       const processingTime = Date.now() - startTime;
+      const confidence = this.calculateConfidence(analysis);
 
-      return {
+      const result: GeminiVisionResponse = {
         analysis,
-        confidence: this.calculateConfidence(analysis),
+        confidence,
         metadata: {
           model: this.config.model,
           tokens_used: response.data.usage?.total_tokens || 0,
-          processing_time: processingTime
+          processing_time: processingTime,
+          cached: false
         }
       };
+
+      // Cache the successful result
+      if (!request.bypassCache) {
+        try {
+          const cacheSuccess = await cache.setVisualAnalysis(request.screenshotPath, {
+            visualAnalysis: analysis,
+            analysisType: request.analysisType || 'full',
+            confidence,
+            metadata: result.metadata,
+            ttl: parseInt(process.env.CACHE_TTL_VISUAL || '604800') // 7 days default
+          });
+          
+          if (cacheSuccess) {
+            logWithTimestamp(`[GEMINI_VISION] Successfully cached visual analysis for: ${request.screenshotPath}`);
+            result.metadata.cached = 'stored';
+          } else {
+            logWithTimestamp(`[GEMINI_VISION] Failed to cache visual analysis for: ${request.screenshotPath}`);
+          }
+        } catch (cacheError) {
+          logWithTimestamp(`[GEMINI_VISION] Error caching visual analysis: ${cacheError}`);
+        }
+      }
+
+      return result;
 
     } catch (error) {
       logWithTimestamp('[GEMINI_VISION] Analysis failed:' + (error instanceof Error ? error.message : 'Unknown error'));

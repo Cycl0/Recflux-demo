@@ -1,3 +1,5 @@
+"use client";
+
 import { useEffect, useRef, useMemo } from 'react';
 
 export default function CTAButton(props) {

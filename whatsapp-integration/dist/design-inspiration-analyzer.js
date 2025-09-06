@@ -11,6 +11,7 @@
 import { InspirationScreenshotCapture } from './screenshot-capture.js';
 import { GeminiVisionAnalyzer } from './gemini-vision-integration.js';
 import { promises as fs } from 'fs';
+import { getRedisCache } from './redis-cache.js';
 function logWithTimestamp(msg) {
     fs.appendFile('mcp-design-analyzer.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => { });
 }
@@ -18,6 +19,7 @@ export class DesignInspirationAnalyzer {
     screenshotCapture;
     geminiAnalyzer;
     crawlerAvailable = false;
+    cache = getRedisCache();
     constructor(openRouterApiKey) {
         this.screenshotCapture = new InspirationScreenshotCapture();
         logWithTimestamp('[DESIGN_ANALYZER] Constructor called with API key:' + (openRouterApiKey ? 'PROVIDED' : 'NOT PROVIDED'));
@@ -286,19 +288,64 @@ export class DesignInspirationAnalyzer {
     /**
      * Perform visual analysis using screenshot capture + Gemini vision
      */
-    async performVisualAnalysis(sites) {
+    async performVisualAnalysis(sites, bypassCache = false) {
         const visualResults = {};
         logWithTimestamp(`[DESIGN_ANALYZER] Starting visual analysis for ${sites.length} sites`);
         logWithTimestamp(`[DESIGN_ANALYZER] Gemini analyzer available: ${!!this.geminiAnalyzer}`);
         logWithTimestamp(`[DESIGN_ANALYZER] Sites to analyze: ${sites.map(s => s.url).join(', ')}`);
+        logWithTimestamp(`[DESIGN_ANALYZER] Bypass cache: ${bypassCache}`);
+        // Check cache for each site first (if not bypassing cache)
+        const sitesNeedingScreenshots = [];
+        const sitesWithCachedResults = [];
+        if (!bypassCache && this.geminiAnalyzer) {
+            for (const site of sites) {
+                try {
+                    // Check if we have cached visual analysis for this URL
+                    const cachedVisual = await this.cache.getVisualAnalysisByUrl(site.url, 'full');
+                    if (cachedVisual) {
+                        logWithTimestamp(`[DESIGN_ANALYZER] Found cached visual analysis for: ${site.url}`);
+                        visualResults[site.url] = {
+                            success: true,
+                            analysis: cachedVisual.visualAnalysis,
+                            confidence: cachedVisual.confidence,
+                            metadata: {
+                                ...cachedVisual.metadata,
+                                cached: true,
+                                cacheTimestamp: cachedVisual.timestamp
+                            },
+                            cached: true,
+                            screenshots: [] // No screenshots needed for cached results
+                        };
+                        sitesWithCachedResults.push(site);
+                    }
+                    else {
+                        sitesNeedingScreenshots.push(site);
+                    }
+                }
+                catch (cacheError) {
+                    logWithTimestamp(`[DESIGN_ANALYZER] Cache check failed for ${site.url}: ${cacheError}`);
+                    sitesNeedingScreenshots.push(site);
+                }
+            }
+        }
+        else {
+            sitesNeedingScreenshots.push(...sites);
+        }
+        logWithTimestamp(`[DESIGN_ANALYZER] Sites with cached results: ${sitesWithCachedResults.length}`);
+        logWithTimestamp(`[DESIGN_ANALYZER] Sites needing screenshots: ${sitesNeedingScreenshots.length}`);
+        // Only take screenshots for sites that don't have cached results
         let screenshotsByUrl = {};
+        if (sitesNeedingScreenshots.length === 0) {
+            logWithTimestamp(`[DESIGN_ANALYZER] All sites have cached results, skipping screenshot capture`);
+            return visualResults;
+        }
         try {
             // Initialize screenshot capture
             logWithTimestamp(`[DESIGN_ANALYZER] Initializing screenshot capture...`);
             await this.screenshotCapture.init();
             logWithTimestamp(`[DESIGN_ANALYZER] Screenshot capture initialized successfully`);
-            // Capture screenshots for all sites
-            const urls = sites.map(site => site.url);
+            // Capture screenshots only for sites that need them
+            const urls = sitesNeedingScreenshots.map(site => site.url);
             logWithTimestamp(`[DESIGN_ANALYZER] Capturing screenshots for URLs: ${JSON.stringify(urls)}`);
             const screenshotResults = await this.screenshotCapture.captureBatchScreenshots(urls, {
                 fullPage: true,
@@ -320,8 +367,8 @@ export class DesignInspirationAnalyzer {
         }
         catch (captureError) {
             logWithTimestamp(`[DESIGN_ANALYZER] Screenshot capture failed: ${captureError instanceof Error ? captureError.message : 'Unknown error'}`);
-            // Return empty results for all sites with error details
-            for (const site of sites) {
+            // Return empty results for sites that needed screenshots with error details
+            for (const site of sitesNeedingScreenshots) {
                 visualResults[site.url] = {
                     success: false,
                     error: `Screenshot capture failed: ${captureError instanceof Error ? captureError.message : 'Unknown error'}`,
@@ -330,9 +377,9 @@ export class DesignInspirationAnalyzer {
             }
             return visualResults;
         }
-        // Analyze screenshots with Gemini if available
+        // Analyze screenshots with Gemini if available (only for sites that needed screenshots)
         if (this.geminiAnalyzer) {
-            for (const site of sites) {
+            for (const site of sitesNeedingScreenshots) {
                 const screenshots = screenshotsByUrl[site.url] || [];
                 if (screenshots.length === 0) {
                     visualResults[site.url] = {
@@ -350,7 +397,9 @@ export class DesignInspirationAnalyzer {
                     const primaryScreenshot = viewportScreenshot || screenshots[0];
                     const analysisResult = await this.geminiAnalyzer.analyzeScreenshot({
                         screenshotPath: primaryScreenshot,
-                        prompt: this.getVisualAnalysisPrompt(site.category)
+                        prompt: this.getVisualAnalysisPrompt(site.category),
+                        bypassCache,
+                        analysisType: 'full'
                     });
                     visualResults[site.url] = {
                         success: true,
@@ -359,6 +408,24 @@ export class DesignInspirationAnalyzer {
                         metadata: analysisResult.metadata,
                         screenshots: screenshots
                     };
+                    // Cache the successful visual analysis by URL
+                    if (!bypassCache) {
+                        try {
+                            const cacheSuccess = await this.cache.setVisualAnalysisByUrl(site.url, {
+                                visualAnalysis: analysisResult.analysis,
+                                analysisType: 'full',
+                                confidence: analysisResult.confidence,
+                                metadata: analysisResult.metadata,
+                                ttl: parseInt(process.env.CACHE_TTL_VISUAL || '604800') // 7 days default
+                            });
+                            if (cacheSuccess) {
+                                logWithTimestamp(`[DESIGN_ANALYZER] Successfully cached visual analysis for: ${site.url}`);
+                            }
+                        }
+                        catch (cacheError) {
+                            logWithTimestamp(`[DESIGN_ANALYZER] Error caching visual analysis: ${cacheError}`);
+                        }
+                    }
                     logWithTimestamp(`[DESIGN_ANALYZER] Visual analysis completed for ${site.url} (confidence: ${analysisResult.confidence})`);
                 }
                 catch (error) {
@@ -648,9 +715,46 @@ ANALYSIS REQUIREMENTS:
     /**
      * Analyze design inspiration for a given theme
      */
-    async analyzeDesignInspiration(theme) {
+    async analyzeDesignInspiration(theme, bypassCache = false) {
         logWithTimestamp(`[DESIGN_ANALYZER] Starting complete design inspiration analysis for theme: ${theme}`);
         const startTime = Date.now();
+        // Try to connect to Redis (non-blocking)
+        try {
+            await this.cache.connect();
+        }
+        catch (redisError) {
+            logWithTimestamp(`[DESIGN_ANALYZER] Redis connection failed, proceeding without cache: ${redisError}`);
+        }
+        // Check cache first (unless bypassing cache)
+        if (!bypassCache) {
+            logWithTimestamp(`[DESIGN_ANALYZER] Checking cache for theme: ${theme}`);
+            const cachedResult = await this.cache.getDesignAnalysis(theme);
+            if (cachedResult) {
+                logWithTimestamp(`[DESIGN_ANALYZER] Cache hit! Returning cached result for theme: ${theme}`);
+                const processingTime = Date.now() - startTime;
+                return {
+                    sites: [], // Sites array is not cached for simplicity
+                    textualResults: cachedResult.textualResults || {},
+                    visualResults: cachedResult.visualResults || {},
+                    consolidatedInsights: {
+                        ...cachedResult.consolidatedInsights,
+                        cached: true,
+                        cacheTimestamp: cachedResult.timestamp,
+                        processingTime
+                    },
+                    summary: {
+                        ...cachedResult.summary,
+                        cached: true
+                    }
+                };
+            }
+            else {
+                logWithTimestamp(`[DESIGN_ANALYZER] Cache miss, proceeding with fresh analysis for theme: ${theme}`);
+            }
+        }
+        else {
+            logWithTimestamp(`[DESIGN_ANALYZER] Cache bypass requested, proceeding with fresh analysis for theme: ${theme}`);
+        }
         // Send progress update to prevent Cline timeout
         const sendProgressUpdate = (step, progress) => {
             const elapsed = Math.round((Date.now() - startTime) / 1000);
@@ -669,7 +773,7 @@ ANALYSIS REQUIREMENTS:
         sendProgressUpdate('Textual analysis completed', 40);
         // Step 3: Perform visual analysis
         sendProgressUpdate('Starting visual analysis', 45);
-        const visualResults = await this.performVisualAnalysis(sites);
+        const visualResults = await this.performVisualAnalysis(sites, bypassCache);
         sendProgressUpdate('Visual analysis completed', 80);
         // Step 4: Consolidate insights
         const consolidatedInsights = this.consolidateInsights(textualResults, visualResults);
@@ -685,7 +789,7 @@ ANALYSIS REQUIREMENTS:
         const processingTime = Date.now() - startTime;
         logWithTimestamp(`[DESIGN_ANALYZER] Analysis completed in ${processingTime}ms`);
         logWithTimestamp(`[DESIGN_ANALYZER] Results: ${successfulTextual}/${sites.length} textual, ${successfulVisual}/${sites.length} visual, ${totalScreenshots} screenshots`);
-        return {
+        const result = {
             sites,
             textualResults,
             visualResults,
@@ -695,9 +799,33 @@ ANALYSIS REQUIREMENTS:
                 successfulTextual,
                 successfulVisual,
                 totalScreenshots,
-                analysisConfidence: avgConfidence
+                analysisConfidence: avgConfidence,
+                cached: false
             }
         };
+        // Cache the successful result
+        if (!bypassCache) {
+            try {
+                const cacheSuccess = await this.cache.setDesignAnalysis(theme, {
+                    consolidatedInsights,
+                    textualResults,
+                    visualResults,
+                    summary: result.summary,
+                    ttl: parseInt(process.env.CACHE_TTL_DESIGN || '43200') // 12 hours default
+                });
+                if (cacheSuccess) {
+                    logWithTimestamp(`[DESIGN_ANALYZER] Successfully cached design analysis for theme: ${theme}`);
+                    result.summary.cached = 'stored';
+                }
+                else {
+                    logWithTimestamp(`[DESIGN_ANALYZER] Failed to cache design analysis for theme: ${theme}`);
+                }
+            }
+            catch (cacheError) {
+                logWithTimestamp(`[DESIGN_ANALYZER] Error caching design analysis: ${cacheError}`);
+            }
+        }
+        return result;
     }
     /**
      * Clean up temporary files

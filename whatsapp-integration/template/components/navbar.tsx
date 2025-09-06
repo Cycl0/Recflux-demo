@@ -26,7 +26,7 @@ import {
   Logo,
 } from "@/components/icons";
 
-export const Navbar = () => {
+export const NavBar = () => {
   const searchInput = (
     <Input
       aria-label="Search"

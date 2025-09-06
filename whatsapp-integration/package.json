@@ -35,6 +35,7 @@
     "puppeteer-core": "^24.17.1",
     "puppeteer-extra": "^3.3.6",
     "puppeteer-extra-plugin-stealth": "^2.11.2",
+    "redis": "^5.8.2",
     "tailwindcss": "^4.1.12",
     "vercel": "^37.14.0",
     "zod": "^3.23.8"

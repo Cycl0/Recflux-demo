@@ -7,13 +7,7 @@ COPY package.json package-lock.json ./
 RUN npm ci
 
 # Copy source and build
-COPY tsconfig.json ./
-COPY src ./src
-COPY mcp-config.json ./
-COPY cline-config.json ./
-COPY cline-mcp-settings.json ./
-COPY template ./_template
-COPY default_components ./default_components
+COPY . .
 RUN npx tsc -p tsconfig.json
 
 FROM node:22.12.0-bookworm AS runtime
@@ -97,7 +91,7 @@ RUN groupadd -r appuser && useradd -r -g appuser -m appuser
 # Copy built artifacts and config
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/mcp-config.json ./mcp-config.json
-COPY --from=builder /app/_template /_template
+COPY --from=builder /app/template /_template
 COPY --from=builder /app/default_components ./default_components
 
 # Create cline CLI config directories and copy configs
@@ -116,8 +110,8 @@ RUN mkdir -p /workspace && \
     chown -R appuser:appuser /workspace
 
 # Expose port
-ENV PORT=3000
-EXPOSE 3000
+ENV PORT=3005
+EXPOSE 3005
 
 # Runtime envs (document placeholders)
 ENV CLAUDE_AUTH_TOKEN=""
@@ -133,7 +127,10 @@ ENV GROQ_API_KEY=""
 ENV SERVICES_HOST="localhost"
 ENV SERVICES_SCHEME="http"
 ENV NETLIFY_API_KEY=""
-ENV PORT=3005
+ENV LANGCACHE_API_KEY=""
+ENV REDIS_URL=""
+ENV REDIS_PASSWORD=""
+ENV REDIS_USER=""
 
 # Anthropic-compatible (Moonshot Kimi K2) envs
 ENV ANTHROPIC_AUTH_TOKEN=""

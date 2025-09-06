@@ -8,6 +8,8 @@ import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 const pptr = puppeteer;
 import { deployToNetlify } from './deploy-netlify.js';
+import { getRedisCache } from './redis-cache.js';
+import { GeminiVisionAnalyzer, GeminiDesignPrompts } from './gemini-vision-integration.js';
 // Minimal MCP server exposing project_reset and CodeSandbox deployment only.
 const server = new McpServer({ name: 'recflux-deployer', version: '1.0.0' }, { capabilities: { tools: {} } });
 server.registerTool('project_reset', {
@@ -143,7 +145,9 @@ server.registerTool('puppeteer_search', {
     description: 'Search for various types of content using PUPPETEER',
     inputSchema: {
         searchTerm: z.string().describe('The search term to look for. Use only a single term in english to increase the chances of finding relevant content.'),
-        searchType: z.enum(['videos', 'icons', 'vectors', 'vfx', 'music', 'animations']).default('videos').describe('The type of content to search for')
+        searchType: z.enum(['videos', 'icons', 'vectors', 'vfx', 'music', 'animations']).default('videos').describe('The type of content to search for'),
+        theme: z.string().describe('Project theme for caching results (e.g., ecommerce, portfolio, saas)'),
+        bypassCache: z.boolean().default(false).optional().describe('Bypass Redis cache and force fresh search')
     }
 }, async (args) => {
     const logMessage = (msg) => {
@@ -157,10 +161,17 @@ server.registerTool('puppeteer_search', {
     // Using Puppeteer (with stealth + proxy rotation) for all content extraction
     const searchTerm = args.searchTerm || '';
     const searchType = args.searchType || 'videos';
+    const theme = args.theme;
+    const bypassCache = args.bypassCache || false;
     logMessage('[MCP_PUPPETEER] Parsed searchTerm: ' + searchTerm);
     logMessage('[MCP_PUPPETEER] Parsed searchType: ' + searchType);
+    logMessage('[MCP_PUPPETEER] Parsed theme: ' + theme);
+    logMessage('[MCP_PUPPETEER] Parsed bypassCache: ' + bypassCache);
     if (!searchTerm) {
         return { content: [{ type: 'text', text: 'Error: No search term provided' }] };
+    }
+    if (!theme) {
+        return { content: [{ type: 'text', text: 'Error: No theme provided' }] };
     }
     let url = '';
     switch (searchType) {
@@ -186,6 +197,71 @@ server.registerTool('puppeteer_search', {
             break;
     }
     logMessage(`[MCP_PUPPETEER] Searching ${searchType} for "${searchTerm}"`);
+    // Initialize Redis cache
+    const cache = getRedisCache();
+    // Check cache first if not bypassing cache
+    if (!bypassCache) {
+        try {
+            await cache.connect();
+            logMessage(`[MCP_PUPPETEER] Checking cache for theme: ${theme}, searchTerm: ${searchTerm}, searchType: ${searchType}`);
+            const cachedResults = await cache.getPuppeteerResults(theme, `${searchType}:${searchTerm}`);
+            if (cachedResults) {
+                logMessage(`[MCP_PUPPETEER] Cache hit! Using cached results for: ${searchType}:${searchTerm}`);
+                // Convert cached scrapedData back to expected format
+                let results = [];
+                if (searchType === 'videos' && cachedResults.scrapedData.videos) {
+                    results = cachedResults.scrapedData.videos.map(v => ({
+                        title: `Video from cache`,
+                        videoUrl: v.src,
+                        thumbnailUrl: v.thumbnail,
+                        type: v.type
+                    }));
+                }
+                else if (searchType === 'images' && cachedResults.scrapedData.images) {
+                    results = cachedResults.scrapedData.images.map(img => ({
+                        title: img.alt || 'Image from cache',
+                        src: img.src,
+                        type: img.type
+                    }));
+                }
+                else if (searchType === 'icons' && cachedResults.scrapedData.icons) {
+                    results = cachedResults.scrapedData.icons.map(icon => ({
+                        title: 'Icon from cache',
+                        src: icon.src,
+                        type: icon.type,
+                        size: icon.size
+                    }));
+                }
+                else if (searchType === 'vectors' && cachedResults.scrapedData.vectors) {
+                    results = cachedResults.scrapedData.vectors.map(vector => ({
+                        title: 'Vector from cache',
+                        src: vector.src,
+                        format: vector.format,
+                        usage: vector.usage
+                    }));
+                }
+                return { content: [{ type: 'text', text: JSON.stringify({
+                                searchType,
+                                searchTerm,
+                                theme,
+                                source: 'Redis Cache',
+                                cached: true,
+                                timestamp: cachedResults.timestamp,
+                                results: results,
+                                totalFound: results.length
+                            }, null, 2) }] };
+            }
+            else {
+                logMessage(`[MCP_PUPPETEER] Cache miss, proceeding with fresh search for: ${searchType}:${searchTerm}`);
+            }
+        }
+        catch (cacheError) {
+            logMessage(`[MCP_PUPPETEER] Cache check failed: ${cacheError}. Proceeding with fresh search.`);
+        }
+    }
+    else {
+        logMessage(`[MCP_PUPPETEER] Cache bypass requested for: ${searchType}:${searchTerm}`);
+    }
     try {
         // Use Pexels API for videos only, PUPPETEER for all other content types including images
         if (searchType === 'videos') {
@@ -211,12 +287,40 @@ server.registerTool('puppeteer_search', {
                     duration: video.duration,
                     type: 'video'
                 })) || [];
+                // Cache the results
+                try {
+                    logMessage(`[MCP_PUPPETEER] Caching Pexels API results for theme: ${theme}`);
+                    await cache.setPuppeteerResults(theme, `${searchType}:${searchTerm}`, {
+                        scrapedData: {
+                            videos: results.map(r => ({ src: r.preview_url, type: r.type, thumbnail: r.thumbnail })),
+                            images: [],
+                            icons: [],
+                            vectors: [],
+                            colors: [],
+                            fonts: [],
+                            socialMedia: [],
+                            backgroundImages: []
+                        },
+                        metadata: {
+                            scrapedAt: new Date().toISOString(),
+                            userAgent: 'Pexels API',
+                            viewport: { width: 0, height: 0 },
+                            loadTime: 0,
+                            elementsFound: results.length
+                        },
+                        ttl: 259200 // 3 days
+                    });
+                }
+                catch (cacheError) {
+                    logMessage(`[MCP_PUPPETEER] Failed to cache Pexels results: ${cacheError}`);
+                }
                 return { content: [{ type: 'text', text: JSON.stringify({
                                 searchType,
                                 searchTerm,
                                 source: 'Pexels API',
                                 total_results: data.total_results,
-                                results: results
+                                results: results,
+                                cached: false
                             }, null, 2) }] };
             }
             else {
@@ -634,12 +738,61 @@ server.registerTool('puppeteer_search', {
                 }, searchType);
             }
             logMessage(`[MCP_PUPPETEER] Extracted ${contentData.length} items via Puppeteer`);
+            const puppeteerResults = {
+                searchType,
+                searchTerm,
+                results: contentData.slice(0, 10),
+                totalFound: contentData.length,
+                source: 'puppeteer-extracted'
+            };
+            // Cache the results in proper PuppeteerCacheEntry format
+            try {
+                logMessage(`[MCP_PUPPETEER] Caching Puppeteer results for theme: ${theme}`);
+                // Convert extracted content to PuppeteerCacheEntry format
+                const scrapedData = {
+                    videos: searchType === 'videos' ? contentData.slice(0, 10).map((item) => ({
+                        src: item.videoUrl || item.src || '',
+                        type: item.type || 'video',
+                        thumbnail: item.thumbnailUrl || item.thumbnail
+                    })) : [],
+                    images: searchType === 'images' ? contentData.slice(0, 10).map((item) => ({
+                        src: item.src || '',
+                        alt: item.title || '',
+                        type: item.type || 'image'
+                    })) : [],
+                    icons: searchType === 'icons' ? contentData.slice(0, 10).map((item) => ({
+                        src: item.src || '',
+                        type: item.type || 'icon',
+                        size: item.size
+                    })) : [],
+                    vectors: searchType === 'vectors' ? contentData.slice(0, 10).map((item) => ({
+                        src: item.src || '',
+                        format: item.format || 'svg',
+                        usage: item.usage
+                    })) : [],
+                    colors: [],
+                    fonts: [],
+                    socialMedia: [],
+                    backgroundImages: []
+                };
+                await cache.setPuppeteerResults(theme, `${searchType}:${searchTerm}`, {
+                    scrapedData,
+                    metadata: {
+                        scrapedAt: new Date().toISOString(),
+                        userAgent: 'Puppeteer Chrome',
+                        viewport: { width: 1024, height: 768 },
+                        loadTime: 0,
+                        elementsFound: contentData.length
+                    },
+                    ttl: 259200 // 3 days
+                });
+            }
+            catch (cacheError) {
+                logMessage(`[MCP_PUPPETEER] Failed to cache Puppeteer results: ${cacheError}`);
+            }
             return { content: [{ type: 'text', text: JSON.stringify({
-                            searchType,
-                            searchTerm,
-                            results: contentData.slice(0, 10),
-                            totalFound: contentData.length,
-                            source: 'puppeteer-extracted'
+                            ...puppeteerResults,
+                            cached: false
                         }, null, 2) }] };
         }
         finally {
@@ -662,7 +815,8 @@ server.registerTool('freepik_ai_image_generator', {
         imageRole: z.string().optional().describe('Specific role of the image (e.g., "background", "icon", "illustration", "photo", "avatar")'),
         aspect_ratio: z.enum(['square_1_1', 'classic_4_3', 'traditional_3_4', 'widescreen_16_9', 'social_story_9_16', 'standard_3_2', 'portrait_2_3', 'horizontal_2_1', 'vertical_1_2']).default('square_1_1').optional().describe('Aspect ratio of the generated image'),
         num_images: z.number().min(1).max(4).default(1).optional().describe('Number of images to generate (1-4)'),
-        seed: z.number().min(1).max(4294967295).optional().describe('Seed for reproducible generation')
+        seed: z.number().min(1).max(4294967295).optional().describe('Seed for reproducible generation'),
+        bypassCache: z.boolean().default(false).optional().describe('Bypass Redis cache and force fresh image generation')
     }
 }, async (args) => {
     const logMessage = (msg) => {
@@ -684,11 +838,53 @@ server.registerTool('freepik_ai_image_generator', {
         const aspectRatio = args.aspect_ratio || 'square_1_1';
         const numImages = args.num_images || 1;
         const seed = args.seed || Math.floor(Math.random() * 4294967295);
+        const bypassCache = args.bypassCache || false;
         if (!prompt) {
             return { content: [{ type: 'text', text: 'Error: No prompt provided' }] };
         }
         if (!htmlContext) {
             return { content: [{ type: 'text', text: 'Error: HTML context is required for contextual image generation. Please provide the HTML/component structure where this image will be placed.' }] };
+        }
+        // Initialize Redis cache and check for cached results
+        const cache = getRedisCache();
+        if (!bypassCache) {
+            try {
+                await cache.connect();
+                logMessage(`[FREEPIK_AI] Checking cache for prompt: ${prompt.substring(0, 50)}...`);
+                const cachedResults = await cache.getImageGenerationResults(prompt);
+                if (cachedResults) {
+                    logMessage(`[FREEPIK_AI] Cache hit! Using cached image for prompt: ${prompt.substring(0, 50)}...`);
+                    return {
+                        content: [{
+                                type: 'text',
+                                text: JSON.stringify({
+                                    success: true,
+                                    imageUrl: cachedResults.imageUrl,
+                                    allImages: cachedResults.allImages,
+                                    totalImages: cachedResults.allImages.length,
+                                    filename: `cached_${Date.now()}.jpg`,
+                                    format: 'jpeg',
+                                    model: 'freepik-flux-dev',
+                                    hosting: 'Freepik CDN',
+                                    aspectRatio: cachedResults.metadata.aspectRatio,
+                                    seed: cachedResults.metadata.seed,
+                                    taskId: cachedResults.metadata.taskId,
+                                    cached: true,
+                                    timestamp: cachedResults.timestamp
+                                }, null, 2)
+                            }]
+                    };
+                }
+                else {
+                    logMessage(`[FREEPIK_AI] Cache miss, proceeding with fresh generation for: ${prompt.substring(0, 50)}...`);
+                }
+            }
+            catch (cacheError) {
+                logMessage(`[FREEPIK_AI] Cache check failed: ${cacheError}. Proceeding with fresh generation.`);
+            }
+        }
+        else {
+            logMessage(`[FREEPIK_AI] Cache bypass requested for prompt: ${prompt.substring(0, 50)}...`);
         }
         // Simple prompt - let the system prompt handle the contextual analysis
         const contextualPrompt = prompt;
@@ -765,6 +961,25 @@ server.registerTool('freepik_ai_image_generator', {
             const filename = `freepik_${sanitizedPrompt}_${timestamp}.jpg`;
             logMessage(`[FREEPIK_AI] Image generation completed successfully!`);
             logMessage(`[FREEPIK_AI] Direct image URL: ${imageUrl}`);
+            // Cache the results for future use
+            try {
+                logMessage(`[FREEPIK_AI] Caching image generation results for prompt: ${prompt.substring(0, 50)}...`);
+                await cache.setImageGenerationResults(prompt, {
+                    imageUrl: imageUrl,
+                    allImages: allGeneratedImages,
+                    metadata: {
+                        aspectRatio: aspectRatio,
+                        seed: seed,
+                        taskId: taskId,
+                        model: 'freepik-flux-dev',
+                        generatedAt: new Date().toISOString()
+                    },
+                    ttl: 2592000 // 30 days
+                });
+            }
+            catch (cacheError) {
+                logMessage(`[FREEPIK_AI] Failed to cache image generation results: ${cacheError}`);
+            }
             return {
                 content: [{
                         type: 'text',
@@ -779,7 +994,8 @@ server.registerTool('freepik_ai_image_generator', {
                             hosting: 'Freepik CDN',
                             aspectRatio: aspectRatio,
                             seed: seed,
-                            taskId: taskId
+                            taskId: taskId,
+                            cached: false
                         }, null, 2)
                     }]
             };
@@ -812,7 +1028,8 @@ server.registerTool('web_crawler', {
         cssSelector: z.string().optional().describe('CSS selector to extract specific elements'),
         extractionQuery: z.string().optional().describe('Specific question/query for LLM-based extraction (e.g., "Extract all product prices")'),
         userAgent: z.string().optional().describe('Custom user agent string'),
-        timeout: z.number().min(10).max(120).default(30).optional().describe('Timeout in seconds')
+        timeout: z.number().min(10).max(120).default(30).optional().describe('Timeout in seconds'),
+        bypassCache: z.boolean().default(false).optional().describe('Bypass Redis cache and force fresh crawl')
     }
 }, async (args) => {
     const logMessage = (msg) => {
@@ -822,7 +1039,53 @@ server.registerTool('web_crawler', {
     logMessage('[CRAWL4AI_CLI] *** TOOL CALLED! ***');
     logMessage('[CRAWL4AI_CLI] Called with args: ' + JSON.stringify(args));
     try {
-        const { url, outputFormat = 'markdown', deepCrawl = false, deepCrawlStrategy = 'bfs', maxPages = 5, cssSelector, extractionQuery, userAgent, timeout = 30 } = args;
+        const { url, outputFormat = 'markdown', deepCrawl = false, deepCrawlStrategy = 'bfs', maxPages = 5, cssSelector, extractionQuery, userAgent, timeout = 30, bypassCache = false } = args;
+        // Initialize Redis cache
+        const cache = getRedisCache();
+        // Try to connect to Redis (non-blocking)
+        try {
+            await cache.connect();
+        }
+        catch (redisError) {
+            logMessage(`[CRAWL4AI_CLI] Redis connection failed, proceeding without cache: ${redisError}`);
+        }
+        // Check cache first (unless bypassing cache)
+        if (!bypassCache) {
+            logMessage(`[CRAWL4AI_CLI] Checking cache for: ${url}`);
+            const cachedResult = await cache.getCrawlAnalysis(url, outputFormat);
+            if (cachedResult) {
+                logMessage(`[CRAWL4AI_CLI] Cache hit! Returning cached result for: ${url}`);
+                const result = {
+                    success: true,
+                    url: cachedResult.url,
+                    outputFormat: cachedResult.outputFormat,
+                    deepCrawl: deepCrawl,
+                    timestamp: cachedResult.timestamp,
+                    crawler: 'crawl4ai-cli-cached',
+                    content: cachedResult.textualAnalysis,
+                    cached: true,
+                    cacheTimestamp: cachedResult.timestamp,
+                    ...(deepCrawl && {
+                        crawlStrategy: deepCrawlStrategy,
+                        maxPages: maxPages
+                    }),
+                    ...(extractionQuery && { extractionQuery }),
+                    ...(cssSelector && { cssSelector })
+                };
+                return {
+                    content: [{
+                            type: 'text',
+                            text: JSON.stringify(result, null, 2)
+                        }]
+                };
+            }
+            else {
+                logMessage(`[CRAWL4AI_CLI] Cache miss, proceeding with fresh crawl for: ${url}`);
+            }
+        }
+        else {
+            logMessage(`[CRAWL4AI_CLI] Cache bypass requested, proceeding with fresh crawl for: ${url}`);
+        }
         logMessage(`[CRAWL4AI_CLI] Starting Crawl4AI CLI crawl for: ${url}`);
         // Build crwl command arguments - note: crwl requires 'crawl' subcommand
         const crwlArgs = ['crawl', url];
@@ -884,7 +1147,7 @@ server.registerTool('web_crawler', {
             crwlProcess.stderr.on('data', (data) => {
                 stderr += data.toString();
             });
-            crwlProcess.on('close', (code, signal) => {
+            crwlProcess.on('close', async (code, signal) => {
                 clearTimeout(killTimer);
                 logMessage(`[CRAWL4AI_CLI] crwl process exited with code: ${code}${signal ? `, signal: ${signal}` : ''}`);
                 if (stderr) {
@@ -901,6 +1164,7 @@ server.registerTool('web_crawler', {
                         timestamp: new Date().toISOString(),
                         crawler: 'crawl4ai-cli',
                         content: stdout.trim(),
+                        cached: false,
                         ...(deepCrawl && {
                             crawlStrategy: deepCrawlStrategy,
                             maxPages: maxPages
@@ -908,6 +1172,33 @@ server.registerTool('web_crawler', {
                         ...(extractionQuery && { extractionQuery }),
                         ...(cssSelector && { cssSelector })
                     };
+                    // Cache the successful result
+                    if (!bypassCache) {
+                        try {
+                            const cacheSuccess = await cache.setCrawlAnalysis(url, {
+                                textualAnalysis: stdout.trim(),
+                                crawledContent: {
+                                    outputFormat,
+                                    deepCrawl,
+                                    ...(deepCrawl && { crawlStrategy: deepCrawlStrategy, maxPages }),
+                                    ...(extractionQuery && { extractionQuery }),
+                                    ...(cssSelector && { cssSelector })
+                                },
+                                outputFormat,
+                                ttl: parseInt(process.env.CACHE_TTL_CRAWL || '86400') // 24 hours default
+                            }, outputFormat);
+                            if (cacheSuccess) {
+                                logMessage(`[CRAWL4AI_CLI] Successfully cached result for: ${url}`);
+                                result.cached = 'stored';
+                            }
+                            else {
+                                logMessage(`[CRAWL4AI_CLI] Failed to cache result for: ${url}`);
+                            }
+                        }
+                        catch (cacheError) {
+                            logMessage(`[CRAWL4AI_CLI] Error caching result: ${cacheError}`);
+                        }
+                    }
                     resolve({
                         content: [{
                                 type: 'text',
@@ -977,7 +1268,8 @@ server.registerTool('gemini_vision_analyzer', {
     inputSchema: {
         screenshotPath: z.string().describe('Path to the screenshot file to analyze'),
         analysisType: z.enum(['full', 'color', 'layout', 'component']).default('full').describe('Type of analysis to perform'),
-        customPrompt: z.string().optional().describe('Optional custom prompt for specific analysis needs')
+        customPrompt: z.string().optional().describe('Optional custom prompt for specific analysis needs'),
+        bypassCache: z.boolean().default(false).optional().describe('Bypass Redis cache and force fresh analysis')
     }
 }, async (args) => {
     const logMessage = (msg) => {
@@ -986,7 +1278,7 @@ server.registerTool('gemini_vision_analyzer', {
     };
     logMessage('[GEMINI_VISION] *** TOOL CALLED! ***');
     logMessage('[GEMINI_VISION] Called with args: ' + JSON.stringify(args));
-    const { screenshotPath, analysisType = 'full', customPrompt } = args;
+    const { screenshotPath, analysisType = 'full', customPrompt, bypassCache = false } = args;
     if (!screenshotPath) {
         return { content: [{ type: 'text', text: 'Error: No screenshot path provided' }] };
     }
@@ -998,140 +1290,58 @@ server.registerTool('gemini_vision_analyzer', {
         return { content: [{ type: 'text', text: 'Error: OPENROUTER_API_KEY environment variable is required' }] };
     }
     try {
-        // Read and encode screenshot
-        const imageBuffer = await fs.readFile(screenshotPath);
-        const base64Image = imageBuffer.toString('base64');
-        const mimeType = screenshotPath.toLowerCase().endsWith('.png') ? 'image/png' : 'image/jpeg';
-        // Design analysis prompts
-        const prompts = {
-            full: `DESIGN ANALYSIS TASK - WEBSITE SCREENSHOT
-
-Analyze this website screenshot and provide detailed technical specifications for replication using modern web technologies.
-
-REQUIRED ANALYSIS SECTIONS:
-
-1. COLOR PALETTE EXTRACTION:
-   - Primary colors (provide exact hex codes where possible)
-   - Secondary colors and accents
-   - Background colors and gradients
-   - Text colors and contrast ratios
-
-2. LAYOUT & STRUCTURE:
-   - Grid system (12-column, flexbox, CSS grid)
-   - Container widths and section spacing
-   - Content organization and hierarchy
-   - Responsive design patterns
-
-3. TYPOGRAPHY ANALYSIS:
-   - Font families (serif, sans-serif, monospace)
-   - Font weights and sizes observed
-   - Text hierarchy patterns
-
-4. COMPONENT SPECIFICATIONS:
-   - Button styles (shapes, colors, hover states)
-   - Card designs (borders, shadows, spacing)
-   - Navigation patterns
-
-5. TAILWIND CSS IMPLEMENTATION:
-   - Specific Tailwind classes for replication
-   - Custom CSS requirements
-
-Provide specific, actionable technical details for accurate replication.`,
-            color: `COLOR EXTRACTION TASK - WEBSITE SCREENSHOT
-
-Analyze this screenshot and extract detailed color information:
-1. Extract exact hex codes for all visible colors
-2. Identify color usage patterns (backgrounds, text, accents)
-3. Note any gradients with their properties
-4. Provide recommendations for implementation`,
-            layout: `LAYOUT ANALYSIS TASK - WEBSITE SCREENSHOT
-
-Analyze this screenshot for layout specifications:
-1. Grid system identification
-2. Section spacing and arrangements
-3. Content hierarchy and organization
-4. Responsive design patterns
-5. Element positioning and alignment`,
-            component: `COMPONENT ANALYSIS TASK - WEBSITE SCREENSHOT
-
-Identify and analyze UI components in this screenshot:
-1. Button variations and states
-2. Card components structure
-3. Navigation elements
-4. Form elements and styling
-5. Typography components`
-        };
-        const prompt = customPrompt || prompts[analysisType] || prompts.full;
+        // Initialize Gemini Vision Analyzer
+        const analyzer = new GeminiVisionAnalyzer(openRouterApiKey);
+        // Select appropriate prompt
+        let prompt = customPrompt;
+        if (!prompt) {
+            switch (analysisType) {
+                case 'full':
+                    prompt = GeminiDesignPrompts.fullAnalysis;
+                    break;
+                case 'color':
+                    prompt = GeminiDesignPrompts.colorAnalysis;
+                    break;
+                case 'layout':
+                    prompt = GeminiDesignPrompts.layoutAnalysis;
+                    break;
+                case 'component':
+                    prompt = GeminiDesignPrompts.componentAnalysis;
+                    break;
+                default: prompt = GeminiDesignPrompts.fullAnalysis;
+            }
+        }
         logMessage(`[GEMINI_VISION] Using analysis type: ${analysisType}`);
         logMessage(`[GEMINI_VISION] Screenshot path: ${screenshotPath}`);
-        logMessage(`[GEMINI_VISION] Image size: ${Math.round(imageBuffer.length / 1024)}KB`);
-        // Prepare OpenRouter API request for Gemini 2.5 Flash
-        const openRouterRequest = {
-            model: 'google/gemini-2.5-flash-image-preview',
-            max_tokens: 4000,
-            temperature: 0.1,
-            messages: [
-                {
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'text',
-                            text: prompt
-                        },
-                        {
-                            type: 'image_url',
-                            image_url: {
-                                url: `data:${mimeType};base64,${base64Image}`
-                            }
-                        }
-                    ]
-                }
-            ]
-        };
-        logMessage('[GEMINI_VISION] Calling OpenRouter API...');
-        // Make API call to OpenRouter
-        const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', openRouterRequest, {
-            headers: {
-                'Authorization': `Bearer ${openRouterApiKey}`,
-                'Content-Type': 'application/json',
-                'HTTP-Referer': 'https://recflux-demo.com',
-                'X-Title': 'Website Design Analysis Tool'
-            }
+        logMessage(`[GEMINI_VISION] Bypass cache: ${bypassCache}`);
+        // Analyze screenshot using the GeminiVisionAnalyzer with caching
+        const result = await analyzer.analyzeScreenshot({
+            screenshotPath,
+            prompt,
+            bypassCache,
+            analysisType
         });
-        logMessage(`[GEMINI_VISION] API response status: ${response.status}`);
-        if (response.status === 200) {
-            const analysis = response.data.choices[0].message.content;
-            const tokensUsed = response.data.usage?.total_tokens || 0;
-            logMessage(`[GEMINI_VISION] Analysis completed successfully`);
-            logMessage(`[GEMINI_VISION] Tokens used: ${tokensUsed}`);
-            logMessage(`[GEMINI_VISION] Analysis length: ${analysis.length} characters`);
-            // Calculate confidence score
-            const keywords = ['color', 'layout', 'typography', 'component', 'spacing', 'design'];
-            const foundKeywords = keywords.filter(keyword => analysis.toLowerCase().includes(keyword)).length;
-            const confidence = Math.round((foundKeywords / keywords.length + Math.min(analysis.length / 1000, 1)) / 2 * 100) / 100;
-            const result = {
-                success: true,
-                analysis: analysis,
-                confidence: confidence,
-                analysisType: analysisType,
-                metadata: {
-                    model: 'google/gemini-2.5-flash-image-preview',
-                    tokensUsed: tokensUsed,
-                    screenshotPath: screenshotPath,
-                    timestamp: new Date().toISOString()
-                }
-            };
-            return {
-                content: [{
-                        type: 'text',
-                        text: JSON.stringify(result, null, 2)
-                    }]
-            };
-        }
-        else {
-            logMessage(`[GEMINI_VISION] API error: ${response.status} ${response.statusText}`);
-            return { content: [{ type: 'text', text: `OpenRouter API error: ${response.status} ${response.statusText}` }] };
-        }
+        logMessage(`[GEMINI_VISION] Analysis completed successfully`);
+        logMessage(`[GEMINI_VISION] Confidence: ${result.confidence}`);
+        logMessage(`[GEMINI_VISION] Tokens used: ${result.metadata.tokens_used}`);
+        logMessage(`[GEMINI_VISION] Cached: ${result.metadata.cached || false}`);
+        const response = {
+            success: true,
+            analysis: result.analysis,
+            confidence: result.confidence,
+            analysisType: analysisType,
+            metadata: {
+                ...result.metadata,
+                screenshotPath: screenshotPath,
+                timestamp: new Date().toISOString()
+            }
+        };
+        return {
+            content: [{
+                    type: 'text',
+                    text: JSON.stringify(response, null, 2)
+                }]
+        };
     }
     catch (error) {
         logMessage(`[GEMINI_VISION] Error: ${error?.message || error}`);
@@ -1168,9 +1378,10 @@ server.registerTool('design_inspiration_analyzer', {
         ]).describe('Project theme/category'),
         includeVisualAnalysis: z.boolean().default(true).describe('Whether to include screenshot capture and Gemini vision analysis'),
         includeTextualAnalysis: z.boolean().default(true).describe('Whether to include web crawling for textual content analysis'),
-        customSites: z.array(z.string()).optional().describe('Optional custom inspiration sites to analyze in addition to auto-selected ones')
+        customSites: z.array(z.string()).optional().describe('Optional custom inspiration sites to analyze in addition to auto-selected ones'),
+        bypassCache: z.boolean().default(false).optional().describe('Bypass Redis cache and force fresh analysis')
     }
-}, async ({ theme, includeVisualAnalysis = true, includeTextualAnalysis = true, customSites = [] }) => {
+}, async ({ theme, includeVisualAnalysis = true, includeTextualAnalysis = true, customSites = [], bypassCache = false }) => {
     const startTime = Date.now();
     function logWithTimestamp(msg) {
         fs.appendFile('mcp-design-analyzer.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => { });
@@ -1186,7 +1397,7 @@ server.registerTool('design_inspiration_analyzer', {
         const analyzer = new DesignInspirationAnalyzer(process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER_API_KEY);
         logWithTimestamp(`[DESIGN_ANALYZER] Analyzer instance created successfully`);
         // Perform the complete analysis
-        const result = await analyzer.analyzeDesignInspiration(theme);
+        const result = await analyzer.analyzeDesignInspiration(theme, bypassCache);
         // Clean up temporary files
         await analyzer.cleanup();
         const processingTime = Date.now() - startTime;
