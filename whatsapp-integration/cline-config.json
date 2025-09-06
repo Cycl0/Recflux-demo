@@ -1,9 +1,9 @@
 {
   "globalState": {
     "apiProvider": "openrouter",
-    "modelId": "moonshotai/kimi-k2",
-    "openRouterModelId": "moonshotai/kimi-k2",
-    "openRouterModelInfo": { "supportsPromptCache": false, "inputPrice": 0.14, "outputPrice": 2.49  },
+    "modelId": "x-ai/grok-code-fast-1",
+    "openRouterModelId": "x-ai/grok-code-fast-1",
+    "openRouterModelInfo": { "supportsPromptCache": false, "inputPrice": 0.2, "outputPrice": 1.5  },
     "autoApprovalSettings": {
       "enabled": true,
       "actions": {
@@ -12,7 +12,7 @@
         "executeSafeCommands": true,
         "useMcp": true
       },
-      "maxRequests": 30
+      "maxRequests": 100
     }
   },
   "settings": {

@@ -148,19 +148,24 @@ services:
       # ANTHROPIC_API_KEY: "${CLAUDE_AUTH_TOKEN}"
       # Browserbase (MCP tools)
       OPEN_ROUTER_API_KEY: "${OPEN_ROUTER_API_KEY}"
+      OPENROUTER_API_KEY: "${OPENROUTER_API_KEY}"
       OPEN_AI_API_KEY: "${OPEN_AI_API_KEY}"
       GROQ_API_KEY: "${GROQ_API_KEY}"
       BROWSERBASE_API_KEY: "${BROWSERBASE_API_KEY}"
       BROWSERBASE_PROJECT_ID: "${BROWSERBASE_PROJECT_ID}"
+      ENFORCE_NAVBAR_PROTECTION: "${ENFORCE_NAVBAR_PROTECTION}"
       # Pexels API Key
       PEXELS_API_KEY: "${PEXELS_API_KEY}"
+      # Image upload service (for Gemini vision analysis)
+      IMGBB_API_KEY: "${IMGBB_API_KEY}"
       # Project path inside container
       CLONED_TEMPLATE_DIR: "/workspace/project"
+      NETLIFY_API_KEY: "${NETLIFY_API_KEY}"
     volumes:
       # Persist project workspace outside the image
       - whatsapp_project:/workspace/project
       # Mount Claude Code credentials for Pro subscription
-      - ${USERPROFILE}/.claude:/home/appuser/.claude
+      # - ${USERPROFILE}/.claude:/home/appuser/.claude
 
 volumes:
   whatsapp_project:

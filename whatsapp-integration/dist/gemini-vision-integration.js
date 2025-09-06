@@ -6,6 +6,10 @@
  */
 import axios from 'axios';
 import { promises as fs } from 'fs';
+import FormData from 'form-data';
+function logWithTimestamp(msg) {
+    fs.appendFile('mcp-design-analyzer.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => { });
+}
 export class GeminiVisionAnalyzer {
     config;
     constructor(apiKey) {
@@ -30,17 +34,16 @@ export class GeminiVisionAnalyzer {
             if (!imgbbApiKey) {
                 throw new Error('IMGBB_API_KEY environment variable is required');
             }
-            console.log('[GEMINI_VISION] Original image size:', Math.round(base64Image.length / 1024), 'KB');
+            logWithTimestamp('[GEMINI_VISION] Original image size:' + Math.round(base64Image.length / 1024) + 'KB');
             // Check if image is too large for imgbb (32MB limit, but we'll be conservative with 8MB for base64)
             // Base64 encoding increases size by ~33%, so 8MB base64 ≈ 6MB binary
             const maxSizeBase64 = 8 * 1024 * 1024; // 8MB for base64 string
             if (base64Image.length > maxSizeBase64) {
-                console.log('[GEMINI_VISION] Image too large for imgbb, size:', Math.round(base64Image.length / 1024), 'KB > 8MB limit');
-                console.log('[GEMINI_VISION] Skipping vision analysis for this image to prevent API errors');
+                logWithTimestamp('[GEMINI_VISION] Image too large for imgbb, size:' + Math.round(base64Image.length / 1024) + 'KB > 8MB limit');
+                logWithTimestamp('[GEMINI_VISION] Skipping vision analysis for this image to prevent API errors');
                 throw new Error(`Image too large for imgbb upload: ${Math.round(base64Image.length / 1024)}KB > 8MB base64 limit. Consider using viewport screenshots only.`);
             }
             // Use form data format for imgbb API
-            const FormData = require('form-data');
             const formData = new FormData();
             formData.append('image', base64Image);
             formData.append('name', `screenshot_${Date.now()}`);
@@ -49,13 +52,13 @@ export class GeminiVisionAnalyzer {
                     ...formData.getHeaders()
                 }
             });
-            console.log('[GEMINI_VISION] Imgbb response status:', imgbbResponse.status);
-            console.log('[GEMINI_VISION] Imgbb response success:', imgbbResponse.data?.success);
+            logWithTimestamp('[GEMINI_VISION] Imgbb response status:' + imgbbResponse.status);
+            logWithTimestamp('[GEMINI_VISION] Imgbb response success:' + imgbbResponse.data?.success);
             if (!imgbbResponse.data?.success) {
                 throw new Error(`Failed to upload image to imgbb: ${JSON.stringify(imgbbResponse.data)}`);
             }
             const imageUrl = imgbbResponse.data.data.url;
-            console.log('[GEMINI_VISION] Image uploaded successfully to:', imageUrl);
+            logWithTimestamp('[GEMINI_VISION] Image uploaded successfully to:' + imageUrl);
             // Prepare OpenRouter API request with image URL
             const openRouterRequest = {
                 model: this.config.model,
@@ -101,7 +104,7 @@ export class GeminiVisionAnalyzer {
             };
         }
         catch (error) {
-            console.error('[GEMINI_VISION] Analysis failed:', error);
+            logWithTimestamp('[GEMINI_VISION] Analysis failed:' + (error instanceof Error ? error.message : 'Unknown error'));
             throw new Error(`Gemini vision analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
         }
     }
@@ -112,7 +115,7 @@ export class GeminiVisionAnalyzer {
         const results = [];
         // Process with delay to respect rate limits
         for (let i = 0; i < requests.length; i++) {
-            console.log(`[GEMINI_VISION] Processing screenshot ${i + 1}/${requests.length}`);
+            logWithTimestamp(`[GEMINI_VISION] Processing screenshot ${i + 1}/${requests.length}`);
             try {
                 const result = await this.analyzeScreenshot(requests[i]);
                 results.push(result);
@@ -122,7 +125,7 @@ export class GeminiVisionAnalyzer {
                 }
             }
             catch (error) {
-                console.error(`[GEMINI_VISION] Failed to process request ${i + 1}:`, error);
+                logWithTimestamp(`[GEMINI_VISION] Failed to process request ${i + 1}:` + (error instanceof Error ? error.message : 'Unknown error'));
                 // Continue with other requests
                 results.push({
                     analysis: 'Analysis failed',

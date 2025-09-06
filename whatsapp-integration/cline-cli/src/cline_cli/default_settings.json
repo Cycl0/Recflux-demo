@@ -1,0 +1,50 @@
+{
+    "globalState": {
+        "apiProvider": "",
+        "apiModelId": "",
+        "awsRegion": "",
+        "awsUseCrossRegionInference": "",
+        "awsBedrockUsePromptCache": "",
+        "awsBedrockEndpoint": "",
+        "awsProfile": "",
+        "awsUseProfile": "",
+        "vertexProjectId": "",
+        "vertexRegion": "",
+        "openAiBaseUrl": "",
+        "openAiModelId": "",
+        "openAiModelInfo": "",
+        "ollamaModelId": "",
+        "ollamaBaseUrl": "",
+        "ollamaApiOptionsCtxNum": "",
+        "lmStudioModelId": "",
+        "lmStudioBaseUrl": "",
+        "anthropicBaseUrl": "",
+        "azureApiVersion": "",
+        "openRouterModelId": "",
+        "openRouterModelInfo": "",
+        "openRouterProviderSorting": "",
+        "liteLlmBaseUrl": "",
+        "liteLlmModelId": "",
+        "qwenApiLine": "",
+        "requestyModelId": "",
+        "requestyModelInfo": "",
+        "togetherModelId": "",
+        "asksageApiUrl": "",
+        "thinkingBudgetTokens": "",
+        "reasoningEffort": "",
+        "favoritedModelIds": "",
+        "autoApprovalSettings": {
+            "enabled": true,
+            "actions": {
+                "readFiles": true,
+                "editFiles": true,
+                "executeSafeCommands": true,
+                "useMcp": true
+            },
+            "maxRequests": 20
+        }
+    },
+    "settings": {
+        "cline.enableCheckpoints": false
+    }
+}

@@ -68,6 +68,7 @@
     "stylis": "^4.3.1",
     "stylis-plugin-rtl": "^2.1.1",
     "tailwindcss": "^3.4.10",
+    "tailwindcss-animate": "^1.0.7",
     "uuid": "^9.0.1",
     "winbox": "^0.2.82",
     "zod": "^3.24.1"

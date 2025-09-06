@@ -4,6 +4,9 @@
       "command": "node",
       "args": ["./dist/mcp-server.js"],
       "env": {
+        "ENFORCE_NAVBAR_PROTECTION": "true",
+        "NAVBAR_PROTECTION_RULES": "/RULES.md",
+        "NAVBAR_DOCUMENTATION": "/NAVBAR_PROTECTION.md",
         "TAVILY_API_KEY": "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",
         "CLONED_TEMPLATE_DIR": "/workspace/project",
         "BROWSERBASE_API_KEY": "bb_live_buP2hIj-CQntUpWuYUJnyMEjZgI",

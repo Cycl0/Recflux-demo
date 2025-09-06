@@ -76,3 +76,5 @@ commit.sh
 
 # Vendor chunks
 .next/server/vendor-chunks
+# Local Netlify folder
+.netlify

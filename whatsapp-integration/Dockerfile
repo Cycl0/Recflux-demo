@@ -13,6 +13,7 @@ COPY mcp-config.json ./
 COPY cline-config.json ./
 COPY cline-mcp-settings.json ./
 COPY template ./_template
+COPY default_components ./default_components
 RUN npx tsc -p tsconfig.json
 
 FROM node:22.12.0-bookworm AS runtime
@@ -23,8 +24,11 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --omit=dev && npm cache clean --force
 
-# Install cline CLI globally (provides `cline-cli` binary)
-RUN npm i -g @yaegaki/cline-cli
+# Build and install cline CLI from source
+COPY cline-cli /tmp/cline-cli
+WORKDIR /tmp/cline-cli
+RUN npm ci && npm run build && npm link
+WORKDIR /app
 
 # Install Python, gosu and Chrome dependencies for Puppeteer and Crawl4AI
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -94,6 +98,7 @@ RUN groupadd -r appuser && useradd -r -g appuser -m appuser
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/mcp-config.json ./mcp-config.json
 COPY --from=builder /app/_template /_template
+COPY --from=builder /app/default_components ./default_components
 
 # Create cline CLI config directories and copy configs
 RUN mkdir -p /home/appuser/.cline_cli/storage/settings
@@ -104,8 +109,11 @@ COPY --from=builder /app/cline-mcp-settings.json /home/appuser/.cline_cli/storag
 COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-# Change ownership to non-root user
-RUN chown -R appuser:appuser /app && chown -R appuser:appuser /home/appuser
+# Create workspace directory and change ownership to non-root user
+RUN mkdir -p /workspace && \
+    chown -R appuser:appuser /app && \
+    chown -R appuser:appuser /home/appuser && \
+    chown -R appuser:appuser /workspace
 
 # Expose port
 ENV PORT=3000
@@ -124,6 +132,7 @@ ENV OPEN_ROUTER_API_KEY=""
 ENV GROQ_API_KEY=""
 ENV SERVICES_HOST="localhost"
 ENV SERVICES_SCHEME="http"
+ENV NETLIFY_API_KEY=""
 ENV PORT=3005
 
 # Anthropic-compatible (Moonshot Kimi K2) envs

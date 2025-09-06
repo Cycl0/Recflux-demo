@@ -94,11 +94,12 @@ export class InspirationScreenshotCapture {
 
     let browser;
     try {
-      browser = await pptr.launch({
-        headless: true,
-        args: launchArgs,
-        executablePath: '/usr/bin/google-chrome-stable'
-      });
+      // Use bundled Chromium (remove executablePath to let Puppeteer use its bundled version)
+      const browser = await pptr.launch({
+				headless: true,
+				args: launchArgs,
+				executablePath: '/usr/bin/google-chrome-stable'
+			});
 
       const page = await browser.newPage();
       

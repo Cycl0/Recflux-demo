@@ -1,9 +1,9 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/bash
+set -e
 
 echo "[ENTRYPOINT] Starting WhatsApp integration container"
 
-# Log Anthropic-compatible configuration for debugging
+# Log configuration
 echo "[ENTRYPOINT] ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-}"
 if [ -n "${ANTHROPIC_AUTH_TOKEN:-}${ANTHROPIC_API_KEY:-}" ]; then
   echo "[ENTRYPOINT] Found Anthropic-compatible API key"
@@ -11,49 +11,29 @@ else
   echo "[ENTRYPOINT] Warning: No Anthropic-compatible API key provided"
 fi
 
-# Ensure project workspace exists and is writable
-mkdir -p "${CLONED_TEMPLATE_DIR}"
+# Ensure workspace exists
+mkdir -p "${CLONED_TEMPLATE_DIR:-/workspace/project}"
 
-# Always replace project with fresh template on startup if template exists
+# Copy template if exists
 if [ -d "/_template" ]; then
-  echo "[ENTRYPOINT] Replacing project with fresh template from /_template into ${CLONED_TEMPLATE_DIR}"
-  rm -rf "${CLONED_TEMPLATE_DIR}"/*
-  cp -R /_template/. "${CLONED_TEMPLATE_DIR}"
-else
-  echo "[ENTRYPOINT] No /_template directory found, keeping existing project"
+  echo "[ENTRYPOINT] Copying fresh template"
+  rm -rf "${CLONED_TEMPLATE_DIR:-/workspace/project}"/*
+  cp -R /_template/. "${CLONED_TEMPLATE_DIR:-/workspace/project}/"
 fi
 
-# Ensure workspace ownership (user created by Dockerfile)
-chown -R appuser:appuser "/workspace" || true
-chown -R appuser:appuser "/app" || true
+# Fix ownership before installing dependencies
+chown -R appuser:appuser "/workspace" 2>/dev/null || true
+chown -R appuser:appuser "/app" 2>/dev/null || true
 
-if [ -x "/opt/crawl4ai-venv/bin/crawl4ai-setup" ]; then
-  if [ ! -f "/root/.crawl4ai/.post_install_done" ]; then
-    echo "[ENTRYPOINT] Running crawl4ai-setup (first run)"
-    /opt/crawl4ai-venv/bin/crawl4ai-setup || true
-    mkdir -p /root/.crawl4ai
-    touch /root/.crawl4ai/.post_install_done
-  else
-    echo "[ENTRYPOINT] Skipping crawl4ai-setup (already completed)"
-  fi
-else
-  echo "[ENTRYPOINT] crawl4ai-setup not found; skipping"
-fi
+# Install dependencies in the project directory as appuser
+if [ -f "${CLONED_TEMPLATE_DIR:-/workspace/project}/package.json" ]; then
+  echo "[ENTRYPOINT] Installing project dependencies..."
+  cd "${CLONED_TEMPLATE_DIR:-/workspace/project}"
+  gosu appuser:appuser npm install
+  echo "[ENTRYPOINT] Dependencies installed successfully"
+fi  
 
-# Ensure Playwright browsers are installed for appuser (needed by Crawl4AI CLI)
-if [ -x "/opt/crawl4ai-venv/bin/playwright" ]; then
-  if [ ! -d "/home/appuser/.cache/ms-playwright" ] || [ -z "$(ls -A /home/appuser/.cache/ms-playwright 2>/dev/null)" ]; then
-    echo "[ENTRYPOINT] Installing Playwright browsers for appuser"
-    gosu appuser:appuser /opt/crawl4ai-venv/bin/playwright install chromium || true
-  else
-    echo "[ENTRYPOINT] Playwright browsers already present; skipping install"
-  fi
-else
-  echo "[ENTRYPOINT] Playwright CLI not found; skipping browser install"
-fi
 
-echo "[ENTRYPOINT] Dropping privileges to appuser"
+echo "[ENTRYPOINT] Starting application as appuser"
+cd /app
 exec gosu appuser:appuser "$@"
-
-
-

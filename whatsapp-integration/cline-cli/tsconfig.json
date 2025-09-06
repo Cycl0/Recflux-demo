@@ -1,0 +1,51 @@
+{
+  "compilerOptions": {
+    "baseUrl": "./src",
+    "esModuleInterop": true,
+    "experimentalDecorators": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
+    "lib": [
+      "es2022",
+      "esnext.disposable",
+      "DOM"
+    ],
+    "module": "esnext",
+    "moduleResolution": "Bundler",
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "noImplicitReturns": true,
+    "noUnusedLocals": false,
+    "resolveJsonModule": true,
+    "rootDir": ".",
+    "skipLibCheck": true,
+    "sourceMap": true,
+    "strict": true,
+    "target": "es2022",
+    "useDefineForClassFields": true,
+    "paths": {
+      "@/*": [
+        "cline/*"
+      ],
+      "@api/*": [
+        "cline/api/*"
+      ],
+      "@core/*": [
+        "cline/core/*"
+      ],
+      "@integrations/*": [
+        "cline/integrations/*"
+      ],
+      "@services/*": [
+        "cline/services/*"
+      ],
+      "@shared/*": [
+        "cline/shared/*"
+      ],
+      "@utils/*": [
+        "cline/utils/*"
+      ]
+    },
+    "useUnknownInCatchVariables": false
+  },
+}

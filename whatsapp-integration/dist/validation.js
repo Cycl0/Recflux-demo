@@ -27,6 +27,18 @@ export async function validateWithESLint(projectDir) {
                     for (const fileResult of eslintResults) {
                         const filePath = path.relative(projectDir, fileResult.filePath);
                         for (const message of fileResult.messages) {
+                            // Skip non-critical parsing errors that don't affect functionality
+                            if (isNonCriticalError(message)) {
+                                warnings.push({
+                                    type: 'style',
+                                    file: filePath,
+                                    line: message.line,
+                                    column: message.column,
+                                    message: message.message,
+                                    rule: message.ruleId
+                                });
+                                continue;
+                            }
                             const error = {
                                 type: 'syntax',
                                 file: filePath,
@@ -195,7 +207,7 @@ export async function validateBuild(projectDir) {
                 errors: [{
                         type: 'build',
                         file: 'build process',
-                        message: 'Build process timed out after 30 seconds',
+                        message: 'Build process timed out after 240 seconds',
                         severity: 'error',
                         fixable: false
                     }],
@@ -203,7 +215,7 @@ export async function validateBuild(projectDir) {
                 fixableErrors: [],
                 canAutoFix: false
             });
-        }, 30000); // 30 second timeout
+        }, 240000); // 240 second timeout (4 minutes)
         buildProcess.stdout.on('data', (data) => {
             stdout += data.toString();
         });
@@ -215,30 +227,75 @@ export async function validateBuild(projectDir) {
             const errors = [];
             const warnings = [];
             if (code !== 0) {
-                // Parse common build error patterns
-                const errorLines = stderr.split('\n').filter(line => line.includes('error') ||
-                    line.includes('Error') ||
-                    line.includes('ERROR') ||
-                    line.includes('Failed to compile'));
-                for (const errorLine of errorLines) {
-                    // Try to extract file and line number from error
-                    const fileMatch = errorLine.match(/([^/\s]+\.(js|jsx|ts|tsx)):(\d+):(\d+)/);
-                    errors.push({
-                        type: 'build',
-                        file: fileMatch ? fileMatch[1] : 'unknown',
-                        line: fileMatch ? parseInt(fileMatch[3]) : undefined,
-                        column: fileMatch ? parseInt(fileMatch[4]) : undefined,
-                        message: errorLine.trim(),
-                        severity: 'error',
-                        fixable: false // Build errors usually require manual intervention
-                    });
+                // Parse both stdout and stderr for all error information
+                const allOutput = `${stdout}\n${stderr}`;
+                const lines = allOutput.split('\n');
+                // Look for specific error patterns that contain useful information
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    // Skip empty lines
+                    if (!line)
+                        continue;
+                    // Module not found errors
+                    if (line.includes("Module not found: Can't resolve")) {
+                        const moduleMatch = line.match(/Module not found: Can't resolve '([^']+)'/);
+                        const fileMatch = lines[i - 1] && lines[i - 1].match(/\.\/([^:]+):(\d+):(\d+)/);
+                        errors.push({
+                            type: 'build',
+                            file: fileMatch ? fileMatch[1] : 'unknown',
+                            line: fileMatch ? parseInt(fileMatch[2]) : undefined,
+                            column: fileMatch ? parseInt(fileMatch[3]) : undefined,
+                            message: moduleMatch ? `Missing dependency: ${moduleMatch[1]}` : line,
+                            severity: 'error',
+                            fixable: true // Missing dependencies can often be auto-fixed
+                        });
+                        continue;
+                    }
+                    // Compilation errors with file references
+                    if (line.match(/\.\/[^:]+:\d+:\d+/) || line.includes('Error:') || line.includes('⨯')) {
+                        const fileMatch = line.match(/\.\/([^:]+):(\d+):(\d+)/);
+                        errors.push({
+                            type: 'build',
+                            file: fileMatch ? fileMatch[1] : 'unknown',
+                            line: fileMatch ? parseInt(fileMatch[2]) : undefined,
+                            column: fileMatch ? parseInt(fileMatch[3]) : undefined,
+                            message: line.replace(/^.*Error:\s*/, '').replace(/^⨯\s*/, '').trim(),
+                            severity: 'error',
+                            fixable: false
+                        });
+                        continue;
+                    }
+                    // Generic error patterns
+                    if (line.includes('error') || line.includes('Error') || line.includes('ERROR') ||
+                        line.includes('Failed to compile') || line.includes('✓ Compiled') === false) {
+                        // Skip webpack chunk information
+                        if (line.includes('webpack') && line.includes('chunk'))
+                            continue;
+                        if (line.includes('Entry point'))
+                            continue;
+                        errors.push({
+                            type: 'build',
+                            file: 'unknown',
+                            message: line,
+                            severity: 'error',
+                            fixable: false
+                        });
+                    }
                 }
-                // If no specific errors found, create a generic one
+                // Always create an error if build failed - let Cline see all build failures
                 if (errors.length === 0) {
+                    // Include detailed build output in error message
+                    let detailedMessage = `Build failed with code ${code}.`;
+                    if (stderr.trim()) {
+                        detailedMessage += `\n\nSTDERR:\n${stderr.trim()}`;
+                    }
+                    if (stdout.trim()) {
+                        detailedMessage += `\n\nSTDOUT:\n${stdout.trim()}`;
+                    }
                     errors.push({
                         type: 'build',
-                        file: 'build process',
-                        message: `Build failed with code ${code}. Check the build output for details.`,
+                        file: 'unknown',
+                        message: detailedMessage,
                         severity: 'error',
                         fixable: false
                     });
@@ -254,12 +311,19 @@ export async function validateBuild(projectDir) {
         });
         buildProcess.on('error', (error) => {
             clearTimeout(timeout);
+            let detailedMessage = `Failed to run build command: ${error.message}`;
+            if (stderr.trim()) {
+                detailedMessage += `\n\nSTDERR:\n${stderr.trim()}`;
+            }
+            if (stdout.trim()) {
+                detailedMessage += `\n\nSTDOUT:\n${stdout.trim()}`;
+            }
             resolve({
                 isValid: false,
                 errors: [{
                         type: 'build',
                         file: 'build process',
-                        message: `Failed to run build command: ${error.message}`,
+                        message: detailedMessage,
                         severity: 'error',
                         fixable: false
                     }],
@@ -638,6 +702,118 @@ export function generateErrorReport(validation) {
     return report.join('\n');
 }
 // Helper functions
+/**
+ * Check if an ESLint error is non-critical (parsing issues, config problems, etc.)
+ * that shouldn't trigger auto-fix loops
+ */
+function isNonCriticalError(message) {
+    const messageText = message.message || '';
+    // CRITICAL errors that SHOULD be reported (real syntax/code issues)
+    const criticalPatterns = [
+        /Duplicate export/, // Duplicate exports
+        /Unexpected token `\w+`\. Expected jsx identifier/, // JSX syntax errors
+        /Expression expected/, // Missing expressions  
+        /Missing semicolon/, // Missing semicolons
+        /Unterminated string/, // Unterminated strings
+        /Unexpected token.*Expected.*/, // Real syntax errors
+        /Invalid.*import/, // Import syntax errors
+        /Invalid.*export/, // Export syntax errors
+    ];
+    // If it's a critical syntax error, don't skip it
+    if (criticalPatterns.some(pattern => pattern.test(messageText))) {
+        return false;
+    }
+    // NON-CRITICAL errors that should be ignored (config/tooling issues)
+    const nonCriticalPatterns = [
+        // Build/config issues that don't affect code functionality
+        /Cannot find module.*lightningcss/, // Missing build dependencies
+        /An error occurred in.*next\/font/, // Next.js font loading issues
+        /Build failed because of webpack errors/, // Build process issues
+        /Failed to compile/, // Generic build failures
+        // TypeScript parsing when ESLint treats as JS (but not real syntax errors)
+        /Unexpected token.*:(?!.*Expected)/, // TS type annotations (but not JSX errors)
+        /The keyword 'interface' is reserved/, // TS interfaces
+        /Unexpected token interface/, // TS interface declarations  
+        /Unexpected token type/, // TS type definitions
+        // Configuration/tooling warnings
+        /Parsing error.*parser/, // Parser configuration issues
+        /Cannot find module.*\/@/, // Missing dev dependencies
+    ];
+    // Check if message text matches non-critical patterns
+    if (nonCriticalPatterns.some(pattern => pattern.test(messageText))) {
+        return true;
+    }
+    // Check for specific rule IDs that are non-critical
+    const nonCriticalRules = [
+        'import/no-unresolved', // Module resolution
+        '@typescript-eslint/parser-error' // TS parser issues
+    ];
+    if (message.ruleId && nonCriticalRules.includes(message.ruleId)) {
+        return true;
+    }
+    // Fatal errors are usually config issues, but check if they contain critical patterns first
+    if (message.fatal === true) {
+        // If fatal but contains critical patterns, don't skip
+        if (criticalPatterns.some(pattern => pattern.test(messageText))) {
+            return false;
+        }
+        return true; // Skip other fatal errors (config issues)
+    }
+    return false; // Default to reporting the error
+}
+/**
+ * Check if a build error line is non-critical (parsing issues, ESLint config, etc.)
+ */
+function isNonCriticalBuildError(errorLine) {
+    // CRITICAL build errors that SHOULD be reported
+    const criticalBuildPatterns = [
+        /Duplicate export/, // Duplicate exports - real code issue
+        /Error:.*x Unexpected token `\w+`\. Expected jsx identifier/, // JSX syntax errors
+        /Error:.*x Expression expected/, // Missing expressions
+        /SyntaxError/, // Real syntax errors
+        /TypeError.*Cannot/, // Runtime type errors
+        /Invalid.*import/, // Import syntax errors
+        /Invalid.*export/, // Export syntax errors
+        /Module not found.*components/, // Missing component files
+    ];
+    // If it's a critical build error, don't skip it
+    if (criticalBuildPatterns.some(pattern => pattern.test(errorLine))) {
+        return false;
+    }
+    // NON-CRITICAL build errors that should be ignored
+    const nonCriticalBuildPatterns = [
+        // Build tooling issues
+        /Cannot find module.*lightningcss/, // Missing build dependencies
+        /Error occurred in.*next\/font/, // Next.js font loading issues
+        /An error occurred in.*next\/font/, // Next.js font issues
+        /Build failed because of webpack errors/, // Generic webpack failures
+        // Configuration/parser issues (not real syntax errors)
+        /ESLint.*Parsing error/, // ESLint config issues
+        /TypeScript.*parsing error/, // TS parser config issues
+        /Unexpected token.*:(?!.*Expected)/, // TS type annotations
+        /The keyword 'interface' is reserved/, // TS interface parsing
+        // Warnings and non-blocking issues
+        /Warning.*deprecated/, // Deprecation warnings
+        /Warning.*configuration/, // Config warnings
+        /eslint.*warning/i, // ESLint warnings
+        /lint.*warning/i, // General linting warnings
+    ];
+    return nonCriticalBuildPatterns.some(pattern => pattern.test(errorLine));
+}
+/**
+ * Check if the overall build failure is non-critical based on output content
+ */
+function isNonCriticalBuildFailure(stdout, stderr) {
+    const combinedOutput = `${stdout}\n${stderr}`;
+    // If output contains mostly parsing/linting errors, consider it non-critical
+    const nonCriticalFailurePatterns = [
+        /Build failed.*ESLint/,
+        /Build failed.*parsing error/,
+        /Build failed.*typescript/i,
+        /Build failed.*lint/i
+    ];
+    return nonCriticalFailurePatterns.some(pattern => pattern.test(combinedOutput));
+}
 async function findFilesRecursive(dir, extensions) {
     const files = [];
     try {

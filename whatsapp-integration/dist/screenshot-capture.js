@@ -64,7 +64,8 @@ export class InspirationScreenshotCapture {
             launchArgs.push(`--proxy-server=${proxy.server}`);
         let browser;
         try {
-            browser = await pptr.launch({
+            // Use bundled Chromium (remove executablePath to let Puppeteer use its bundled version)
+            const browser = await pptr.launch({
                 headless: true,
                 args: launchArgs,
                 executablePath: '/usr/bin/google-chrome-stable'

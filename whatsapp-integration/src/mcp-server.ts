@@ -8,7 +8,7 @@ import path from 'path';
 import puppeteer from 'puppeteer-extra';
 import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 const pptr: any = puppeteer;
-import { deployToCodeSandbox } from './deploy-codesandbox.js';
+import { deployToNetlify } from './deploy-netlify.js';
 
 // Minimal MCP server exposing project_reset and CodeSandbox deployment only.
 
@@ -45,9 +45,9 @@ server.registerTool(
 );
 
 server.registerTool(
-	'codesandbox_deploy',
+	'netlify_deploy',
 	{
-		description: 'Deploy the current project to CodeSandbox and return preview/editor URLs',
+		description: 'Deploy the current project to Netlify and return preview/admin URLs',
 		inputSchema: {}
 	},
 	async (_args: any) => {
@@ -57,14 +57,14 @@ server.registerTool(
 			return { content: [{ type: 'text', text: `Invalid deploy directory: ${root}. Set CLONED_TEMPLATE_DIR to the cloned template path or run the tool from that directory.` }] } as const;
 		}
 		try {
-			console.error(`[MCP_CODESANDBOX_DEPLOY] Creating sandbox from directory: ${root}`);
+			console.error(`[MCP_NETLIFY_DEPLOY] Creating Netlify site from directory: ${root}`);
 			
-			const result = await deployToCodeSandbox(root);
-			console.error(`[MCP_CODESANDBOX_DEPLOY] Sandbox created. editor=${result.editorUrl} preview=${result.previewUrl}`);
-			return { content: [{ type: 'text', text: JSON.stringify({ editorUrl: result.editorUrl, previewUrl: result.previewUrl }) }] } as const;
+			const result = await deployToNetlify(root);
+			console.error(`[MCP_NETLIFY_DEPLOY] Netlify site created. dashboard=${result.adminUrl} preview=${result.previewUrl}`);
+			return { content: [{ type: 'text', text: JSON.stringify({ adminUrl: result.adminUrl, previewUrl: result.previewUrl }) }] } as const;
 		} catch (err: any) {
 			const msg = err?.message || String(err);
-			console.error(`[MCP_CODESANDBOX_DEPLOY] Failed: ${msg}`);
+			console.error(`[MCP_NETLIFY_DEPLOY] Failed: ${msg}`);
 			return { content: [{ type: 'text', text: `Instant deployment failed: ${msg}` }] } as const;
 		}
 	}
@@ -1371,7 +1371,19 @@ server.registerTool(
 	{
 		description: 'Complete design inspiration analysis combining web crawling, screenshot capture, and AI vision analysis',
 		inputSchema: {
-			theme: z.string().describe('Project theme/category (e.g., "tech", "saas", "finance", "creative", "landing", etc.)'),
+			theme: z.enum([
+				'3d', '420', 'ai', 'accessibility', 'advertising', 'agency', 'android-app', 'animation', 
+				'architecture', 'art', 'audio', 'automotive', 'beauty', 'blog', 'book', 'branding', 
+				'business', 'community', 'conference', 'construction', 'crypto', 'd2c', 'design', 
+				'development', 'ecommerce', 'editorial', 'education', 'environmental', 'event', 
+				'fashion', 'film', 'finance', 'fitness', 'food-drink', 'furniture', 'gaming', 
+				'health', 'illustration', 'interior', 'landscaping', 'legal', 'logistics', 
+				'macos-app', 'magazine', 'marketing', 'motion', 'movies', 'museum', 'music', 
+				'news', 'personal', 'pets', 'photography', 'podcast', 'political', 'portfolio', 
+				'productivity', 'real-estate', 'restaurant', 'retail', 'robotics', 'saas', 
+				'science', 'security', 'social-media', 'sports', 'startup', 'studio', 
+				'technology', 'television', 'travel', 'typography', 'venture-capital', 'video'
+			]).describe('Project theme/category'),
 			includeVisualAnalysis: z.boolean().default(true).describe('Whether to include screenshot capture and Gemini vision analysis'),
 			includeTextualAnalysis: z.boolean().default(true).describe('Whether to include web crawling for textual content analysis'),
 			customSites: z.array(z.string()).optional().describe('Optional custom inspiration sites to analyze in addition to auto-selected ones')
@@ -1385,11 +1397,16 @@ server.registerTool(
 		}
 		
 		logWithTimestamp(`[DESIGN_ANALYZER] Starting analysis for theme: ${theme}`);
+		logWithTimestamp(`[DESIGN_ANALYZER] Environment check - OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? 'SET' : 'NOT SET'}`);
+		logWithTimestamp(`[DESIGN_ANALYZER] Environment check - OPEN_ROUTER_API_KEY: ${process.env.OPEN_ROUTER_API_KEY ? 'SET' : 'NOT SET'}`);
 		
 		try {
+			logWithTimestamp(`[DESIGN_ANALYZER] About to import DesignInspirationAnalyzer...`);
 			// Dynamic import to handle the new module
 			const { DesignInspirationAnalyzer } = await import('./design-inspiration-analyzer.js');
-			const analyzer = new DesignInspirationAnalyzer();
+			logWithTimestamp(`[DESIGN_ANALYZER] Import successful, creating analyzer instance...`);
+			const analyzer = new DesignInspirationAnalyzer(process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER_API_KEY);
+			logWithTimestamp(`[DESIGN_ANALYZER] Analyzer instance created successfully`)
 			
 			// Perform the complete analysis
 			const result = await analyzer.analyzeDesignInspiration(theme);
@@ -1427,7 +1444,13 @@ server.registerTool(
 								`Analysis completed with ${result.summary.analysisConfidence.toFixed(2)} average confidence`,
 								`${result.summary.totalScreenshots} screenshots captured for visual analysis`,
 								`${result.consolidatedInsights.inspirationSources.length} successful inspiration sources analyzed`
-							]
+							],
+							screenshotDetails: {
+								totalCaptured: result.consolidatedInsights.screenshots.totalCaptured,
+								screenshotsByUrl: result.consolidatedInsights.screenshots.byUrl,
+								analysisResults: result.consolidatedInsights.screenshots.analysisResults,
+								availableForGeminiAnalysis: Object.keys(result.consolidatedInsights.screenshots.byUrl).length
+							}
 						}, null, 2)
 					}
 				]
@@ -1455,10 +1478,11 @@ server.registerTool(
 	}
 );
 
+
 async function main(): Promise<void> {
 	console.error('[MCP_SERVER] Starting MCP server with tools:');
 	console.error('- project_reset');
-	console.error('- codesandbox_deploy'); 
+	console.error('- netlify_deploy');
 	console.error('- color_palette_generator');
 	console.error('- puppeteer_search');
 	console.error('- freepik_ai_image_generator');
