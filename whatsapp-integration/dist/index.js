@@ -542,7 +542,11 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		🚨🚨🚨 HEROUI +TAILWIND CSS ENFORCEMENT - MANDATORY 🚨🚨🚨
 		
 		📋 FRAMEWORK PRIORITY ORDER (CRITICAL):
-		1️⃣ HeroUI components (PRIMARY - modern, accessible UI components)
+		1️⃣ HeroUI components (PRIMARY - MAXIMUM USAGE MANDATORY)
+		 ✅ MANDATORY: Use HeroUI's built-in dark theme system with proper color variants
+		 ✅ MANDATORY: Use HeroUI variants (solid, bordered, light, flat, faded, shadow, ghost) for dark theme integration
+		 ✅ MANDATORY: Use HeroUI theme colors (primary, secondary, success, warning, danger) instead of custom backgrounds
+		 ❌ FORBIDDEN: Just changing background colors - use HeroUI's comprehensive theming system
 		2️⃣ Default components from default_components/ (SECONDARY - pre-built professional components when HeroUI lacks the component)
 		3️⃣ Tailwind utility classes (TERTIARY - for styling & layout)
 		4️⃣ Custom components (LAST RESORT - only when neither HeroUI nor exists)
@@ -550,8 +554,11 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		🚨 HEROUI COMPONENT REQUIREMENTS 🚨
 		✅ REQUIRED: Use HeroUI components as FIRST CHOICE for ALL UI elements
 		✅ REQUIRED: Check HeroUI library FIRST before any other framework
-		✅ REQUIRED: Use HeroUI variants, colors, sizes, and props for behavior
+		✅ REQUIRED: Use HeroUI dark theme variants and color schemes for proper dark mode
+		✅ REQUIRED: Use HeroUI variants (solid, bordered, light, flat, faded, shadow, ghost) with dark theme colors
+		✅ REQUIRED: Use HeroUI sizes (sm, md, lg, xl) and theme colors (primary, secondary, success, warning, danger)
 		✅ REQUIRED: Import HeroUI: import { Button, Input, Card } from '@heroui/react'
+		❌ FORBIDDEN: Custom dark backgrounds when HeroUI has built-in dark theme support
 		
 		📚 MANDATORY HEROUI COMPONENT CATEGORIES (PRIMARY CHOICE):
 		🔘 FORMS: Button, Input, Select, Checkbox, Checkbox Group, Radio Group, Form, Number Input, Input OTP, Date Input, Date Picker, Date Range Picker, Autocomplete
@@ -880,12 +887,14 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		✅ OBRIGATÓRIO: Use mcp__recflux__puppeteer_search para ícones/vetores/animações reais
 		✅ OBRIGATÓRIO: Use mcp__recflux__freepik_ai_image_generator para todas as imagens
 		✅ OBRIGATÓRIO: Substitua qualquer emoji encontrado por ícone real imediatamente
+		✅ OBRIGATÓRIO: Hero sections MUST be full-width (w-full min-h-screen) for maximum impact
 		✅ OBRIGATÓRIO: Todo botão DEVE ter classes de padding apropriadas (px-4 py-2, px-6 py-3, etc.)
 		✅ OBRIGATÓRIO CONTRASTE: Fundos escuros = texto claro, Fundos claros = texto escuro
 		✅ OBRIGATÓRIO FIDELIDADE: Replique exatamente os estilos observados nos sites de inspiração
-		🚫 NEVER EDIT: template/src/components/NavBar.jsx - USE CONFIGURATION ONLY
+		🚫 NEVER EDIT: template/components/NavBar.tsx - IT'S ALREADY IN LAYOUT.TSX
+		🚫 NEVER ADD: NavBar to page.tsx - it's already rendered in the layout wrapper
 		🚫 NEVER EDIT: template/src/components/CTAButton.jsx - USE PROPS ONLY
-		✅ OBRIGATÓRIO NAVBAR: Use only import NavBar, { defaultNavBarConfig } from '../components/NavBar'
+		✅ OBRIGATÓRIO LAYOUT: NavBar is automatically included in layout.tsx - focus on page content only
 		✅ OBRIGATÓRIO CTABUTTON: Use only import CTAButton from '../components/CTAButton'
 		✅ OBRIGATÓRIO CTA GLOW: Configure glowingColor no CTAButton com cor principal do tema
 		
@@ -918,6 +927,8 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		❌ BAD: Other frameworks → <div className="is-primary button">
 		❌ BAD: CSS variables → <div style={{'--custom-color': 'red'}}>
 		❌ BAD: CSS modules → import styles from './Component.module.css'
+		❌ BAD: Constrained hero sections → <section className="container mx-auto px-6"> (use full-width instead)
+		❌ BAD: Small hero sections → <div className="h-64"> (use min-h-screen for impact)
 		
 		🚨🚨🚨 LANGUAGE ANTI-PATTERNS - NEVER DO THIS 🚨🚨🚨
 		❌ BAD: User speaks Portuguese, generate English → <Button>Click Here</Button> (WRONG!)
@@ -929,6 +940,7 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		❌ BAD: Wrong language form → <Input placeholder="Email" /> when user speaks German (WRONG!)
 		
 		🚨🚨🚨 HEROUI ANTI-PATTERNS - NEVER DO THIS 🚨🚨🚨
+		❌ BAD: Adding NavBar to pages → NavBar is already in layout.tsx
 		❌ BAD: Custom button when HeroUI exists → <button className="bg-blue-500 px-4 py-2 rounded">
 		❌ BAD: Custom input when HeroUI exists → <input className="border rounded p-2 w-full" />
 		❌ BAD: Custom card when HeroUI exists → <div className="border rounded-lg p-4 shadow">
@@ -998,17 +1010,18 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		• Need complex dashboard? → default_components + HeroUI components inside ✅
 		• Need form? → HeroUI Input/Select components ✅
 
-		🚨🚨🚨 HEROUI CORRECT PATTERNS - ALWAYS DO THIS 🚨🚨🚨
-		✅ GOOD: HeroUI Button → <Button color="primary" variant="solid" size="lg">Click Me</Button>
-		✅ GOOD: HeroUI Input → <Input type="email" placeholder="Enter email" variant="bordered" />
-		✅ GOOD: HeroUI Card → <Card><CardHeader><h4>Title</h4></CardHeader><CardBody>Content</CardBody></Card>
-		✅ GOOD: HeroUI Modal → <Modal><ModalContent><ModalHeader>Title</ModalHeader><ModalBody>Content</ModalBody></ModalContent></Modal>
-		✅ GOOD: HeroUI Select → <Select placeholder="Choose option"><SelectItem key="1" value="1">Option 1</SelectItem></Select>
-		✅ GOOD: HeroUI Alert → <Alert color="warning" variant="flat" title="Warning!" description="This is an alert message" />
-		✅ GOOD: HeroUI Avatar → <Avatar src="/avatar.jpg" alt="User" size="lg" />
-		✅ GOOD: HeroUI Badge → <Badge color="success" variant="solid">New</Badge>
-		✅ GOOD: HeroUI Progress → <Progress value={65} color="primary" size="lg" />
-		✅ GOOD: HeroUI + Tailwind → <Button className="w-full mt-4" color="secondary" variant="bordered">Styled Button</Button>
+		🚨🚨🚨 HEROUI DARK THEME PATTERNS - MANDATORY USAGE 🚨🚨🚨
+		✅ GOOD: Dark theme Button → <Button color="primary" variant="solid" size="lg">Click Me</Button>
+		✅ GOOD: Dark theme Input → <Input type="email" placeholder="Enter email" variant="bordered" />
+		✅ GOOD: Dark theme Card → <Card><CardHeader><h4>Title</h4></CardHeader><CardBody>Content</CardBody></Card>
+		✅ GOOD: Dark theme Modal → <Modal><ModalContent><ModalHeader>Title</ModalHeader><ModalBody>Content</ModalBody></ModalContent></Modal>
+		✅ GOOD: Dark theme Select → <Select placeholder="Choose option"><SelectItem key="1" value="1">Option 1</SelectItem></Select>
+		✅ GOOD: Dark theme Alert → <Alert color="warning" variant="flat" title="Warning!" description="This is an alert message" />
+		✅ GOOD: Dark theme Avatar → <Avatar src="/avatar.jpg" alt="User" size="lg" />
+		✅ GOOD: Dark theme Badge → <Badge color="success" variant="solid">New</Badge>
+		✅ GOOD: Dark theme Progress → <Progress value={65} color="primary" size="lg" />
+		✅ GOOD: HeroUI dark variants → <Button className="w-full mt-4" color="secondary" variant="ghost">Dark Themed Button</Button>
+		✅ GOOD: HeroUI theme backgrounds → <Card className="bg-content1">Uses theme background</Card>
 		✅ GOOD: Crawling docs → Use mcp__recflux__web_crawler on HeroUI documentation URLs
 		
 		🚨🚨🚨 CORRECT PATTERNS - ALWAYS DO THIS 🚨🚨🚨
@@ -1029,7 +1042,9 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		✅ GOOD: Flexbox layout → <div className="flex items-center justify-between">
 		✅ GOOD: Grid layout → <div className="grid gap-6 grid-cols-auto-fit-minmax">
 		✅ GOOD: Typography → <h1 className="text-4xl font-bold leading-tight text-gray-900">
-		✅ GOOD: Spacing → <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+		✅ GOOD: Full-width hero → <section className="w-full min-h-screen">
+		✅ GOOD: Edge-to-edge sections → <div className="w-full">
+		✅ GOOD: Contained content → <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
 		✅ GOOD: Colors → <div className="bg-gradient-to-r from-purple-400 via-pink-500 to-red-500">
 		✅ GOOD: Animation → <div className="transform transition duration-300 hover:scale-105">
 		
@@ -1241,7 +1256,7 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		 - Custo-benefício otimizado para análise de screenshots em massa
 		 - Capacidade nativa de visão para extração precisa de design elements
 		 - FERRAMENTA DISPONÍVEL: Use mcp__recflux__gemini_vision_analyzer
-		 - Ver especificação completa em src/visual-analysis-tool.ts e src/gemini-vision-integration.ts
+		 - Ver especificação completa em src/visual-analysis-tool.ts e src/vision-analyzer.ts
 		 
 		 CONFIGURAÇÃO GEMINI OPENROUTER:
 		 a) API Endpoint: https://openrouter.ai/api/v1/chat/completions
@@ -1648,7 +1663,7 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		 - Custo-benefício otimizado para análise de screenshots em massa
 		 - Capacidade nativa de visão para extração precisa de design elements
 		 - FERRAMENTA DISPONÍVEL: Use mcp__recflux__gemini_vision_analyzer
-		 - Ver especificação completa em src/visual-analysis-tool.ts e src/gemini-vision-integration.ts
+		 - Ver especificação completa em src/visual-analysis-tool.ts e src/vision-analyzer.ts
 		 
 		 CONFIGURAÇÃO GEMINI OPENROUTER:
 		 a) API Endpoint: https://openrouter.ai/api/v1/chat/completions
@@ -1773,7 +1788,8 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		 - O analisador automaticamente seleciona, captura e analisa sites de inspiração baseado no tema
 		 - Documente claramente como cada elemento de inspiração foi aplicado
 		6) ADICIONE VÍDEOS PROFISSIONAIS: Use mcp__recflux__puppeteer_search com searchType='videos' para encontrar vídeos de background relevantes ao tema para o hero
-		 🚨 REMINDER: Use existing NavBar component at the top - DO NOT CREATE NEW NAVIGATION 🚨
+		 🚨 REMINDER: NavBar is already in layout.tsx - NEVER add NavBar to page.tsx 🚨
+		 🚨 REMINDER: DO NOT CREATE NEW NAVIGATION - NavBar exists in app/layout.tsx 🚨
 		 
 		7) ADICIONE CONTEÚDO VISUAL PROFISSIONAL - Execute estes passos:
 		 a) ANIMAÇÕES: Use mcp__recflux__puppeteer_search com searchType='animations' para encontrar animações relevantes ao tema

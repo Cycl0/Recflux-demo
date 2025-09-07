@@ -9,7 +9,7 @@
  * 4. Data consolidation and synthesis
  */
 import { InspirationScreenshotCapture } from './screenshot-capture.js';
-import { GeminiVisionAnalyzer } from './gemini-vision-integration.js';
+import { VisionAnalyzer } from './vision-analyzer.js';
 import { promises as fs } from 'fs';
 import { getRedisCache } from './redis-cache.js';
 function logWithTimestamp(msg) {
@@ -17,35 +17,36 @@ function logWithTimestamp(msg) {
 }
 export class DesignInspirationAnalyzer {
     screenshotCapture;
-    geminiAnalyzer;
+    visionAnalyzer;
     crawlerAvailable = false;
     cache = getRedisCache();
     constructor(openRouterApiKey) {
         this.screenshotCapture = new InspirationScreenshotCapture();
         logWithTimestamp('[DESIGN_ANALYZER] Constructor called with API key:' + (openRouterApiKey ? 'PROVIDED' : 'NOT PROVIDED'));
+        logWithTimestamp('[DESIGN_ANALYZER] process.env.OPENAI_API_KEY:' + (process.env.OPENAI_API_KEY ? 'SET' : 'NOT SET'));
         logWithTimestamp('[DESIGN_ANALYZER] process.env.OPENROUTER_API_KEY:' + (process.env.OPENROUTER_API_KEY ? 'SET' : 'NOT SET'));
         logWithTimestamp('[DESIGN_ANALYZER] process.env.OPEN_ROUTER_API_KEY:' + (process.env.OPEN_ROUTER_API_KEY ? 'SET' : 'NOT SET'));
         logWithTimestamp('[DESIGN_ANALYZER] process.env.IMGBB_API_KEY:' + (process.env.IMGBB_API_KEY ? 'SET' : 'NOT SET'));
-        // Determine which API key to use
-        const apiKey = openRouterApiKey || process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER_API_KEY;
+        // Determine which API key to use (prioritize OpenAI, fallback to OpenRouter)
+        const apiKey = openRouterApiKey || process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER_API_KEY;
         if (apiKey) {
             logWithTimestamp('[DESIGN_ANALYZER] API key found, initializing Gemini analyzer');
             // Check if IMGBB_API_KEY is also available (required for visual analysis)
             if (process.env.IMGBB_API_KEY) {
                 logWithTimestamp('[DESIGN_ANALYZER] IMGBB_API_KEY found, visual analysis will be fully functional');
-                this.geminiAnalyzer = new GeminiVisionAnalyzer(apiKey);
+                this.visionAnalyzer = new VisionAnalyzer(apiKey);
             }
             else {
                 logWithTimestamp('[DESIGN_ANALYZER] IMGBB_API_KEY missing, visual analysis will fail');
                 logWithTimestamp('[DESIGN_ANALYZER] Please set IMGBB_API_KEY environment variable for image uploads');
                 // Still create the analyzer, but it will fail at runtime with a clear error
-                this.geminiAnalyzer = new GeminiVisionAnalyzer(apiKey);
+                this.visionAnalyzer = new VisionAnalyzer(apiKey);
             }
         }
         else {
-            logWithTimestamp('[DESIGN_ANALYZER] No OpenRouter API key found, visual analysis will be disabled');
-            logWithTimestamp('[DESIGN_ANALYZER] Available env vars:' + Object.keys(process.env).filter(k => k.toLowerCase().includes('openrouter') || k.toLowerCase().includes('router')).join(', '));
-            logWithTimestamp('[DESIGN_ANALYZER] Please set OPENROUTER_API_KEY or OPEN_ROUTER_API_KEY environment variable');
+            logWithTimestamp('[DESIGN_ANALYZER] No OpenAI/OpenRouter API key found, visual analysis will be disabled');
+            logWithTimestamp('[DESIGN_ANALYZER] Available env vars:' + Object.keys(process.env).filter(k => k.toLowerCase().includes('openai') || k.toLowerCase().includes('openrouter') || k.toLowerCase().includes('router')).join(', '));
+            logWithTimestamp('[DESIGN_ANALYZER] Please set OPENAI_API_KEY, OPENROUTER_API_KEY or OPEN_ROUTER_API_KEY environment variable');
         }
         // Check if MCP crawler is available (will be used via external call)
         this.crawlerAvailable = true; // Assume available since it's part of the existing system
@@ -291,13 +292,13 @@ export class DesignInspirationAnalyzer {
     async performVisualAnalysis(sites, bypassCache = false) {
         const visualResults = {};
         logWithTimestamp(`[DESIGN_ANALYZER] Starting visual analysis for ${sites.length} sites`);
-        logWithTimestamp(`[DESIGN_ANALYZER] Gemini analyzer available: ${!!this.geminiAnalyzer}`);
+        logWithTimestamp(`[DESIGN_ANALYZER] Vision analyzer available: ${!!this.visionAnalyzer}`);
         logWithTimestamp(`[DESIGN_ANALYZER] Sites to analyze: ${sites.map(s => s.url).join(', ')}`);
         logWithTimestamp(`[DESIGN_ANALYZER] Bypass cache: ${bypassCache}`);
         // Check cache for each site first (if not bypassing cache)
         const sitesNeedingScreenshots = [];
         const sitesWithCachedResults = [];
-        if (!bypassCache && this.geminiAnalyzer) {
+        if (!bypassCache && this.visionAnalyzer) {
             for (const site of sites) {
                 try {
                     // Check if we have cached visual analysis for this URL
@@ -377,8 +378,8 @@ export class DesignInspirationAnalyzer {
             }
             return visualResults;
         }
-        // Analyze screenshots with Gemini if available (only for sites that needed screenshots)
-        if (this.geminiAnalyzer) {
+        // Analyze screenshots with Vision analyzer if available (only for sites that needed screenshots)
+        if (this.visionAnalyzer) {
             for (const site of sitesNeedingScreenshots) {
                 const screenshots = screenshotsByUrl[site.url] || [];
                 if (screenshots.length === 0) {
@@ -395,7 +396,7 @@ export class DesignInspirationAnalyzer {
                     // Look for viewport screenshot first, fallback to first available
                     const viewportScreenshot = screenshots.find(path => path.includes('_viewport_'));
                     const primaryScreenshot = viewportScreenshot || screenshots[0];
-                    const analysisResult = await this.geminiAnalyzer.analyzeScreenshot({
+                    const analysisResult = await this.visionAnalyzer.analyzeScreenshot({
                         screenshotPath: primaryScreenshot,
                         prompt: this.getVisualAnalysisPrompt(site.category),
                         bypassCache,

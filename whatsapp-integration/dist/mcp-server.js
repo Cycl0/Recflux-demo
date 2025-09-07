@@ -9,7 +9,7 @@ import StealthPlugin from 'puppeteer-extra-plugin-stealth';
 const pptr = puppeteer;
 import { deployToNetlify } from './deploy-netlify.js';
 import { getRedisCache } from './redis-cache.js';
-import { GeminiVisionAnalyzer, GeminiDesignPrompts } from './gemini-vision-integration.js';
+import { VisionDesignPrompts } from './vision-analyzer.js';
 // Minimal MCP server exposing project_reset and CodeSandbox deployment only.
 const server = new McpServer({ name: 'recflux-deployer', version: '1.0.0' }, { capabilities: { tools: {} } });
 server.registerTool('project_reset', {
@@ -1263,8 +1263,8 @@ server.registerTool('web_crawler', {
     }
 });
 // Gemini 2.0 Flash Vision Tool for Website Design Analysis
-server.registerTool('gemini_vision_analyzer', {
-    description: 'Analyze website screenshots using Gemini 2.5 Flash for design inspiration extraction',
+server.registerTool('vision_analyzer', {
+    description: 'Analyze website screenshots using multimodal llm for design inspiration extraction',
     inputSchema: {
         screenshotPath: z.string().describe('Path to the screenshot file to analyze'),
         analysisType: z.enum(['full', 'color', 'layout', 'component']).default('full').describe('Type of analysis to perform'),
@@ -1274,57 +1274,58 @@ server.registerTool('gemini_vision_analyzer', {
 }, async (args) => {
     const logMessage = (msg) => {
         console.error(msg);
-        fs.appendFile('mcp-gemini-vision.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => { });
+        fs.appendFile('mcp-vision-analyzer.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => { });
     };
-    logMessage('[GEMINI_VISION] *** TOOL CALLED! ***');
-    logMessage('[GEMINI_VISION] Called with args: ' + JSON.stringify(args));
+    logMessage('[VISION_ANALYZER] *** TOOL CALLED! ***');
+    logMessage('[VISION_ANALYZER] Called with args: ' + JSON.stringify(args));
     const { screenshotPath, analysisType = 'full', customPrompt, bypassCache = false } = args;
     if (!screenshotPath) {
         return { content: [{ type: 'text', text: 'Error: No screenshot path provided' }] };
     }
-    const openRouterApiKey = process.env.OPENROUTER_API_KEY;
-    logMessage(`[GEMINI_VISION] API Key found: ${openRouterApiKey ? 'YES' : 'NO'}`);
-    logMessage(`[GEMINI_VISION] API Key length: ${openRouterApiKey?.length || 0}`);
-    logMessage(`[GEMINI_VISION] API Key starts with: ${openRouterApiKey?.substring(0, 20) || 'N/A'}...`);
-    if (!openRouterApiKey) {
-        return { content: [{ type: 'text', text: 'Error: OPENROUTER_API_KEY environment variable is required' }] };
+    const openAIApiKey = process.env.OPENAI_API_KEY;
+    logMessage(`[VISION_ANALYZER] API Key found: ${openAIApiKey ? 'YES' : 'NO'}`);
+    logMessage(`[VISION_ANALYZER] API Key length: ${openAIApiKey?.length || 0}`);
+    logMessage(`[VISION_ANALYZER] API Key starts with: ${openAIApiKey?.substring(0, 20) || 'N/A'}...`);
+    if (!openAIApiKey) {
+        return { content: [{ type: 'text', text: 'Error: OPENAI_API_KEY environment variable is required' }] };
     }
     try {
-        // Initialize Gemini Vision Analyzer
-        const analyzer = new GeminiVisionAnalyzer(openRouterApiKey);
+        // Initialize Vision Analyzer
+        const { VisionAnalyzer } = await import('./vision-analyzer.js');
+        const analyzer = new VisionAnalyzer(openAIApiKey);
         // Select appropriate prompt
         let prompt = customPrompt;
         if (!prompt) {
             switch (analysisType) {
                 case 'full':
-                    prompt = GeminiDesignPrompts.fullAnalysis;
+                    prompt = VisionDesignPrompts.fullAnalysis;
                     break;
                 case 'color':
-                    prompt = GeminiDesignPrompts.colorAnalysis;
+                    prompt = VisionDesignPrompts.colorAnalysis;
                     break;
                 case 'layout':
-                    prompt = GeminiDesignPrompts.layoutAnalysis;
+                    prompt = VisionDesignPrompts.layoutAnalysis;
                     break;
                 case 'component':
-                    prompt = GeminiDesignPrompts.componentAnalysis;
+                    prompt = VisionDesignPrompts.componentAnalysis;
                     break;
-                default: prompt = GeminiDesignPrompts.fullAnalysis;
+                default: prompt = VisionDesignPrompts.fullAnalysis;
             }
         }
-        logMessage(`[GEMINI_VISION] Using analysis type: ${analysisType}`);
-        logMessage(`[GEMINI_VISION] Screenshot path: ${screenshotPath}`);
-        logMessage(`[GEMINI_VISION] Bypass cache: ${bypassCache}`);
-        // Analyze screenshot using the GeminiVisionAnalyzer with caching
+        logMessage(`[VISION_ANALYZER] Using analysis type: ${analysisType}`);
+        logMessage(`[VISION_ANALYZER] Screenshot path: ${screenshotPath}`);
+        logMessage(`[VISION_ANALYZER] Bypass cache: ${bypassCache}`);
+        // Analyze screenshot using the VisionAnalyzer with caching
         const result = await analyzer.analyzeScreenshot({
             screenshotPath,
             prompt,
             bypassCache,
             analysisType
         });
-        logMessage(`[GEMINI_VISION] Analysis completed successfully`);
-        logMessage(`[GEMINI_VISION] Confidence: ${result.confidence}`);
-        logMessage(`[GEMINI_VISION] Tokens used: ${result.metadata.tokens_used}`);
-        logMessage(`[GEMINI_VISION] Cached: ${result.metadata.cached || false}`);
+        logMessage(`[VISION_ANALYZER] Analysis completed successfully`);
+        logMessage(`[VISION_ANALYZER] Confidence: ${result.confidence}`);
+        logMessage(`[VISION_ANALYZER] Tokens used: ${result.metadata.tokens_used}`);
+        logMessage(`[VISION_ANALYZER] Cached: ${result.metadata.cached || false}`);
         const response = {
             success: true,
             analysis: result.analysis,
@@ -1344,8 +1345,8 @@ server.registerTool('gemini_vision_analyzer', {
         };
     }
     catch (error) {
-        logMessage(`[GEMINI_VISION] Error: ${error?.message || error}`);
-        console.error('[GEMINI_VISION] Full error:', error);
+        logMessage(`[VISION_ANALYZER] Error: ${error?.message || error}`);
+        console.error('[VISION_ANALYZER] Full error:', error);
         return {
             content: [{
                     type: 'text',
@@ -1376,7 +1377,7 @@ server.registerTool('design_inspiration_analyzer', {
             'science', 'security', 'social-media', 'sports', 'startup', 'studio',
             'technology', 'television', 'travel', 'typography', 'venture-capital', 'video'
         ]).describe('Project theme/category'),
-        includeVisualAnalysis: z.boolean().default(true).describe('Whether to include screenshot capture and Gemini vision analysis'),
+        includeVisualAnalysis: z.boolean().default(true).describe('Whether to include screenshot capture and vision analysis'),
         includeTextualAnalysis: z.boolean().default(true).describe('Whether to include web crawling for textual content analysis'),
         customSites: z.array(z.string()).optional().describe('Optional custom inspiration sites to analyze in addition to auto-selected ones'),
         bypassCache: z.boolean().default(false).optional().describe('Bypass Redis cache and force fresh analysis')
@@ -1387,6 +1388,7 @@ server.registerTool('design_inspiration_analyzer', {
         fs.appendFile('mcp-design-analyzer.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => { });
     }
     logWithTimestamp(`[DESIGN_ANALYZER] Starting analysis for theme: ${theme}`);
+    logWithTimestamp(`[DESIGN_ANALYZER] Environment check - OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? 'SET' : 'NOT SET'}`);
     logWithTimestamp(`[DESIGN_ANALYZER] Environment check - OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? 'SET' : 'NOT SET'}`);
     logWithTimestamp(`[DESIGN_ANALYZER] Environment check - OPEN_ROUTER_API_KEY: ${process.env.OPEN_ROUTER_API_KEY ? 'SET' : 'NOT SET'}`);
     try {
@@ -1394,7 +1396,7 @@ server.registerTool('design_inspiration_analyzer', {
         // Dynamic import to handle the new module
         const { DesignInspirationAnalyzer } = await import('./design-inspiration-analyzer.js');
         logWithTimestamp(`[DESIGN_ANALYZER] Import successful, creating analyzer instance...`);
-        const analyzer = new DesignInspirationAnalyzer(process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER_API_KEY);
+        const analyzer = new DesignInspirationAnalyzer(process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER_API_KEY);
         logWithTimestamp(`[DESIGN_ANALYZER] Analyzer instance created successfully`);
         // Perform the complete analysis
         const result = await analyzer.analyzeDesignInspiration(theme, bypassCache);
