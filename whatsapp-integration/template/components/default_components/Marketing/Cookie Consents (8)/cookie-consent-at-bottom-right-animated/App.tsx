@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import {Button, Link, ResizablePanel, Spacer} from "@nextui-org/react";
+import {Button, Link, ResizablePanel, Spacer} from "@heroui/react";
 import {LazyMotion, domAnimation, AnimatePresence, m} from "framer-motion";
-import {cn} from "@nextui-org/react";
+import {cn} from "@heroui/react";
 
 import SwitchCell from "./switch-cell";
 

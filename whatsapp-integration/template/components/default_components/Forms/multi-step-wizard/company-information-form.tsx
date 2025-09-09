@@ -1,9 +1,9 @@
 "use client";
 
-import type {InputProps, SelectProps} from "@nextui-org/react";
+import type {InputProps, SelectProps} from "@heroui/react";
 
 import React from "react";
-import {Input, Select, SelectItem} from "@nextui-org/react";
+import {Input, Select, SelectItem} from "@heroui/react";
 
 import {cn} from "./cn";
 import companyTypes from "./company-types";

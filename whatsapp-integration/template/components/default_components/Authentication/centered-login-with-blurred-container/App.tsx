@@ -1,9 +1,9 @@
 "use client";
 
-import type {InputProps} from "@nextui-org/react";
+import type {InputProps} from "@heroui/react";
 
 import React from "react";
-import {Button, Input, Checkbox, Link, Divider} from "@nextui-org/react";
+import {Button, Input, Checkbox, Link, Divider} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 export default function Component() {

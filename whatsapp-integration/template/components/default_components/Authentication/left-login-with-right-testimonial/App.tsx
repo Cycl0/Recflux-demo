@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Button, Input, Link, Divider, User, Checkbox} from "@nextui-org/react";
+import {Button, Input, Link, Divider, User, Checkbox} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import {AcmeIcon} from "./social";

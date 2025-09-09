@@ -1,10 +1,10 @@
 "use client";
 
-import {Accordion, AccordionItem} from "@nextui-org/react";
+import {Accordion, AccordionItem} from "@heroui/react";
 import React from "react";
-import {Listbox, Tooltip, ListboxItem, ListboxSection} from "@nextui-org/react";
+import {Listbox, Tooltip, ListboxItem, ListboxSection} from "@heroui/react";
 import {Icon} from "@iconify/react";
-import {cn} from "@nextui-org/react";
+import {cn} from "@heroui/react";
 
 export let SidebarItemType = /*#__PURE__*/ (function (SidebarItemType) {
   SidebarItemType["Nest"] = "nest";

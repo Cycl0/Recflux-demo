@@ -32,8 +32,34 @@ export async function deployToNetlify(projectDir: string): Promise<{ deploymentU
 }
 
 function buildProject(projectDir: string): Promise<void> {
-    return new Promise((resolve, reject) => {
+    return new Promise(async (resolve, reject) => {
         console.log('🔨 Building Next.js project...');
+        
+        // First, clear all build caches to ensure fresh build
+        console.log('🧹 Clearing build caches...');
+        const cacheDirectories = ['.next', 'out', 'node_modules/.cache', '.cache'];
+        
+        for (const dir of cacheDirectories) {
+            try {
+                await fs.rm(path.join(projectDir, dir), { recursive: true, force: true });
+                console.log(`✅ Cleared ${dir}`);
+            } catch (e) {
+                console.log(`ℹ️ ${dir} not found (already clean)`);
+            }
+        }
+        
+        // Fix ownership after cache clearing to ensure build processes can write
+        try {
+            const { spawn } = await import('child_process');
+            await new Promise<void>((resolve) => {
+                const chownProcess = spawn('chown', ['-R', 'appuser:appuser', projectDir], { stdio: 'ignore' });
+                chownProcess.on('close', () => resolve());
+                chownProcess.on('error', () => resolve()); // Continue even if chown fails
+            });
+            console.log('✅ Fixed ownership after cache clearing');
+        } catch (e) {
+            console.log('ℹ️ Could not fix ownership (might not be in container)');
+        }
         
         const buildProcess = spawn('npm', ['run', 'build'], {
             cwd: projectDir,

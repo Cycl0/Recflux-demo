@@ -94,9 +94,16 @@ COPY --from=builder /app/mcp-config.json ./mcp-config.json
 COPY --from=builder /app/template /_template
 COPY --from=builder /app/default_components ./default_components
 
+# Copy documentation for Cline access
+COPY --from=builder /app/docs ./docs
+
+
+COPY --from=builder /app/src/syntax-fix-prompt.ts ./src/syntax-fix-prompt.ts
+
 # Create cline CLI config directories and copy configs
 RUN mkdir -p /home/appuser/.cline_cli/storage/settings
 COPY --from=builder /app/cline-config.json /home/appuser/.cline_cli/cline_cli_settings.json
+COPY --from=builder /app/cline-config-fix.json /home/appuser/.cline_cli/cline_cli_settings_fix.json
 COPY --from=builder /app/cline-mcp-settings.json /home/appuser/.cline_cli/storage/settings/cline_mcp_settings.json
 
 # Add entrypoint to seed project directory if empty

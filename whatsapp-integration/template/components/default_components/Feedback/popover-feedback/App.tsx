@@ -9,7 +9,7 @@ import {
   PopoverContent,
   PopoverTrigger,
   Textarea,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import FeedbackRating from "./feedback-rating";

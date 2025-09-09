@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import {Divider, Input, Slider} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Divider, Input, Slider} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 function clampValue(value, min, max) {
   return Math.min(Math.max(value, min), max);

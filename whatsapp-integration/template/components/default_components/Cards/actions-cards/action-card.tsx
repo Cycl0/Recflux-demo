@@ -1,9 +1,9 @@
 "use client";
 
-import type {CardProps} from "@nextui-org/react";
+import type {CardProps} from "@heroui/react";
 
 import React from "react";
-import {Card, CardBody} from "@nextui-org/react";
+import {Card, CardBody} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import {cn} from "./cn";

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Card, CardHeader, CardBody, Button, Avatar} from "@nextui-org/react";
+import {Card, CardHeader, CardBody, Button, Avatar} from "@heroui/react";
 
 import CellValue from "./cell-value";
 

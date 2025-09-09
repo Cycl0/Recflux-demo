@@ -8,7 +8,7 @@ import {
   Select,
   SelectItem,
   useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import FiltersWrapper from "./filters-wrapper";

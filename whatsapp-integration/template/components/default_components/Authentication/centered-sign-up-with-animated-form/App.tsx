@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Button, Input, Link, Divider} from "@nextui-org/react";
+import {Button, Input, Link, Divider} from "@heroui/react";
 import {AnimatePresence, m, LazyMotion, domAnimation} from "framer-motion";
 import {Icon} from "@iconify/react";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Card, CardHeader, CardBody, Button, Avatar, Tabs, Tab, Chip} from "@nextui-org/react";
+import {Card, CardHeader, CardBody, Button, Avatar, Tabs, Tab, Chip} from "@heroui/react";
 
 export default function Component() {
   return (

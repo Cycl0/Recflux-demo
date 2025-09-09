@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import {Tooltip, VisuallyHidden, useRadio} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Tooltip, VisuallyHidden, useRadio} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 const ColorRadioItem = React.forwardRef(({color, tooltip, ...props}, ref) => {
   const {Component, isSelected, isFocusVisible, getBaseProps, getInputProps} = useRadio(props);

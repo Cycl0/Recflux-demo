@@ -1,0 +1,21 @@
+{
+  "globalState": {
+    "apiProvider": "openrouter",
+    "modelId": "openrouter/sonoma-sky-alpha",
+    "openRouterModelId": "openrouter/sonoma-sky-alpha",
+    "openRouterModelInfo": { "supportsPromptCache": true, "inputPrice": 0.2, "outputPrice": 1.5  },
+    "autoApprovalSettings": {
+      "enabled": true,
+      "actions": {
+        "readFiles": true,
+        "editFiles": true,
+        "executeSafeCommands": true,
+        "useMcp": true
+      },
+      "maxRequests": 100
+    }
+  },
+  "settings": {
+    "cline.enableCheckpoints": false
+  }
+}

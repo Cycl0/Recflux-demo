@@ -1,11 +1,11 @@
 "use client";
 
-import type {InputProps} from "@nextui-org/react";
+import type {InputProps} from "@heroui/react";
 
 import React from "react";
 import {Icon} from "@iconify/react";
-import {Input} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Input} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 export type PaymentFormProps = React.HTMLAttributes<HTMLDivElement> & {
   variant?: InputProps["variant"];

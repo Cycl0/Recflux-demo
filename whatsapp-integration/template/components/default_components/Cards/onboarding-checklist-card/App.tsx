@@ -1,9 +1,9 @@
 "use client";
 
-import type {CardProps} from "@nextui-org/react";
+import type {CardProps} from "@heroui/react";
 
 import React from "react";
-import {Card, CardBody, CardHeader, Listbox, ListboxItem, Progress} from "@nextui-org/react";
+import {Card, CardBody, CardHeader, Listbox, ListboxItem, Progress} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 const items = [

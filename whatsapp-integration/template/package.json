@@ -30,6 +30,7 @@
     "@heroui/switch": "2.2.23",
     "@heroui/system": "2.4.21",
     "@heroui/theme": "2.4.21",
+    "@iconify/react": "^6.0.1",
     "@react-aria/ssr": "3.9.10",
     "@react-aria/visually-hidden": "3.8.27",
     "clsx": "2.1.1",

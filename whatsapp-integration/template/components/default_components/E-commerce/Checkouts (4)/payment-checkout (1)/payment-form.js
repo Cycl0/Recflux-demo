@@ -2,8 +2,8 @@
 
 import React from "react";
 import {Icon} from "@iconify/react";
-import {Input} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Input} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 const PaymentForm = React.forwardRef(({variant = "flat", className, ...props}, ref) => {
   const NumberInput = (props) => (

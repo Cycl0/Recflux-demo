@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Avatar, Button, Spacer, Tab, Tabs, Tooltip, useDisclosure} from "@nextui-org/react";
+import {Avatar, Button, Spacer, Tab, Tabs, Tooltip, useDisclosure} from "@heroui/react";
 import {Icon} from "@iconify/react";
 import {useMediaQuery} from "usehooks-ts";
 

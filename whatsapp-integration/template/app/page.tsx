@@ -2,7 +2,6 @@
 
 import { Card, CardHeader, CardBody } from "@heroui/card";
 import { Button } from "@heroui/button";
-import { Image } from "@heroui/image";
 import { Chip } from "@heroui/chip";
 import { Badge } from "@heroui/badge";
 import { Avatar } from "@heroui/avatar";
@@ -278,22 +277,20 @@ export default function Home() {
                   }}
                 >
                   <CardHeader className="flex-col items-start p-0">
-                    <div className="w-full h-48 relative overflow-hidden rounded-t-large">
-                      <Image
-                        src="https://cdn-magnific.freepik.com/result_FLUX_DEV_b0159eb9-468c-4cf2-89f5-cfa27b5744d7_0.jpeg?token=exp=1757211405~hmac=98d8da098a8fff5b4d034cd58c1e0022c6e50049f4cb4412501f5f5378d3a9d5"
-                        alt={card.title}
-                        className="w-full h-full object-cover"
-                        classNames={{
-                          wrapper: "w-full h-full",
+                    <div className="w-full h-48 relative overflow-hidden rounded-t-large group">
+                      <div 
+                        className="absolute inset-0 bg-cover bg-center bg-no-repeat transition-transform duration-500 ease-out group-hover:scale-110"
+                        style={{
+                          backgroundImage: `url('https://cdn-magnific.freepik.com/result_FLUX_DEV_6cd007f9-1a29-40f0-bfd6-6e2501e9ef91_0.jpeg?token=exp=1757434850~hmac=adc0812dd5dc197756a0b798fb69ade7eca5fd47fbbd3cb61ecde301e70e20e5')`
                         }}
                       />
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent" />
+                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-black/20 transition-opacity duration-300 group-hover:from-black/70 group-hover:via-black/30 group-hover:to-black/10" />
                       <div className="absolute bottom-4 left-4 right-4">
-                        <div className={`p-2 bg-${card.chipColor}/20 backdrop-blur-sm rounded-lg w-fit mb-2`}>
+                        <div className={`p-2 bg-white/20 backdrop-blur-md rounded-lg w-fit mb-2 border border-white/30`}>
                           <span className="text-2xl">{card.icon}</span>
                         </div>
-                        <h3 className="text-lg font-semibold text-white mb-1">{card.title}</h3>
-                        <Chip size="sm" color={card.chipColor} variant="flat">{card.chip}</Chip>
+                        <h3 className="text-lg font-semibold text-white mb-2 drop-shadow-lg">{card.title}</h3>
+                        <Chip size="sm" color={card.chipColor} variant="solid" className="backdrop-blur-sm bg-white/90 text-black font-medium">{card.chip}</Chip>
                       </div>
                     </div>
                   </CardHeader>

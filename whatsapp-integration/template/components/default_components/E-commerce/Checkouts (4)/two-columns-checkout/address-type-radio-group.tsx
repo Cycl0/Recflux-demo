@@ -1,10 +1,10 @@
 "use client";
 
-import type {RadioGroupProps} from "@nextui-org/react";
+import type {RadioGroupProps} from "@heroui/react";
 
 import React from "react";
-import {Radio, RadioGroup} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Radio, RadioGroup} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 const AddressTypeForm = React.forwardRef<HTMLDivElement, RadioGroupProps>(
   ({className, classNames = {}, ...props}, ref) => {

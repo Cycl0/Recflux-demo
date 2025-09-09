@@ -3,7 +3,7 @@
 import type {ProductViewItem} from "./product-view-item";
 
 import React from "react";
-import {BreadcrumbItem, Breadcrumbs} from "@nextui-org/react";
+import {BreadcrumbItem, Breadcrumbs} from "@heroui/react";
 
 import ProductViewInfo from "./product-view-item";
 

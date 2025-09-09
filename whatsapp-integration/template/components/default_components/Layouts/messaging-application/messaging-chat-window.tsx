@@ -8,7 +8,7 @@ import {
   DropdownMenu,
   DropdownTrigger,
   ScrollShadow,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import MessagingChatMessage from "./messaging-chat-message";

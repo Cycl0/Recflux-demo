@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Input, Select, SelectItem, useDisclosure} from "@nextui-org/react";
+import {Input, Select, SelectItem, useDisclosure} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import reviews from "./reviews";

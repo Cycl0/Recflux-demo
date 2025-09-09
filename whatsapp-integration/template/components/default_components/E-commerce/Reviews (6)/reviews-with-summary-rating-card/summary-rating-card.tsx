@@ -2,8 +2,8 @@
 
 import React from "react";
 import {Icon} from "@iconify/react";
-import {Button, Progress} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Button, Progress} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 export type SummaryRatingCardProps = React.HTMLAttributes<HTMLDivElement> & {
   ratings: {

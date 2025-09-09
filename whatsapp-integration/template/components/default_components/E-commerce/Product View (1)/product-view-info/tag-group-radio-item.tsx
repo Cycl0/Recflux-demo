@@ -1,11 +1,11 @@
 "use client";
 
-import type {RadioProps} from "@nextui-org/react";
+import type {RadioProps} from "@heroui/react";
 
 import React from "react";
-import {Chip, VisuallyHidden, useRadio, useRadioGroupContext} from "@nextui-org/react";
+import {Chip, VisuallyHidden, useRadio, useRadioGroupContext} from "@heroui/react";
 import {Icon} from "@iconify/react";
-import {cn} from "@nextui-org/react";
+import {cn} from "@heroui/react";
 
 export type TagGroupRadioItemProps = Omit<RadioProps, "icon"> & {
   icon?: string;

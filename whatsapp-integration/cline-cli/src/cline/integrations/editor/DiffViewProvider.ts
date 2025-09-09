@@ -1,6 +1,7 @@
 import * as vscode from "vscode-interface"
 import * as path from "path"
 import * as fs from "fs/promises"
+import * as os from "os"
 import { createDirectoriesForFile } from "@utils/fs"
 import { arePathsEqual } from "@utils/path"
 import { formatResponse } from "@core/prompts/responses"
@@ -11,6 +12,41 @@ import { detectEncoding } from "../misc/extract-text"
 import * as iconv from "iconv-lite"
 
 export const DIFF_VIEW_URI_SCHEME = "cline-diff"
+
+/**
+ * Detect if we're running in a containerized environment where VSCode operations might be unreliable
+ */
+function isContainerEnvironment(): boolean {
+	// Check common container indicators
+	try {
+		// Check for container-specific environment variables
+		if (process.env.DOCKER_CONTAINER || process.env.KUBERNETES_SERVICE_HOST || process.env.container) {
+			return true
+		}
+
+		// Check for container-specific filesystem indicators (Linux containers)
+		if (os.platform() === 'linux') {
+			try {
+				const cgroup = require('fs').readFileSync('/proc/1/cgroup', 'utf8')
+				if (cgroup.includes('docker') || cgroup.includes('containerd') || cgroup.includes('kubepods')) {
+					return true
+				}
+			} catch {
+				// Ignore errors reading cgroup info
+			}
+		}
+
+		// Check if we're running as PID 1 (common in containers)
+		if (process.pid === 1) {
+			return true
+		}
+
+		return false
+	} catch (error) {
+		// If detection fails, assume we're not in a container
+		return false
+	}
+}
 
 export class DiffViewProvider {
 	editType?: "create" | "modify"
@@ -26,13 +62,202 @@ export class DiffViewProvider {
 	private streamedLines: string[] = []
 	private preDiagnostics: [vscode.Uri, vscode.Diagnostic[]][] = []
 	private fileEncoding: string = "utf8"
+	private fileLock?: Promise<void>
+	private lockAcquired = false
 
-	constructor(private cwd: string) {}
+	// Global file lock registry to prevent concurrent operations across different DiffViewProvider instances
+	private static fileLocks = new Map<string, Promise<void>>()
+	private static lockResolvers = new Map<string, () => void>()
+	private static lockTimers = new Map<string, NodeJS.Timeout>()
+	
+	// Static initialization for cleanup handlers
+	private static isCleanupHandlerRegistered = false
+
+	constructor(private cwd: string) {
+		// Register cleanup handlers once
+		if (!DiffViewProvider.isCleanupHandlerRegistered) {
+			this.registerCleanupHandlers()
+			DiffViewProvider.isCleanupHandlerRegistered = true
+		}
+	}
+
+	/**
+	 * Register cleanup handlers for graceful shutdown
+	 */
+	private registerCleanupHandlers(): void {
+		const cleanup = () => {
+			console.log('[FILE_LOCK] Cleaning up all file locks on process exit')
+			DiffViewProvider.cleanupAllLocks()
+		}
+
+		// Handle various process exit scenarios
+		process.on('exit', cleanup)
+		process.on('SIGINT', cleanup) 
+		process.on('SIGTERM', cleanup)
+		process.on('uncaughtException', cleanup)
+		process.on('unhandledRejection', cleanup)
+	}
+
+	/**
+	 * Clean up all active file locks
+	 */
+	private static cleanupAllLocks(): void {
+		// Clear all timers
+		for (const timer of DiffViewProvider.lockTimers.values()) {
+			clearTimeout(timer)
+		}
+		
+		// Release all locks
+		for (const [path, resolver] of DiffViewProvider.lockResolvers.entries()) {
+			console.log(`[FILE_LOCK] Force-releasing lock on ${path}`)
+			resolver()
+		}
+		
+		// Clear all maps
+		DiffViewProvider.fileLocks.clear()
+		DiffViewProvider.lockResolvers.clear()
+		DiffViewProvider.lockTimers.clear()
+	}
+
+	/**
+	 * Acquire a file lock to prevent concurrent modifications
+	 */
+	private async acquireFileLock(filePath: string): Promise<boolean> {
+		const absolutePath = path.resolve(this.cwd, filePath)
+		const lockKey = absolutePath.toLowerCase() // Normalize path for consistent locking
+		
+		try {
+			// Check if there's already a lock for this file
+			const existingLock = DiffViewProvider.fileLocks.get(lockKey)
+			
+			if (existingLock) {
+				console.log(`[FILE_LOCK] Waiting for existing lock on ${filePath}`)
+				// Wait for existing lock with timeout
+				await Promise.race([
+					existingLock,
+					new Promise((_, reject) => 
+						setTimeout(() => reject(new Error('Lock timeout')), 15000)
+					)
+				])
+			}
+
+			// Create a new lock with proper resolver tracking
+			let resolveLock: () => void
+			const lockPromise = new Promise<void>((resolve) => {
+				resolveLock = resolve
+			})
+
+			// Store everything we need for cleanup
+			this.fileLock = lockPromise
+			DiffViewProvider.fileLocks.set(lockKey, lockPromise)
+			DiffViewProvider.lockResolvers.set(lockKey, resolveLock!)
+			this.lockAcquired = true
+
+			console.log(`[FILE_LOCK] Acquired lock on ${filePath}`)
+			
+			// Auto-release lock after 45 seconds as safety measure
+			const timer = setTimeout(() => {
+				if (this.lockAcquired && DiffViewProvider.lockResolvers.has(lockKey)) {
+					console.log(`[FILE_LOCK] Auto-releasing lock on ${filePath} after timeout`)
+					this.releaseFileLock(filePath)
+				}
+			}, 45000)
+			
+			DiffViewProvider.lockTimers.set(lockKey, timer)
+
+			return true
+		} catch (error) {
+			console.warn(`[FILE_LOCK] Failed to acquire lock on ${filePath}:`, error)
+			return false
+		}
+	}
+
+	/**
+	 * Direct file system write as fallback when VSCode operations fail
+	 * This is particularly important in containerized environments
+	 */
+	private async directFileWrite(content: string, filePath: string): Promise<void> {
+		const absolutePath = path.resolve(this.cwd, filePath)
+		
+		try {
+			// Ensure parent directories exist
+			await createDirectoriesForFile(absolutePath)
+			
+			// Detect and preserve file encoding
+			let encodedContent: Buffer
+			if (this.fileEncoding && this.fileEncoding !== 'utf8') {
+				encodedContent = iconv.encode(content, this.fileEncoding)
+			} else {
+				encodedContent = Buffer.from(content, 'utf8')
+			}
+			
+			// Write file with proper error handling
+			await fs.writeFile(absolutePath, encodedContent, { 
+				encoding: null,  // Use raw buffer to preserve encoding
+				mode: 0o644     // Standard file permissions
+			})
+			
+			console.log(`[DIRECT_WRITE] Successfully wrote file: ${filePath}`)
+		} catch (error) {
+			console.error(`[DIRECT_WRITE] Failed to write file ${filePath}:`, error)
+			throw new Error(`Direct file write failed: ${(error as Error).message}`)
+		}
+	}
+
+	/**
+	 * Release the file lock
+	 */
+	private async releaseFileLock(filePath: string): Promise<void> {
+		if (!this.lockAcquired || !this.fileLock) {
+			return
+		}
+
+		const absolutePath = path.resolve(this.cwd, filePath)
+		const lockKey = absolutePath.toLowerCase()
+
+		try {
+			this.lockAcquired = false
+			
+			// Clear timeout if it exists
+			const timer = DiffViewProvider.lockTimers.get(lockKey)
+			if (timer) {
+				clearTimeout(timer)
+				DiffViewProvider.lockTimers.delete(lockKey)
+			}
+			
+			// Find the resolve function and call it
+			const resolver = DiffViewProvider.lockResolvers.get(lockKey)
+			if (resolver) {
+				resolver()
+				DiffViewProvider.lockResolvers.delete(lockKey)
+			}
+			
+			// Clean up the file lock if it matches our instance
+			const lockPromise = DiffViewProvider.fileLocks.get(lockKey)
+			if (lockPromise === this.fileLock) {
+				DiffViewProvider.fileLocks.delete(lockKey)
+			}
+
+			// Create a resolved promise to satisfy any awaiting code
+			this.fileLock = Promise.resolve()
+
+			console.log(`[FILE_LOCK] Released lock on ${filePath}`)
+		} catch (error) {
+			console.warn(`[FILE_LOCK] Error releasing lock on ${filePath}:`, error)
+		}
+	}
 
 	async open(relPath: string): Promise<void> {
 		this.relPath = relPath
 		const fileExists = this.editType === "modify"
 		const absolutePath = path.resolve(this.cwd, relPath)
+		
+		// Acquire file lock before starting editing
+		const lockAcquired = await this.acquireFileLock(relPath)
+		if (!lockAcquired) {
+			throw new Error(`Could not acquire file lock for ${relPath}. Another operation may be in progress.`)
+		}
+		
 		this.isEditing = true
 		// if the file is already open, ensure it's not dirty before getting its contents
 		if (fileExists) {
@@ -180,6 +405,10 @@ export class DiffViewProvider {
 		finalContent: string | undefined
 	}> {
 		if (!this.relPath || !this.newContent || !this.activeDiffEditor) {
+			// Release lock even if we're returning early
+			if (this.relPath) {
+				await this.releaseFileLock(this.relPath)
+			}
 			return {
 				newProblemsMessage: undefined,
 				userEdits: undefined,
@@ -193,16 +422,46 @@ export class DiffViewProvider {
 		// get the contents before save operation which may do auto-formatting
 		const preSaveContent = updatedDocument.getText()
 
-		if (updatedDocument.isDirty) {
-			await updatedDocument.save()
+		// Enhanced save logic with container fallback
+		let postSaveContent: string
+		let saveSucceeded = false
+
+		try {
+			// Try VSCode save first
+			if (updatedDocument.isDirty) {
+				await updatedDocument.save()
+			}
+			postSaveContent = updatedDocument.getText()
+			saveSucceeded = true
+			console.log(`[VSCODE_SAVE] Successfully saved file: ${this.relPath}`)
+		} catch (error) {
+			console.warn(`[VSCODE_SAVE] VSCode save failed for ${this.relPath}:`, error)
+			saveSucceeded = false
 		}
 
-		// get text after save in case there is any auto-formatting done by the editor
-		const postSaveContent = updatedDocument.getText()
+		// If VSCode save failed OR we're in a container environment, use direct file write as fallback
+		if (!saveSucceeded || isContainerEnvironment()) {
+			try {
+				console.log(`[FALLBACK] Using direct file write for ${this.relPath} (container: ${isContainerEnvironment()}, save failed: ${!saveSucceeded})`)
+				await this.directFileWrite(this.newContent, this.relPath)
+				postSaveContent = this.newContent // We know what we wrote
+				console.log(`[FALLBACK] Direct file write succeeded for ${this.relPath}`)
+			} catch (fallbackError) {
+				console.error(`[FALLBACK] Direct file write also failed for ${this.relPath}:`, fallbackError)
+				// Re-throw the original error if both methods fail
+				throw new Error(`Both VSCode save and direct file write failed: ${(fallbackError as Error).message}`)
+			}
+		}
 
-		await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), {
-			preview: false,
-		})
+		try {
+			await vscode.window.showTextDocument(vscode.Uri.file(absolutePath), {
+				preview: false,
+			})
+		} catch (error) {
+			// If showing the document fails, it's not critical for the save operation
+			console.warn(`[VSCODE_SHOW] Failed to show document ${this.relPath}:`, error)
+		}
+		
 		await this.closeAllDiffViews()
 
 		/*
@@ -258,6 +517,11 @@ export class DiffViewProvider {
 				normalizedPreSaveContent,
 				normalizedPostSaveContent,
 			)
+		}
+
+		// Release file lock after successful save
+		if (this.relPath) {
+			await this.releaseFileLock(this.relPath)
 		}
 
 		return {
@@ -401,15 +665,24 @@ export class DiffViewProvider {
 
 	// close editor if open?
 	async reset() {
+		// Release file lock during reset
+		if (this.relPath) {
+			await this.releaseFileLock(this.relPath)
+		}
+		
 		this.editType = undefined
 		this.isEditing = false
 		this.originalContent = undefined
 		this.createdDirs = []
 		this.documentWasOpen = false
+		this.relPath = undefined
+		this.newContent = undefined
 		this.activeDiffEditor = undefined
 		this.fadedOverlayController = undefined
 		this.activeLineController = undefined
 		this.streamedLines = []
 		this.preDiagnostics = []
+		this.fileLock = undefined
+		this.lockAcquired = false
 	}
 }

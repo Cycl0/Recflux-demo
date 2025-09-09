@@ -2,8 +2,8 @@
 import type {MessagingChatMessageProps} from "./data";
 
 import React, {useCallback} from "react";
-import {Avatar, Image} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Avatar, Image} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 const MessagingChatMessage = React.forwardRef<HTMLDivElement, MessagingChatMessageProps>(
   ({avatar, name, time, message, isRTL, imageUrl, className, classNames, ...props}, ref) => {

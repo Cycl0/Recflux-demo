@@ -1,9 +1,9 @@
 "use client";
 
-import type {RadioProps} from "@nextui-org/react";
+import type {RadioProps} from "@heroui/react";
 
 import React from "react";
-import {Chip, Radio} from "@nextui-org/react";
+import {Chip, Radio} from "@heroui/react";
 
 import {cn} from "./cn";
 

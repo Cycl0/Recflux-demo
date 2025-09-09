@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import {User} from "@nextui-org/react";
+import {User} from "@heroui/react";
 import {Icon} from "@iconify/react";
-import {cn} from "@nextui-org/react";
+import {cn} from "@heroui/react";
 
 const Review = React.forwardRef(
   ({children, user, title, content, rating, createdAt, ...props}, ref) => (

@@ -1,6 +1,6 @@
 "use client";
 
-import type {CardProps} from "@nextui-org/react";
+import type {CardProps} from "@heroui/react";
 
 import React from "react";
 import {
@@ -12,7 +12,7 @@ import {
   CardFooter,
   Spacer,
   Divider,
-} from "@nextui-org/react";
+} from "@heroui/react";
 
 export default function Component(props: CardProps) {
   const [orgName, setOrgName] = React.useState<string>("NextUI");

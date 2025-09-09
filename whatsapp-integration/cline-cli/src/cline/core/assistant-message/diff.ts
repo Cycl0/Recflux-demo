@@ -251,6 +251,20 @@ async function constructNewFileContentV1(diffContent: string, originalContent: s
 		lines.pop()
 	}
 
+	// Additional check for incomplete JSX/HTML tags at the end
+	// This handles cases like "<Badge content="A" that are incomplete
+	const finalLastLine = lines[lines.length - 1]
+	if (lines.length > 0 && finalLastLine) {
+		// Check for incomplete JSX/HTML tags
+		if (
+			finalLastLine.match(/^<[A-Z][a-zA-Z]*\s+[^>]*$/) || // Incomplete opening tag like "<Badge content="
+			finalLastLine.match(/^<[a-z][a-zA-Z]*\s+[^>]*$/) || // Incomplete lowercase tag
+			finalLastLine.match(/^<[A-Z][a-zA-Z]*\s+\w+="[^"]*$/) // Incomplete attribute like 'content="A'
+		) {
+			lines.pop()
+		}
+	}
+
 	for (const line of lines) {
 		if (line === "<<<<<<< SEARCH") {
 			inSearch = true
@@ -712,6 +726,20 @@ export async function constructNewFileContentV2(diffContent: string, originalCon
 		lastLine !== ">>>>>>> REPLACE"
 	) {
 		lines.pop()
+	}
+
+	// Additional check for incomplete JSX/HTML tags at the end
+	// This handles cases like "<Badge content="A" that are incomplete
+	const finalLastLine = lines[lines.length - 1]
+	if (lines.length > 0 && finalLastLine) {
+		// Check for incomplete JSX/HTML tags
+		if (
+			finalLastLine.match(/^<[A-Z][a-zA-Z]*\s+[^>]*$/) || // Incomplete opening tag like "<Badge content="
+			finalLastLine.match(/^<[a-z][a-zA-Z]*\s+[^>]*$/) || // Incomplete lowercase tag
+			finalLastLine.match(/^<[A-Z][a-zA-Z]*\s+\w+="[^"]*$/) // Incomplete attribute like 'content="A'
+		) {
+			lines.pop()
+		}
 	}
 
 	for (const line of lines) {

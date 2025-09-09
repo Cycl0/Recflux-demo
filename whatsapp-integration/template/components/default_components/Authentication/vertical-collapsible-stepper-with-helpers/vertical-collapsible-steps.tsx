@@ -1,10 +1,10 @@
 "use client";
 
 import type {ComponentProps} from "react";
-import type {ButtonProps} from "@nextui-org/react";
+import type {ButtonProps} from "@heroui/react";
 
 import React from "react";
-import {Spacer} from "@nextui-org/react";
+import {Spacer} from "@heroui/react";
 import {useControlledState} from "@react-stately/utils";
 import {m, LazyMotion, domAnimation} from "framer-motion";
 

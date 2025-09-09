@@ -1,9 +1,9 @@
 "use client";
 
-import type {CardProps} from "@nextui-org/react";
+import type {CardProps} from "@heroui/react";
 
 import React from "react";
-import {Card, CardBody, Image, CardHeader} from "@nextui-org/react";
+import {Card, CardBody, Image, CardHeader} from "@heroui/react";
 import {m, useMotionValue, domAnimation, LazyMotion, useMotionTemplate} from "framer-motion";
 
 export default function Component(props: CardProps) {

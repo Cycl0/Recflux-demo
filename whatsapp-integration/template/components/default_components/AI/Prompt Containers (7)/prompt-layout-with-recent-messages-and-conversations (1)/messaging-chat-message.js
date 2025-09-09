@@ -1,8 +1,8 @@
 "use client";
 
 import React, {useCallback} from "react";
-import {Avatar, Image} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Avatar, Image} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 const MessagingChatMessage = React.forwardRef(
   ({avatar, name, time, message, isRTL, imageUrl, className, classNames, ...props}, ref) => {

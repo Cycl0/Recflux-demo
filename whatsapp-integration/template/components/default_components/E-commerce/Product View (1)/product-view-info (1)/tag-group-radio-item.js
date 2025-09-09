@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import {Chip, VisuallyHidden, useRadio, useRadioGroupContext} from "@nextui-org/react";
+import {Chip, VisuallyHidden, useRadio, useRadioGroupContext} from "@heroui/react";
 import {Icon} from "@iconify/react";
-import {cn} from "@nextui-org/react";
+import {cn} from "@heroui/react";
 
 const TagGroupRadioItem = React.forwardRef(({icon, ...props}, ref) => {
   const {

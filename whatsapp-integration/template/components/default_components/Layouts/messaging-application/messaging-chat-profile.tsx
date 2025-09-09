@@ -12,7 +12,7 @@ import {
   CardBody,
   Image,
   ScrollShadow,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import MessagingChatHeader from "./messaging-chat-header";

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Button, Divider, Input} from "@nextui-org/react";
+import {Button, Divider, Input} from "@heroui/react";
 
 import OrderSummaryItem from "./order-summary-item";
 

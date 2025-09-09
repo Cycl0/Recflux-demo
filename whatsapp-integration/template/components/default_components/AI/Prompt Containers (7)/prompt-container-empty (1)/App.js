@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Avatar, Tab, Tabs} from "@nextui-org/react";
+import {Avatar, Tab, Tabs} from "@heroui/react";
 
 import FeaturesCards from "./features-cards";
 import PromptInputWithBottomActions from "./prompt-input-with-bottom-actions";

@@ -1,6 +1,6 @@
 "use client";
 
-import type {CardProps} from "@nextui-org/react";
+import type {CardProps} from "@heroui/react";
 
 import React from "react";
 import {
@@ -13,7 +13,7 @@ import {
   Tab,
   ScrollShadow,
   CardFooter,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import NotificationItem from "./notification-item";

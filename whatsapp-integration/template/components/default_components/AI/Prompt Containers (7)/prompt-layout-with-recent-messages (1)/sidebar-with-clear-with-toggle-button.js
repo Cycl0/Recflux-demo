@@ -16,7 +16,7 @@ import {
   DropdownItem,
   DropdownSection,
   cn,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import {AcmeIcon} from "./acme";

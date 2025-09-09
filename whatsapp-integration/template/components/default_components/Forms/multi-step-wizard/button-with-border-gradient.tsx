@@ -1,8 +1,8 @@
 "use client";
 
-import type {ButtonProps, LinkProps} from "@nextui-org/react";
+import type {ButtonProps, LinkProps} from "@heroui/react";
 
-import {Button} from "@nextui-org/react";
+import {Button} from "@heroui/react";
 import {startsWith} from "lodash";
 import Link from "next/link";
 

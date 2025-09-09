@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {CheckboxGroup} from "@nextui-org/checkbox";
+import {CheckboxGroup} from "@heroui/checkbox";
 
 import TagGroupItem from "./tag-group-item";
 

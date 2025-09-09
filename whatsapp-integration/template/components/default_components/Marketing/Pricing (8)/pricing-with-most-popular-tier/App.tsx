@@ -14,7 +14,7 @@ import {
   Spacer,
   Tab,
   Tabs,
-} from "@nextui-org/react";
+} from "@heroui/react";
 
 import {FrequencyEnum} from "./pricing-types";
 import {frequencies, tiers} from "./pricing-tiers";

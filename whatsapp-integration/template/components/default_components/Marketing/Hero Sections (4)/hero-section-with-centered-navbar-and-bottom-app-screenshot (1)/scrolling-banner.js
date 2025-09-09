@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import {ScrollShadow} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {ScrollShadow} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 /*
   This example requires some changes to your TailwindCSS config:

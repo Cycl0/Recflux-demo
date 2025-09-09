@@ -10,7 +10,7 @@ import {
   Link,
   Progress,
   RadioGroup,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 import {AnimatePresence, LazyMotion, m, domAnimation} from "framer-motion";
 

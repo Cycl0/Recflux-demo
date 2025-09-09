@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Button, Divider, Link, Textarea} from "@nextui-org/react";
+import {Button, Divider, Link, Textarea} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import FeedbackRating from "./feedback-rating";

@@ -9,7 +9,7 @@ import {
   DropdownSection,
   DropdownItem,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import SidebarContainer from "./sidebar-with-clear-with-toggle-button";

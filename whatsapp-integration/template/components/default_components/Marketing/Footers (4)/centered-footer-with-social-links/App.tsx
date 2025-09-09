@@ -3,7 +3,7 @@
 import type {IconProps} from "@iconify/react";
 
 import React from "react";
-import {Link, Spacer} from "@nextui-org/react";
+import {Link, Spacer} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import {AcmeIcon} from "./acme";

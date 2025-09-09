@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {ScrollShadow, Tab, Tabs} from "@nextui-org/react";
+import {ScrollShadow, Tab, Tabs} from "@heroui/react";
 
 import Conversation from "./conversation";
 import PromptInputWithRegenerateButton from "./prompt-input-with-regenerate-button";

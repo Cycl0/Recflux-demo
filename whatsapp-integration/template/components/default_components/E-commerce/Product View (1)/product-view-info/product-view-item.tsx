@@ -10,9 +10,9 @@ import {
   Link,
   RadioGroup,
   ScrollShadow,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
-import {cn} from "@nextui-org/react";
+import {cn} from "@heroui/react";
 
 import ColorRadioItem from "./color-radio-item";
 import RatingRadioGroup from "./rating-radio-group";

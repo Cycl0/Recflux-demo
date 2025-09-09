@@ -11,7 +11,7 @@ import {
   Popover,
   PopoverTrigger,
   PopoverContent,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import PromptContainerWithConversation from "./prompt-container-with-conversation";

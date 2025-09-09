@@ -1,10 +1,10 @@
 "use client";
 
-import type {CardProps} from "@nextui-org/react";
+import type {CardProps} from "@heroui/react";
 
 import React from "react";
 import {Icon} from "@iconify/react";
-import {Card, CardHeader, CardBody, RadioGroup, Badge} from "@nextui-org/react";
+import {Card, CardHeader, CardBody, RadioGroup, Badge} from "@heroui/react";
 
 import PlanRadio from "./plan-radio";
 

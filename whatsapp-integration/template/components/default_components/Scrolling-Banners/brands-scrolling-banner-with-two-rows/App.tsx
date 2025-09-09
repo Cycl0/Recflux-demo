@@ -1,5 +1,5 @@
 import React from "react";
-import {Spacer} from "@nextui-org/react";
+import {Spacer} from "@heroui/react";
 
 import {Logo1, Logo10, Logo2, Logo3, Logo4, Logo5, Logo6, Logo7, Logo8, Logo9} from "./logos";
 

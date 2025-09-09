@@ -1,8 +1,8 @@
-import type {ButtonProps} from "@nextui-org/react";
+import type {ButtonProps} from "@heroui/react";
 import type {ButtonWithBorderGradientProps} from "./button-with-border-gradient";
 
 import * as React from "react";
-import {Button} from "@nextui-org/react";
+import {Button} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import {cn} from "./cn";

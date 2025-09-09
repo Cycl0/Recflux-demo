@@ -36,14 +36,17 @@ export class TaskController {
     private _isAborting: boolean = false
     private _autoResume: boolean = false
     private _autoStartNewTask: boolean = false
+    private _incompleteTaskResumption: boolean = false
     private _task?: string
 
     constructor(context: vscode.ExtensionContext, forceApprovalMcpTool: boolean) {
         // do nothing
         const outputChannel: vscode.OutputChannel = {
             appendLine: function (value: string): void {
+                console.log(`[OutputChannel] ${value}`);
             },
             dispose: function (): void {
+                console.log(`[OutputChannel] Channel disposed`);
             }
         }
 
@@ -232,13 +235,40 @@ export class TaskController {
             return
         }
 
-        this._autoResume = true
-        this._autoStartNewTask = autoStartNewTask
+        // Import the completion detection functions
+        const { isTaskIncomplete, getTaskCompletionStatus } = await import("cline/core/storage/disk")
         
-        this.emitMessageToExtension({
-            type: "showTaskWithId",
-            text: historyItem.id,
-        })
+        // Check if the task was incomplete due to context window limitations
+        const isIncomplete = await isTaskIncomplete(this._context, historyItem.id)
+        const completionStatus = await getTaskCompletionStatus(this._context, historyItem.id)
+        
+        if (isIncomplete) {
+            this._readline.write(`\n🔄 Detected incomplete task: "${task}"\n`)
+            this._readline.write(`📋 Last action: ${completionStatus.lastAction}\n`)
+            this._readline.write(`💡 Suggestion: ${completionStatus.suggestionForResumption}\n`)
+            this._readline.write(`\nResuming with automatic continuation prompt...\n\n`)
+            
+            // Set up for intelligent resumption
+            this._autoResume = true
+            this._autoStartNewTask = autoStartNewTask
+            this._incompleteTaskResumption = true
+            
+            this.emitMessageToExtension({
+                type: "showTaskWithId",
+                text: historyItem.id,
+            })
+        } else {
+            this._readline.write(`\n✅ Task appears to be complete: "${task}"\n`)
+            this._readline.write(`📋 Status: ${completionStatus.lastAction}\n\n`)
+            
+            this._autoResume = true
+            this._autoStartNewTask = autoStartNewTask
+            
+            this.emitMessageToExtension({
+                type: "showTaskWithId",
+                text: historyItem.id,
+            })
+        }
     }
 
     private async ask(message: ClineMessage, text: string): Promise<string | undefined> {
@@ -259,10 +289,23 @@ export class TaskController {
                 this._autoStartNewTask = false
 
                 this._readline.write(prompt + "\n")
-                this.emitMessageToExtension({
-                    type: "askResponse",
-                    askResponse: "yesButtonClicked",
-                })
+                
+                // If this is an incomplete task resumption, provide a continuation prompt
+                if (this._incompleteTaskResumption) {
+                    this._readline.write("Auto-resuming incomplete conversation with continuation prompt...\n")
+                    this._incompleteTaskResumption = false
+                    
+                    this.emitMessageToExtension({
+                        type: "askResponse",
+                        askResponse: "messageResponse",
+                        text: "Continue from where you left off. Please complete the task that was interrupted by context window limitations. If you were in the middle of implementing changes, please continue with those changes now.",
+                    })
+                } else {
+                    this.emitMessageToExtension({
+                        type: "askResponse",
+                        askResponse: "yesButtonClicked",
+                    })
+                }
 
                 return undefined
             }

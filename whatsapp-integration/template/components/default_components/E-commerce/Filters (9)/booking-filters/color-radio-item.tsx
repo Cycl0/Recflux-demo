@@ -1,10 +1,10 @@
 "use client";
 
-import type {RadioProps} from "@nextui-org/react";
+import type {RadioProps} from "@heroui/react";
 
 import React from "react";
-import {Tooltip, VisuallyHidden, useRadio} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Tooltip, VisuallyHidden, useRadio} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 export type ColorRadioItemProps = Omit<RadioProps, "color"> & {color?: string; tooltip?: string};
 

@@ -1,7 +1,7 @@
 "use client";
 
 import React, {useCallback} from "react";
-import {Avatar, Image} from "@nextui-org/react";
+import {Avatar, Image} from "@heroui/react";
 
 import {cn} from "./cn";
 

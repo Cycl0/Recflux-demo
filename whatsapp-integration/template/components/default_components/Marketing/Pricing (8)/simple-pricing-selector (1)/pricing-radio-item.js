@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import {Radio} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Radio} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 const PricingRadioItem = React.forwardRef(
   ({classNames = {}, className, children, ...props}, ref) => (

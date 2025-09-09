@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import {Avatar, Link} from "@nextui-org/react";
+import {Avatar, Link} from "@heroui/react";
 import {Icon} from "@iconify/react";
-import {cn} from "@nextui-org/react";
+import {cn} from "@heroui/react";
 
 export type TeamMember = {
   name: string;

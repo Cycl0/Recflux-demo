@@ -16,10 +16,16 @@ import { createClient } from '@supabase/supabase-js';
 import { deployToNetlify } from './deploy-netlify.js';
 import { 
  validateProject, 
+ validateProjectWithoutLock,
  autoFixProject, 
  generateErrorReport, 
- type ValidationResult 
+ detectErrorPattern,
+ ValidationLockManager,
+ TemplateManager,
+ type ValidationResult,
+ type ValidationError
 } from './validation.js';
+import { getFocusedSystemPrompt } from './syntax-fix-prompt.js';
 
 // ESM-compatible __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -41,6 +47,49 @@ function shouldProcessMessage(uniqueId: string): boolean {
  if (processedMessageIds.has(uniqueId)) return false;
  processedMessageIds.set(uniqueId, Date.now());
  return true;
+}
+
+// Simple cache for tracking recent task attempts
+const recentTaskAttempts: Map<string, { count: number, lastAttempt: number }> = new Map();
+const TASK_ATTEMPT_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+async function shouldAttemptTaskResumption(userPrompt: string, projectDir: string): Promise<boolean> {
+ try {
+  // Normalize the prompt for consistent tracking
+  const normalizedPrompt = userPrompt.toLowerCase().trim();
+  
+  // Check if we've seen this task recently
+  const now = Date.now();
+  const attemptRecord = recentTaskAttempts.get(normalizedPrompt);
+  
+  if (attemptRecord) {
+   // Clean up old attempts
+   if (now - attemptRecord.lastAttempt > TASK_ATTEMPT_TTL_MS) {
+    recentTaskAttempts.delete(normalizedPrompt);
+    return false;
+   }
+   
+   // If this is the second or third attempt within the TTL window, 
+   // it's likely a resumption scenario
+   if (attemptRecord.count >= 2) {
+    console.log(`[CLINE] Task "${normalizedPrompt}" attempted ${attemptRecord.count} times recently - likely incomplete task`);
+    attemptRecord.count++;
+    attemptRecord.lastAttempt = now;
+    return true;
+   }
+   
+   attemptRecord.count++;
+   attemptRecord.lastAttempt = now;
+  } else {
+   // First time seeing this task
+   recentTaskAttempts.set(normalizedPrompt, { count: 1, lastAttempt: now });
+  }
+  
+  return false;
+ } catch (error) {
+  console.error('[CLINE] Error checking task resumption:', error);
+  return false;
+ }
 }
 
 function getSupabaseForIdempotency() {
@@ -94,9 +143,447 @@ interface ClineResult {
 }
 
 /**
+ * CircuitBreaker to prevent infinite loops and apply exponential backoff
+ * Enhanced to track strategies and content hashes for better self-healing
+ */
+class CircuitBreaker {
+	private static fileFailures = new Map<string, { count: number; lastFailure: number; backoffUntil: number; strategy: string }>()
+	private static strategyAttempts = new Map<string, Map<string, { count: number; lastAttempt: number; contentHash?: string }>>()
+	private static fileContentHashes = new Map<string, string>()
+	
+	/**
+	 * Generate a simple hash for content comparison
+	 */
+	static hashContent(content: string): string {
+		let hash = 0
+		for (let i = 0; i < content.length; i++) {
+			const char = content.charCodeAt(i)
+			hash = ((hash << 5) - hash) + char
+			hash = hash & hash // Convert to 32-bit integer
+		}
+		return hash.toString(36)
+	}
+
+	/**
+	 * Check if a file should be skipped due to circuit breaker
+	 * Enhanced with strategy and content hash tracking
+	 */
+	static shouldSkipFile(filePath: string, strategy: string, currentContentHash?: string): boolean {
+		const normalizedPath = filePath.toLowerCase()
+		const now = Date.now()
+		
+		// Get strategy attempts for this file
+		const fileStrategyAttempts = this.strategyAttempts.get(normalizedPath) || new Map()
+		const strategyData = fileStrategyAttempts.get(strategy)
+		
+		// If no previous attempts with this strategy, allow it
+		if (!strategyData) {
+			console.log(`[CIRCUIT_BREAKER] Allowing new strategy '${strategy}' for ${filePath}`)
+			return false
+		}
+		
+		// Check if content has changed since last attempt with this strategy
+		if (currentContentHash && strategyData.contentHash && currentContentHash !== strategyData.contentHash) {
+			console.log(`[CIRCUIT_BREAKER] Content changed since last '${strategy}' attempt, allowing retry for ${filePath}`)
+			return false
+		}
+		
+		// Apply progressive backoff based on strategy attempts
+		const timeSinceLastAttempt = now - strategyData.lastAttempt
+		const requiredCooldown = this.getStrategyCooldown(strategy, strategyData.count)
+		
+		if (timeSinceLastAttempt < requiredCooldown) {
+			const remainingMs = requiredCooldown - timeSinceLastAttempt
+			console.log(`[CIRCUIT_BREAKER] Strategy '${strategy}' cooling down for ${filePath} - ${Math.ceil(remainingMs / 1000)}s remaining`)
+			return true
+		}
+		
+		// Check if we've exceeded max attempts for this strategy
+		if (strategyData.count >= this.getMaxAttemptsForStrategy(strategy)) {
+			console.log(`[CIRCUIT_BREAKER] Strategy '${strategy}' exhausted (${strategyData.count} attempts) for ${filePath}`)
+			return true
+		}
+		
+		return false
+	}
+	
+	/**
+	 * Get cooldown time for a strategy based on attempt count
+	 */
+	private static getStrategyCooldown(strategy: string, attemptCount: number): number {
+		// Clean rewrite strategies get minimal cooldown (last resort)
+		if (strategy.includes('clean_rewrite') || strategy.includes('comprehensive_cleanup')) {
+			return 1000 // 1 second
+		}
+		
+		// Edit-based strategies get moderate cooldown
+		if (strategy.includes('edit') || strategy.includes('targeted')) {
+			return Math.min(5000 * Math.pow(2, attemptCount - 1), 30000) // 5s → 10s → 20s → 30s max
+		}
+		
+		// Other strategies get standard cooldown
+		return Math.min(3000 * Math.pow(2, attemptCount - 1), 15000) // 3s → 6s → 12s → 15s max
+	}
+	
+	/**
+	 * Get maximum attempts allowed for a strategy
+	 */
+	private static getMaxAttemptsForStrategy(strategy: string): number {
+		// Clean rewrite strategies get more attempts (they're more likely to work)
+		if (strategy.includes('clean_rewrite') || strategy.includes('comprehensive_cleanup')) {
+			return 3
+		}
+		
+		// Other strategies get fewer attempts before escalation
+		return 2
+	}
+	
+	/**
+	 * Record a failure for a file with strategy tracking
+	 */
+	static recordFailure(filePath: string, strategy: string, currentContentHash?: string): void {
+		const normalizedPath = filePath.toLowerCase()
+		const now = Date.now()
+		
+		// Update strategy attempts
+		if (!this.strategyAttempts.has(normalizedPath)) {
+			this.strategyAttempts.set(normalizedPath, new Map())
+		}
+		
+		const fileStrategyAttempts = this.strategyAttempts.get(normalizedPath)!
+		const currentData = fileStrategyAttempts.get(strategy) || { count: 0, lastAttempt: 0 }
+		
+		fileStrategyAttempts.set(strategy, {
+			count: currentData.count + 1,
+			lastAttempt: now,
+			contentHash: currentContentHash
+		})
+		
+		// Update file content hash if provided
+		if (currentContentHash) {
+			this.fileContentHashes.set(normalizedPath, currentContentHash)
+		}
+		
+		console.log(`[CIRCUIT_BREAKER] Recorded failure for ${filePath} with strategy '${strategy}' (attempt ${currentData.count + 1})`)
+	}
+	
+	/**
+	 * Get next recommended strategy based on what's been tried and failed
+	 * With content-aware strategy selection to prevent destructive fixes for surgically fixable errors
+	 */
+	static getNextStrategy(filePath: string, errors?: ValidationError[]): string | null {
+		const normalizedPath = filePath.toLowerCase()
+		const fileStrategyAttempts = this.strategyAttempts.get(normalizedPath)
+		
+		if (!fileStrategyAttempts) {
+			return 'targeted_edit' // Start with least disruptive
+		}
+		
+		// Check if we have surgically fixable import/export errors
+		const hasSurgicallyFixableErrors = errors && errors.some(error => 
+			error.rule === 'surgical-import-export' && error.fixable
+		);
+		
+		// For surgically fixable errors, prevent escalation to destructive strategies
+		// to avoid destroying creative content for simple import/export fixes
+		let availableStrategies = [
+			'targeted_edit',
+			'comprehensive_edit', 
+			'clean_rewrite',
+			'comprehensive_cleanup'
+		];
+		
+		if (hasSurgicallyFixableErrors) {
+			console.log(`[CIRCUIT_BREAKER] Detected surgically fixable import/export errors for ${filePath} - restricting to safe strategies`);
+			// Limit to non-destructive strategies for import/export errors
+			availableStrategies = [
+				'targeted_edit',
+				'comprehensive_edit'
+			];
+		}
+		
+		// Progressive strategy escalation within available strategies
+		const strategies = availableStrategies;
+		
+		// Find first strategy that hasn't been exhausted
+		for (const strategy of strategies) {
+			const strategyData = fileStrategyAttempts.get(strategy)
+			if (!strategyData || strategyData.count < this.getMaxAttemptsForStrategy(strategy)) {
+				// Check if strategy is in cooldown
+				if (strategyData) {
+					const timeSinceLastAttempt = Date.now() - strategyData.lastAttempt
+					const requiredCooldown = this.getStrategyCooldown(strategy, strategyData.count)
+					if (timeSinceLastAttempt < requiredCooldown) {
+						continue // Skip strategies in cooldown
+					}
+				}
+				return strategy
+			}
+		}
+		
+		// All strategies exhausted
+		console.log(`[CIRCUIT_BREAKER] All strategies exhausted for ${filePath}`)
+		return null
+	}
+	
+	/**
+	 * Reset circuit breaker state for a file (for testing or manual override)
+	 */
+	static reset(filePath: string): void {
+		const normalizedPath = filePath.toLowerCase()
+		this.fileFailures.delete(normalizedPath)
+		this.strategyAttempts.delete(normalizedPath) 
+		this.fileContentHashes.delete(normalizedPath)
+		console.log(`[CIRCUIT_BREAKER] Reset state for ${filePath}`)
+	}
+	
+	/**
+	 * Clear all circuit breaker state (for cleanup or testing)
+	 */
+	static clear(): void {
+		this.fileFailures.clear()
+		this.strategyAttempts.clear()
+		this.fileContentHashes.clear()
+		console.log(`[CIRCUIT_BREAKER] Cleared all state`)
+	}
+	
+	/**
+	 * Record a success for a file (resets failure count)
+	 */
+	static recordSuccess(filePath: string): void {
+		const normalizedPath = filePath.toLowerCase()
+		
+		this.fileFailures.delete(normalizedPath)
+		this.strategyAttempts.delete(normalizedPath)
+		this.fileContentHashes.delete(normalizedPath)
+		
+		console.log(`[CIRCUIT_BREAKER] Success recorded for ${filePath} - reset all tracking`)
+	}
+	
+	/**
+	 * Get current failure count for a file
+	 */
+	static getFailureCount(filePath: string): number {
+		const normalizedPath = filePath.toLowerCase()
+		return this.fileFailures.get(normalizedPath)?.count || 0
+	}
+	
+	/**
+	 * Check if force clean write should be used based on failed strategies
+	 */
+	static shouldUseForceCleanWrite(filePath: string): boolean {
+		const normalizedPath = filePath.toLowerCase()
+		const fileStrategyAttempts = this.strategyAttempts.get(normalizedPath)
+		
+		if (!fileStrategyAttempts) return false
+		
+		// Check if multiple different strategies have failed
+		const failedStrategies = Array.from(fileStrategyAttempts.entries()).filter(([_, data]) => data.count >= 1)
+		
+		// Use force clean write if:
+		// 1. 3+ different strategies have been tried (comprehensive approach needed)
+		// 2. ANY strategy has failed 3+ times (stuck in loop)
+		// 3. 2+ strategies have failed 2+ times each (persistent issues)
+		if (failedStrategies.length >= 3) {
+			return true // Too many strategies tried
+		}
+		
+		const highFailureStrategies = failedStrategies.filter(([_, data]) => data.count >= 3)
+		if (highFailureStrategies.length >= 1) {
+			return true // Any strategy stuck in loop
+		}
+		
+		const moderateFailureStrategies = failedStrategies.filter(([_, data]) => data.count >= 2)
+		if (moderateFailureStrategies.length >= 2) {
+			return true // Multiple strategies struggling
+		}
+		
+		return false
+	}
+	
+	/**
+	 * Get the best next strategy based on what hasn't been tried or exhausted
+	 */
+	static getNextBestStrategy(filePath: string, currentStrategy: string, availableStrategies: string[]): string {
+		const normalizedPath = filePath.toLowerCase()
+		const fileStrategyAttempts = this.strategyAttempts.get(normalizedPath) || new Map()
+		
+		// Find strategies that haven't been exhausted
+		const viableStrategies = availableStrategies.filter(strategy => {
+			const attempts = fileStrategyAttempts.get(strategy)
+			return !attempts || attempts.count < this.getMaxAttemptsForStrategy(strategy)
+		})
+		
+		// If no viable strategies, suggest clean rewrite
+		if (viableStrategies.length === 0) {
+			return 'comprehensive_cleanup'
+		}
+		
+		// Prefer clean rewrite strategies if other approaches have failed
+		const cleanRewriteStrategies = viableStrategies.filter(s => s.includes('clean_rewrite') || s.includes('comprehensive_cleanup'))
+		if (cleanRewriteStrategies.length > 0 && this.getFailureCount(filePath) >= 3) {
+			return cleanRewriteStrategies[0]
+		}
+		
+		// Otherwise, pick first viable strategy that's different from current
+		return viableStrategies.find(s => s !== currentStrategy) || viableStrategies[0] || currentStrategy
+	}
+	
+	/**
+	 * Get content hash for a file path if available
+	 */
+	static getContentHash(filePath: string): string | undefined {
+		const normalizedPath = filePath.toLowerCase()
+		return this.fileContentHashes.get(normalizedPath)
+	}
+	
+	/**
+	 * Generate content hash for comparison
+	 */
+	static generateContentHash(content: string): string {
+		return this.hashContent(content)
+	}
+	
+	/**
+	 * Clear all circuit breaker state (emergency reset)
+	 */
+}
+
+/**
+ * Get progressive fixing strategy based on attempt number and error pattern
+ */
+function getFixingStrategy(attempt: number, pattern: string, errors: any[]): { instruction: string; guidance: string } {
+    const strategies = {
+        duplicate_code: {
+            0: {
+                instruction: "FOCUS: Remove all duplicate code sections and exports. Use Write tool to create clean, single version.",
+                guidance: "🎯 Strategy: Identify duplicate functions/components and consolidate them into a single implementation."
+            },
+            1: {
+                instruction: "ALTERNATIVE APPROACH: Use MultiEdit tool to remove duplicate sections in multiple steps.",
+                guidance: "🔧 Try: Break down the duplicate removal into smaller, targeted edits."
+            },
+            default: {
+                instruction: "COMPREHENSIVE CLEANUP: Start fresh - read entire file and rewrite with proper structure.",
+                guidance: "⚠️ Last resort: Complete file restructure may be needed."
+            }
+        },
+        jsx_structure: {
+            0: {
+                instruction: "FOCUS: Fix JSX structure issues. Check for unclosed tags, missing brackets, and malformed JSX.",
+                guidance: "🎯 Strategy: Validate JSX syntax - every opening tag needs a closing tag, every { needs a }."
+            },
+            1: {
+                instruction: "ALTERNATIVE APPROACH: Use bracket matching - find where JSX structure breaks down.",
+                guidance: "🔧 Try: Count opening/closing braces and tags to find mismatches."
+            },
+            default: {
+                instruction: "STEP-BY-STEP: Fix JSX section by section, validating each component separately.",
+                guidance: "⚠️ Progressive fix: Isolate each JSX component and fix individually."
+            }
+        },
+        missing_brackets: {
+            0: {
+                instruction: "FOCUS: Find and fix missing closing brackets, braces, and parentheses.",
+                guidance: "🎯 Strategy: Look for functions/objects/arrays that aren't properly closed."
+            },
+            1: {
+                instruction: "ALTERNATIVE APPROACH: Add missing brackets systematically from inside out.",
+                guidance: "🔧 Try: Start with innermost expressions and work outward."
+            },
+            default: {
+                instruction: "BRACKET AUDIT: Review entire file structure for proper nesting and closure.",
+                guidance: "⚠️ Complete review: Ensure every opening bracket has its match."
+            }
+        },
+        mixed_issues: {
+            0: {
+                instruction: "PRIORITY: Fix syntax errors first (brackets, semicolons), then structural issues.",
+                guidance: "🎯 Strategy: Address errors in order of severity - syntax → structure → style."
+            },
+            1: {
+                instruction: "FOCUSED REPAIR: Target the most common error type first, then address others.",
+                guidance: "🔧 Try: Group similar errors and fix them in batches."
+            },
+            default: {
+                instruction: "SYSTEMATIC APPROACH: Fix one file at a time, ensuring each is valid before moving on.",
+                guidance: "⚠️ Methodical fix: Complete one area fully before tackling the next."
+            }
+        },
+        default: {
+            0: {
+                instruction: "The previous code generation resulted in errors. Please fix the following issues and ensure the code is valid:",
+                guidance: "🎯 Read the entire file first, then make targeted fixes."
+            },
+            1: {
+                instruction: "ALTERNATIVE STRATEGY: Try a different approach to fixing these persistent errors:",
+                guidance: "🔧 Consider using different tools (Write vs Edit vs MultiEdit)."
+            },
+            default: {
+                instruction: "COMPREHENSIVE FIX: These errors require careful attention. Read files thoroughly before editing:",
+                guidance: "⚠️ Take time to understand the full context before making changes."
+            }
+        }
+    };
+
+    const patternStrategies = strategies[pattern as keyof typeof strategies] || strategies.default;
+    const strategy = patternStrategies[attempt as keyof typeof patternStrategies] || patternStrategies.default;
+
+    return strategy;
+}
+
+/**
+ * Progressive fixing strategy that incorporates circuit breaker recommendations
+ */
+function getProgressiveFixingStrategy(
+    attempt: number, 
+    pattern: string, 
+    errors: any[], 
+    fileStrategies: Map<string, string>
+): { instruction: string; guidance: string } {
+    // If we have specific file strategies from circuit breaker, use them
+    if (fileStrategies.size > 0) {
+        const strategies = Array.from(fileStrategies.values())
+        const dominantStrategy = strategies[0] // Use first strategy as base
+        
+        const strategyInstructions = {
+            'targeted_edit': {
+                instruction: "TARGETED EDIT: Make minimal, precise changes to fix specific errors. Use Edit tool for small fixes.",
+                guidance: "🎯 Strategy: Focus on exact error locations with minimal disruption to working code."
+            },
+            'comprehensive_edit': {
+                instruction: "COMPREHENSIVE EDIT: Use MultiEdit to make coordinated changes across multiple sections.",
+                guidance: "🔧 Strategy: Address related issues together while preserving overall structure."
+            },
+            'clean_rewrite': {
+                instruction: "CLEAN REWRITE: Use Write tool to create a fresh version focusing on fixing core issues.",
+                guidance: "✨ Strategy: Start with a clean slate while maintaining functionality."
+            },
+            'comprehensive_cleanup': {
+                instruction: "COMPREHENSIVE CLEANUP: Complete file restructure with proper organization and syntax.",
+                guidance: "🔄 Strategy: Last resort - rebuild file with correct structure and clean code."
+            }
+        }
+        
+        const strategyInfo = strategyInstructions[dominantStrategy as keyof typeof strategyInstructions] || 
+                            strategyInstructions['comprehensive_cleanup']
+        
+        return {
+            instruction: strategyInfo.instruction + `\n\nFiles requiring attention: ${Array.from(fileStrategies.keys()).join(', ')}`,
+            guidance: strategyInfo.guidance + `\n\nStrategy per file: ${Array.from(fileStrategies.entries()).map(([f, s]) => `${f}: ${s}`).join(', ')}`
+        }
+    }
+    
+    // Fallback to original strategy if no specific file strategies
+    return getFixingStrategy(attempt, pattern, errors)
+}
+
+/**
  * Enhanced version of runClineCLIInDir with automated validation and error fixing
  */
-async function runClineCLIInDirWithValidation(cwd: string, userPrompt: string, systemAppend: string, maxRetries = 3): Promise<ClineResult & { validationResult?: ValidationResult }> {
+async function runClineCLIInDirWithValidation(cwd: string, userPrompt: string, systemAppend: string, maxRetries = 6): Promise<ClineResult & { validationResult?: ValidationResult }> {
+ // Use template isolation to prevent file watcher interference
+ return await TemplateManager.withTemplateIsolation(cwd, async () => {
  let attempt = 0;
  let lastValidation: ValidationResult | null = null;
 
@@ -105,7 +592,34 @@ async function runClineCLIInDirWithValidation(cwd: string, userPrompt: string, s
  console.log(`[ENHANCED_CLINE] Attempt ${attempt}/${maxRetries}`);
  
  // Run the original Cline CLI
- const clineResult = await runClineCLIInDir(cwd, userPrompt, systemAppend);
+ // Detect if we're doing syntax fixes and use better model
+const isSyntaxFixAttempt = attempt > 1; // First attempt is initial request, subsequent are fixes
+const hasSyntaxErrors = lastValidation && lastValidation.errors.some(e => 
+	e.type === 'syntax' || e.message.toLowerCase().includes('syntax') ||
+	e.message.toLowerCase().includes('bracket') || e.message.toLowerCase().includes('duplicate')
+);
+// Check if circuit breaker indicates we should use better model
+const hasCircuitBreakerIssues = lastValidation && lastValidation.errors.some(e => {
+	const file = e.file;
+	return file && CircuitBreaker.getFailureCount(file) >= 2;
+});
+
+const useBetterModel: boolean = isSyntaxFixAttempt && (
+	!!hasSyntaxErrors || 
+	attempt >= 3 || 
+	!!hasCircuitBreakerIssues
+); // Use better model for syntax errors, after 3 attempts, or when circuit breaker detects repeated failures
+
+if (useBetterModel) {
+const reasons = [];
+if (hasSyntaxErrors) reasons.push('syntax errors detected');
+if (attempt >= 3) reasons.push(`attempt ${attempt} (fallback)`);
+if (hasCircuitBreakerIssues) reasons.push('circuit breaker failures');
+console.log(`[ENHANCED_CLINE] 🚀 Using better model (grok-code-fast-1) for syntax fix - reason: ${reasons.join(', ')}`);
+}
+
+console.log(`[DEBUG] About to call runClineCLIInDir - attempt: ${attempt}, useBetterModel: ${useBetterModel}`);
+const clineResult = await runClineCLIInDir(cwd, userPrompt, systemAppend, useBetterModel);
  
  // If Cline CLI failed, return immediately
  if (clineResult.code !== 0) {
@@ -115,12 +629,23 @@ async function runClineCLIInDirWithValidation(cwd: string, userPrompt: string, s
  
  console.log(`[ENHANCED_CLINE] Cline CLI completed, running validation...`);
  
- // Validate the generated code
- const validation = await validateProject(cwd);
+ // Run validation (syntax-first for early attempts, comprehensive for later)
+ const syntaxOnly = attempt < maxRetries - 2; // Use syntax-only for first 4 attempts
+ console.log(`[ENHANCED_CLINE] Using ${syntaxOnly ? 'syntax-only' : 'comprehensive'} validation for attempt ${attempt + 1}`);
+ // Use validation without locks in retry loop to prevent interference with Cline file writes
+ const validation = await validateProjectWithoutLock(cwd, syntaxOnly);
  lastValidation = validation;
  
  if (validation.isValid) {
  console.log(`[ENHANCED_CLINE] ✅ Validation passed on attempt ${attempt}`);
+ 
+ // Record success for all previously problematic files
+ const allFiles = validation.errors.concat(lastValidation?.errors || []).map(e => e.file).filter(f => f && f !== 'unknown')
+ const uniqueFiles = [...new Set(allFiles)]
+ for (const file of uniqueFiles) {
+ CircuitBreaker.recordSuccess(file)
+ }
+ 
  return { ...clineResult, validationResult: validation };
  }
  
@@ -135,9 +660,15 @@ async function runClineCLIInDirWithValidation(cwd: string, userPrompt: string, s
  console.log(`[ENHANCED_CLINE] ✅ Auto-fixed ${fixResult.changedFiles.length} files`);
  
  // Re-validate after auto-fix
- const postFixValidation = await validateProject(cwd);
+ const postFixValidation = await validateProjectWithoutLock(cwd);
  if (postFixValidation.isValid) {
  console.log(`[ENHANCED_CLINE] ✅ Validation passed after auto-fix`);
+ 
+ // Record success for all fixed files
+ for (const file of fixResult.changedFiles) {
+ CircuitBreaker.recordSuccess(file)
+ }
+ 
  return { ...clineResult, validationResult: postFixValidation };
  } else if (postFixValidation.errors.length < validation.errors.length) {
  console.log(`[ENHANCED_CLINE] 🔧 Auto-fix reduced errors from ${validation.errors.length} to ${postFixValidation.errors.length}`);
@@ -149,10 +680,93 @@ async function runClineCLIInDirWithValidation(cwd: string, userPrompt: string, s
  // If we have remaining errors and attempts left, ask Cline to fix them
  if (attempt < maxRetries) {
  const errorReport = generateErrorReport(lastValidation || validation);
- const fixPrompt = `The previous code generation resulted in errors. Please fix the following issues and ensure the code is valid:\n\n${errorReport}\n\nOriginal request: ${userPrompt}`;
+ const pattern = detectErrorPattern(validation.errors);
  
- console.log(`[ENHANCED_CLINE] 🔄 Asking Cline to fix errors on attempt ${attempt +1}...`);
+ // Apply enhanced circuit breaker logic for problematic files
+ const problemFiles = validation.errors.map(e => e.file).filter(f => f && f !== 'unknown')
+ const skippedFiles: string[] = []
+const fileStrategies = new Map<string, string>()
+ 
+ // Determine strategy for each problematic file  
+ for (const file of problemFiles) {
+ // Get recommended strategy from circuit breaker, passing errors for content-aware selection
+ const fileErrors = validation.errors.filter(error => error.file === file);
+ const recommendedStrategy = CircuitBreaker.getNextStrategy(file, fileErrors) || 'comprehensive_cleanup'
+
+ // Generate content hash for change detection
+ let contentHash: string | undefined
+ try {
+ const content = await fs.readFile(path.join(cwd, file), 'utf-8')
+ contentHash = CircuitBreaker.hashContent(content)
+ } catch (error) {
+ console.warn(`[ENHANCED_CLINE] Could not read ${file} for content hashing:`, error)
+ }
+
+ if (CircuitBreaker.shouldSkipFile(file, recommendedStrategy, contentHash)) {
+ skippedFiles.push(file)
+ } else {
+ fileStrategies.set(file, recommendedStrategy)
+ }
+ }
+ 
+ // If all problematic files are being skipped, break the loop
+ if (skippedFiles.length === problemFiles.length && problemFiles.length > 0) {
+ console.log(`[ENHANCED_CLINE] 🚫 Circuit breaker activated - all problematic files are in backoff period`)
+ console.log(`[ENHANCED_CLINE] Skipped files: ${skippedFiles.join(', ')}`)
+ break
+ }
+ 
+ // Create progressive strategy based on attempt number and error pattern
+ // Record failures for files that will be worked on based on strategies
+for (const [file, strategyName] of fileStrategies) {
+	// Generate content hash for failure tracking
+	let contentHash: string | undefined
+	try {
+		const content = await fs.readFile(path.join(cwd, file), 'utf-8')
+		contentHash = CircuitBreaker.hashContent(content)
+	} catch (error) {
+		console.warn(`[ENHANCED_CLINE] Could not read ${file} for failure recording:`, error)
+	}
+	
+	CircuitBreaker.recordFailure(file, strategyName, contentHash)
+}
+
+const strategy = getProgressiveFixingStrategy(attempt, pattern, validation.errors, fileStrategies);
+ 
+ // Check if any files need force clean write
+ const forceCleanWriteFiles = problemFiles.filter(file => CircuitBreaker.shouldUseForceCleanWrite(file))
+ let forceCleanWriteGuidance = ''
+ 
+ if (forceCleanWriteFiles.length > 0) {
+ forceCleanWriteGuidance = `
+
+🚨 FORCE CLEAN WRITE STRATEGY:
+The following files have persistent errors and may need complete rewriting:
+${forceCleanWriteFiles.map(f => `  • ${f}`).join('\n')}
+
+For these files, consider:
+1. Read the entire file first to understand structure and errors
+2. Try Edit tool for single changes (safest approach)
+3. If Edit works, use multiple Edit operations systematically
+4. Only use MultiEdit if Edit tool is also failing
+5. Work from END of file backward to remove stray code first
+6. Focus on syntax fixes only - brackets, semicolons, closing tags
+7. AVOID Write, execute_command, and write_to_file tools if they're failing`
+ }
+ 
+ const fixPrompt = `${strategy.instruction}
+
+${errorReport}
+
+${strategy.guidance}${forceCleanWriteGuidance}
+
+Original request: ${userPrompt}`;
+ 
+ console.log(`[ENHANCED_CLINE] 🔄 Asking Cline to fix errors (attempt ${attempt + 1}, strategy: ${pattern})...`);
  userPrompt = fixPrompt; // Update prompt for next iteration
+ 
+ // Use focused system prompt for error fixing
+ systemAppend = getFocusedSystemPrompt(pattern);
  }
  }
  
@@ -168,40 +782,60 @@ async function runClineCLIInDirWithValidation(cwd: string, userPrompt: string, s
  stderrLen: generateErrorReport(lastValidation!).length,
  validationResult: lastValidation || undefined
  };
+ }); // Close TemplateManager.withTemplateIsolation
 }
 
-function runClineCLIInDir(cwd: string, userPrompt: string, systemAppend: string): Promise<ClineResult> {
-	return new Promise((resolve, reject) => {
-		// Resolve absolute project directory and prepare prompts
-		const absProjectDir = path.resolve(cwd);
-		const userArg = userPrompt;
-		
-		// Create cline config path
-		const clineConfigPath = path.resolve(__dirname, '../cline-config.json');
-		console.log('[CLINE] Config path:', clineConfigPath);
-		
-		// Check if cline config file exists
-		try {
-			const configExists = fsSync.existsSync(clineConfigPath);
-			console.log('[CLINE] Config exists:', configExists);
-			if (configExists) {
-				const configContent = fsSync.readFileSync(clineConfigPath, 'utf8');
-				console.log('[CLINE] Config content:', configContent);
-			}
-		} catch (e) {
-			console.error('[CLINE] Error checking config:', e);
+async function runClineCLIInDir(cwd: string, userPrompt: string, systemAppend: string, useBetterModelForSyntax?: boolean): Promise<ClineResult> {
+	// Resolve absolute project directory and prepare prompts
+	const absProjectDir = path.resolve(cwd);
+	const userArg = userPrompt;
+	
+	// Create cline config path - use better model config for syntax fixes
+	const clineConfigPath = useBetterModelForSyntax === true
+		? '/home/appuser/.cline_cli/cline_cli_settings_fix.json'
+		: '/home/appuser/.cline_cli/cline_cli_settings.json';
+	console.log('[CLINE] Config path:', clineConfigPath, useBetterModelForSyntax === true ? '(using better model for syntax fixes)' : '(using default model)');
+	
+	// Check if cline config file exists
+	try {
+		const configExists = fsSync.existsSync(clineConfigPath);
+		console.log('[CLINE] Config exists:', configExists);
+		if (configExists) {
+			const configContent = fsSync.readFileSync(clineConfigPath, 'utf8');
+			console.log('[CLINE] Config content:', configContent);
 		}
+	} catch (e) {
+		console.error('[CLINE] Error checking config:', e);
+	}
+	
+	// cline-cli uses 'task' command with automation flags
+	// Check if we should resume an existing incomplete task
+	const shouldResumeIncompleteTask = await shouldAttemptTaskResumption(userArg, absProjectDir);
+	
+	return new Promise((resolve, reject) => {
 		
-		// cline-cli uses 'task' command with automation flags
-		const baseArgs = [
+		const baseArgs = shouldResumeIncompleteTask ? [
 			'task',
 			'--full-auto',
 			'--auto-approve-mcp',
-			'--settings', '/home/appuser/.cline_cli/cline_cli_settings.json',
+			'--settings', clineConfigPath,
+			'--workspace', absProjectDir,
+			'--custom-instructions', systemAppend,
+			'--resume-or-new',  // Use resume-or-new flag to automatically resume incomplete tasks
+			userArg
+		] : [
+			'task',
+			'--full-auto',
+			'--auto-approve-mcp',
+			'--settings', clineConfigPath,
 			'--workspace', absProjectDir,
 			'--custom-instructions', systemAppend,
 			userArg
 		];
+		
+		if (shouldResumeIncompleteTask) {
+			console.log('[CLINE] 🔄 Attempting to resume incomplete task for prompt:', userArg);
+		}
 		let cmd = CLINE_BIN;
 		let args = baseArgs.slice();
 		let useShell = false;
@@ -544,9 +1178,9 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		🚨🚨🚨 CRITICAL: DO NOT TOUCH THE NAVBAR OR CTABUTTON FILES 🚨🚨🚨
 		🚨🚨🚨 CRITICAL: USE ONLY CONFIGURATION OBJECTS 🚨🚨🚨
 		
-		✅ ONLY ALLOWED: import NavBar, { defaultNavBarConfig } from '../components/NavBar';
+		✅ ONLY ALLOWED: import { NavBar } from '../components/NavBar';
 		✅ ONLY ALLOWED: import CTAButton from '../components/CTAButton';
-		✅ ONLY ALLOWED: <NavBar {...defaultNavBarConfig} />
+		✅ ONLY ALLOWED: <NavBar />
 		✅ ONLY ALLOWED: <CTAButton text="Click Me" href="/action" />
 		
 		🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫🚫
@@ -778,12 +1412,13 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		✅ REQUIRED: Use CTAButton with props only
 		
 		🚨 WARNING: DO NOT MODIFY COMPONENT FILES - USE CONFIGURATION ONLY 🚨
+		🚨 CRITICAL FOOTER RULE: Modify footer content in app/layout.tsx, NEVER in page.tsx 🚨
 		
 		✅ NAVBAR USAGE (ONLY ALLOWED METHOD):
-		 import NavBar, { defaultNavBarConfig } from '../components/NavBar';
+		 import { NavBar } from '../components/NavBar';
 		 
 		 OPÇÃO 1 - Usar configuração padrão:
-		 <NavBar {...defaultNavBarConfig} />
+		 <NavBar />
 		 
 		 OPÇÃO 2 - Criar configuração customizada para o tema:
 		 const customNavConfig = {
@@ -883,7 +1518,7 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		- CTA: DO NOT CREATE FROM SCRATCH - USE CTAButton component with props ONLY
 		
 		🚨 CRITICAL: NavBar.jsx and CTAButton.jsx must NEVER be modified 🚨
-		🚨 CRITICAL: Use import NavBar, { defaultNavBarConfig } from '../components/NavBar' 🚨
+		🚨 CRITICAL: Use import { NavBar } from '../components/NavBar' 🚨
 		🚨 CRITICAL: Use import CTAButton from '../components/CTAButton' 🚨
 		🚨 CRITICAL: DO NOT change const NavBar = to export default function 🚨
 		🚨 CRITICAL: DO NOT change const CTAButton = to export default function 🚨
@@ -935,6 +1570,7 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		🚫 NEVER ADD: NavBar to page.tsx - it's already rendered in the layout wrapper
 		🚫 NEVER EDIT: template/src/components/CTAButton.jsx - USE PROPS ONLY
 		✅ OBRIGATÓRIO LAYOUT: NavBar is automatically included in layout.tsx - focus on page content only
+		✅ OBRIGATÓRIO FOOTER: Footer modifications must be done in layout.tsx, NOT page.tsx
 		✅ OBRIGATÓRIO CTABUTTON: Use only import CTAButton from '../components/CTAButton'
 		✅ OBRIGATÓRIO CTA GLOW: Configure glowingColor no CTAButton com cor principal do tema
 		
@@ -981,6 +1617,7 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		
 		🚨🚨🚨 HEROUI ANTI-PATTERNS - NEVER DO THIS 🚨🚨🚨
 		❌ BAD: Adding NavBar to pages → NavBar is already in layout.tsx
+		❌ BAD: Adding footer to page.tsx → Footer changes must be in layout.tsx
 		❌ BAD: Custom button when HeroUI exists → <button className="bg-blue-500 px-4 py-2 rounded">
 		❌ BAD: Custom input when HeroUI exists → <input className="border rounded p-2 w-full" />
 		❌ BAD: Custom card when HeroUI exists → <div className="border rounded-lg p-4 shadow">
@@ -1002,8 +1639,8 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		✅✅✅ CORRECT PATTERNS - ALWAYS DO THIS ✅✅✅
 		
 		CORRECT EXAMPLES:
-		✅ GOOD: import NavBar, { defaultNavBarConfig } from '../components/NavBar';
-		✅ GOOD: <NavBar {...defaultNavBarConfig} />
+		✅ GOOD: import { NavBar } from '../components/NavBar';
+		✅ GOOD: <NavBar />
 		✅ GOOD: <NavBar {...customNavConfig} />
 		✅ GOOD: import CTAButton from '../components/CTAButton';
 		✅ GOOD: <CTAButton text="Click Me" href="/action" />
@@ -1830,6 +2467,8 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		6) ADICIONE VÍDEOS PROFISSIONAIS: Use mcp__recflux__puppeteer_search com searchType='videos' para encontrar vídeos de background relevantes ao tema para o hero
 		 🚨 REMINDER: NavBar is already in layout.tsx - NEVER add NavBar to page.tsx 🚨
 		 🚨 REMINDER: DO NOT CREATE NEW NAVIGATION - NavBar exists in app/layout.tsx 🚨
+		 🚨 FOOTER MODIFICATION RULE: ALWAYS modify footer content in app/layout.tsx, NOT in page.tsx 🚨
+		 🚨 CRITICAL: Footer changes must be made in layout.tsx to appear on all pages consistently 🚨
 		 
 		7) ADICIONE CONTEÚDO VISUAL PROFISSIONAL - Execute estes passos:
 		 a) ANIMAÇÕES: Use mcp__recflux__puppeteer_search com searchType='animations' para encontrar animações relevantes ao tema
@@ -1990,6 +2629,31 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		RESULTADO: Sites com design visualmente atrativo, teoricamente fundamentado, tecnicamente preciso e contextualmente fiel às inspirações
 	`;
  try {
+ // Clear all build caches before Cline execution to prevent stale deployments
+ console.log('[CACHE] Clearing build caches before Cline execution...');
+ const cacheDirectories = ['.next', 'out', 'node_modules/.cache', '.cache', 'build', 'dist'];
+ for (const cacheDir of cacheDirectories) {
+ try {
+ await fs.rm(path.join(dir, cacheDir), { recursive: true, force: true });
+ console.log(`[CACHE] ✅ Cleared ${cacheDir}`);
+ } catch (e) {
+ console.log(`[CACHE] ℹ️ ${cacheDir} not found (already clean)`);
+ }
+ }
+ 
+ // Fix ownership after cache clearing to ensure build processes can write
+ try {
+ const { spawn } = await import('child_process');
+ await new Promise<void>((resolve) => {
+ const chownProcess = spawn('chown', ['-R', 'appuser:appuser', dir], { stdio: 'ignore' });
+ chownProcess.on('close', () => resolve());
+ chownProcess.on('error', () => resolve()); // Continue even if chown fails
+ });
+ console.log('[CACHE] ✅ Fixed ownership after cache clearing');
+ } catch (e) {
+ console.log('[CACHE] ℹ️ Could not fix ownership (might not be in container)');
+ }
+ 
  const before = await hashDirectory(dir);
  const result = await runClineCLIInDirWithValidation(dir, nlPrompt, system);
  const stdout = result.stdout;
@@ -2269,6 +2933,31 @@ app.post('/webhook', async (req: Request, res: Response) => {
 				}
 				const systemDeploy = `Você é um admin de código. Edite o projeto desta pasta conforme o pedido.`;
 				try {
+					// Clear all build caches before Cline execution to prevent stale deployments
+					console.log('[CACHE] Clearing build caches before Cline execution (deploy prompt)...');
+					const cacheDirectories = ['.next', 'out', 'node_modules/.cache', '.cache', 'build', 'dist'];
+					for (const cacheDir of cacheDirectories) {
+						try {
+							await fs.rm(path.join(dir, cacheDir), { recursive: true, force: true });
+							console.log(`[CACHE] ✅ Cleared ${cacheDir}`);
+						} catch (e) {
+							console.log(`[CACHE] ℹ️ ${cacheDir} not found (already clean)`);
+						}
+					}
+					
+					// Fix ownership after cache clearing to ensure build processes can write
+					try {
+						const { spawn } = await import('child_process');
+						await new Promise<void>((resolve) => {
+							const chownProcess = spawn('chown', ['-R', 'appuser:appuser', dir], { stdio: 'ignore' });
+							chownProcess.on('close', () => resolve());
+							chownProcess.on('error', () => resolve()); // Continue even if chown fails
+						});
+						console.log('[CACHE] ✅ Fixed ownership after cache clearing');
+					} catch (e) {
+						console.log('[CACHE] ℹ️ Could not fix ownership (might not be in container)');
+					}
+					
 					const before = await hashDirectory(dir);
 					const result = await runClineCLIInDirWithValidation(dir, reactCode, systemDeploy);
 					const stdout = result.stdout;

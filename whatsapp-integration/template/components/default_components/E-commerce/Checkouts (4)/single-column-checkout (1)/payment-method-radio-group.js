@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import {RadioGroup} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {RadioGroup} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 import {VisaIcon, MasterCardIcon, PayPalIcon} from "./providers";
 

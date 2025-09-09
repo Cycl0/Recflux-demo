@@ -7,7 +7,7 @@
     "tailwind-merge": "2.2.0",
     "framer-motion": "11.1.7",
     "@iconify/react": "4.1.1",
-    "@nextui-org/react": "latest"
+    "@heroui/react": "latest"
   },
   "devDependencies": {
     "@types/react": "^18.0.0",

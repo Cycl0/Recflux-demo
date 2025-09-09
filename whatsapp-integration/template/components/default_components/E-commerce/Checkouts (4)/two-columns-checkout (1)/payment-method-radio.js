@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import {Chip, Radio} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Chip, Radio} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 const PaymentMethodRadio = React.forwardRef(
   (

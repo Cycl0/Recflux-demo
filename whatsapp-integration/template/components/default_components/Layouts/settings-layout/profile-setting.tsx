@@ -1,10 +1,10 @@
 "use client";
 
 import * as React from "react";
-import {Card, CardBody} from "@nextui-org/card";
-import {Avatar} from "@nextui-org/avatar";
+import {Card, CardBody} from "@heroui/card";
+import {Avatar} from "@heroui/avatar";
 import {Icon} from "@iconify/react";
-import {Button, Badge, Input, Spacer, Textarea} from "@nextui-org/react";
+import {Button, Badge, Input, Spacer, Textarea} from "@heroui/react";
 
 import {cn} from "./cn";
 

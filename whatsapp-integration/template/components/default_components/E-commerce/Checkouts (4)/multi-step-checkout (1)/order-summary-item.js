@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import {Button, Image, Link, Tooltip} from "@nextui-org/react";
+import {Button, Image, Link, Tooltip} from "@heroui/react";
 import {Icon} from "@iconify/react";
-import {cn} from "@nextui-org/react";
+import {cn} from "@heroui/react";
 
 const OrderSummaryItem = React.forwardRef(
   ({children, name, href, price, color, size, quantity, imageSrc, className, ...props}, ref) => (

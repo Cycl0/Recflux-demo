@@ -3,7 +3,13 @@
     "allow": [
       "Read(A:\\Lucas\\Projects\\Recflux-demo/**)",
       "Read(A:\\Lucas\\Projects\\Recflux-demo/**)",
-      "Read(A:\\Lucas\\Projects\\Recflux-demo/**)"
+      "Read(A:\\Lucas\\Projects\\Recflux-demo/**)",
+      "Bash(grep:*)",
+      "Bash(docker exec:*)",
+      "Bash(npx mocha:*)",
+      "Bash(node:*)",
+      "Bash(npm test)",
+      "Bash(npm run:*)"
     ],
     "deny": [],
     "ask": []

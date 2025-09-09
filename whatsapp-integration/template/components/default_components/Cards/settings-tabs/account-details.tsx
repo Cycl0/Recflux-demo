@@ -1,6 +1,6 @@
 "use client";
 
-import type {CardProps} from "@nextui-org/react";
+import type {CardProps} from "@heroui/react";
 
 import React from "react";
 import {
@@ -14,7 +14,7 @@ import {
   Autocomplete,
   AutocompleteItem,
   CardFooter,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import countries from "./countries";

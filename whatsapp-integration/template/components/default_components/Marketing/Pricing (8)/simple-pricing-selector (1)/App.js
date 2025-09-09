@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Chip, Link, RadioGroup, Spacer, Tab, Tabs} from "@nextui-org/react";
+import {Chip, Link, RadioGroup, Spacer, Tab, Tabs} from "@heroui/react";
 
 import {FrequencyEnum} from "./pricing-types";
 import {frequencies, tiers} from "./pricing-tiers";

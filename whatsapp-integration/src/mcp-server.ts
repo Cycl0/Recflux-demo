@@ -31,14 +31,17 @@ server.registerTool(
 		let templateDir = '/_template';
 		
 		try {
-			// Don't delete the entire project dir, just reset key files
 			const templateStat = await fs.stat(templateDir);
 			if (!templateStat.isDirectory()) {
 				throw new Error(`Template directory not found: ${templateDir}`);
 			}
 			
-			// Copy template files to project directory
+			// Ensure project directory exists
+			await fs.mkdir(projectDir, { recursive: true });
+			
+			// Copy clean template files to project directory
 			await fs.cp(templateDir, projectDir, { recursive: true, force: true });
+			
 			return { content: [{ type: 'text', text: JSON.stringify({ ok: true, projectDir, templateDir }) }] } as const;
 		} catch (e: any) {
 			return { content: [{ type: 'text', text: `project_reset error: ${e?.message || e}. Template dir: ${templateDir}` }] } as const;

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Button, Card, CardBody, CardFooter, ScrollShadow, Spacer} from "@nextui-org/react";
+import {Button, Card, CardBody, CardFooter, ScrollShadow, Spacer} from "@heroui/react";
 
 import {AcmeLogo} from "./acme";
 import {items} from "./sidebar-items";

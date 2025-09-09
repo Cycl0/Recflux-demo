@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import {Button, Image} from "@nextui-org/react";
+import {Button, Image} from "@heroui/react";
 import {Icon} from "@iconify/react";
-import {cn} from "@nextui-org/react";
+import {cn} from "@heroui/react";
 
 import RatingRadioGroup from "./rating-radio-group";
 

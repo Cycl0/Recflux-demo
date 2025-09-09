@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import {ScrollShadow, Tab, Tabs} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {ScrollShadow, Tab, Tabs} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 import PromptInputWithBottomActions from "./prompt-input-with-bottom-actions";
 import Conversation from "./conversation";

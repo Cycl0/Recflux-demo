@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import {Autocomplete, AutocompleteItem, Avatar, Input, Spacer} from "@nextui-org/react";
+import {Autocomplete, AutocompleteItem, Avatar, Input, Spacer} from "@heroui/react";
 import {m, type HTMLMotionProps, LazyMotion, domAnimation} from "framer-motion";
-import {cn} from "@nextui-org/react";
+import {cn} from "@heroui/react";
 
 import countries from "./countries";
 

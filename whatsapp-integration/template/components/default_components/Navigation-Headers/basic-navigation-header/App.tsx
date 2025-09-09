@@ -20,7 +20,7 @@ import {
   PopoverTrigger,
   Avatar,
   Badge,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import {AcmeIcon} from "./social";

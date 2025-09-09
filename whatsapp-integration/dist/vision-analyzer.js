@@ -16,7 +16,7 @@ export class VisionAnalyzer {
     constructor(apiKey) {
         this.config = {
             apiKey,
-            model: 'gpt-5',
+            model: 'gpt-5', // Keep gpt-5 as it's the better model
             temperature: 0.1 // Low temperature for consistent technical analysis
         };
     }
@@ -116,8 +116,8 @@ export class VisionAnalyzer {
                     }
                 ]
             };
-            // Make API call to Vision service (OpenAI)
-            const response = await axios.post('https://api.openai.com/v1/chat/completions', visionRequest, {
+            // Make API call to Vision service via OpenRouter (supports gpt-5)
+            const response = await axios.post('https://openrouter.ai/api/v1/chat/completions', visionRequest, {
                 headers: {
                     'Authorization': `Bearer ${this.config.apiKey}`,
                     'Content-Type': 'application/json'

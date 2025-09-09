@@ -141,6 +141,130 @@ export async function saveClineMessages(context: vscode.ExtensionContext, taskId
 	}
 }
 
+export async function isTaskIncomplete(context: vscode.ExtensionContext, taskId: string): Promise<boolean> {
+	try {
+		const clineMessages = await getSavedClineMessages(context, taskId)
+		if (clineMessages.length === 0) return false
+
+		const lastMessage = clineMessages[clineMessages.length - 1]
+		
+		// Check for incomplete conversation indicators
+		const isIncompleteConversation = 
+			// Last message is not a completion attempt
+			!(lastMessage.ask === "completion_result" || lastMessage.ask === "resume_completed_task") &&
+			// Last message is not a user response
+			lastMessage.type !== "ask" &&
+			// Task didn't end with explicit completion
+			!clineMessages.some(msg => msg.text?.includes("attempt_completion")) &&
+			// Check for context window related interruptions
+			(lastMessage.partial === true || 
+			 lastMessage.type === "say" && lastMessage.say === "text" &&
+			 !lastMessage.text?.trim().endsWith(".") && !lastMessage.text?.trim().endsWith("?") && !lastMessage.text?.trim().endsWith("!"))
+
+		// Additional check: if the conversation appears to be in the middle of file operations
+		const wasPerformingFileOperations = clineMessages
+			.slice(-5) // Check last 5 messages
+			.some(msg => 
+				msg.say === "tool" && 
+				msg.text && (
+					msg.text.includes('"tool": "write_to_file"') ||
+					msg.text.includes('"tool": "read_file"') ||
+					msg.text.includes('"tool": "replace_in_file"')
+				)
+			)
+
+		return isIncompleteConversation || wasPerformingFileOperations
+	} catch (error) {
+		console.error("Failed to check if task is incomplete:", error)
+		return false
+	}
+}
+
+export async function getTaskCompletionStatus(context: vscode.ExtensionContext, taskId: string): Promise<{
+	isComplete: boolean
+	lastAction: string
+	suggestionForResumption: string
+}> {
+	try {
+		const clineMessages = await getSavedClineMessages(context, taskId)
+		const apiHistory = await getSavedApiConversationHistory(context, taskId)
+		
+		if (clineMessages.length === 0) {
+			return {
+				isComplete: false,
+				lastAction: "No previous conversation found",
+				suggestionForResumption: "Start fresh conversation"
+			}
+		}
+
+		const lastMessage = clineMessages[clineMessages.length - 1]
+		const lastFewMessages = clineMessages.slice(-3)
+		
+		// Check explicit completion
+		if (lastMessage.ask === "completion_result" || lastMessage.ask === "resume_completed_task") {
+			return {
+				isComplete: true,
+				lastAction: "Task was explicitly completed",
+				suggestionForResumption: "Task is already complete"
+			}
+		}
+
+		// Analyze last actions to provide intelligent resumption
+		let lastAction = "Unknown last action"
+		let suggestionForResumption = "Continue the conversation"
+
+		// Check what Cline was doing when interrupted
+		const recentToolUse = lastFewMessages.find(msg => msg.say === "tool" && msg.text)
+		if (recentToolUse) {
+			try {
+				const toolData = JSON.parse(recentToolUse.text!)
+				const toolName = toolData.tool
+				lastAction = `Was using tool: ${toolName}`
+				
+				switch (toolName) {
+					case "write_to_file":
+						suggestionForResumption = "Continue with file writing operations"
+						break
+					case "read_file":
+						suggestionForResumption = "Continue with file analysis"
+						break
+					case "execute_command":
+						suggestionForResumption = "Continue with command execution"
+						break
+					case "replace_in_file":
+						suggestionForResumption = "Continue with file modifications"
+						break
+					default:
+						suggestionForResumption = `Continue with ${toolName} operations`
+				}
+			} catch {}
+		}
+
+		// Check if conversation was cut off mid-thought
+		const wasInterrupted = lastMessage.partial === true || 
+			(lastMessage.type === "say" && lastMessage.say === "text" && 
+			 lastMessage.text && !lastMessage.text.trim().match(/[.!?]$/))
+
+		if (wasInterrupted) {
+			lastAction = "Conversation was interrupted mid-response"
+			suggestionForResumption = "Ask Cline to continue from where it left off"
+		}
+
+		return {
+			isComplete: false,
+			lastAction,
+			suggestionForResumption
+		}
+	} catch (error) {
+		console.error("Failed to get task completion status:", error)
+		return {
+			isComplete: false,
+			lastAction: "Error analyzing task",
+			suggestionForResumption: "Try resuming with caution"
+		}
+	}
+}
+
 export async function getTaskMetadata(context: vscode.ExtensionContext, taskId: string): Promise<TaskMetadata> {
 	const filePath = path.join(await ensureTaskDirectoryExists(context, taskId), GlobalFileNames.taskMetadata)
 	try {

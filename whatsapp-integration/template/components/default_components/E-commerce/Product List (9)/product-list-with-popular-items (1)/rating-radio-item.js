@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import {VisuallyHidden, useRadio, useRadioGroupContext} from "@nextui-org/react";
+import {VisuallyHidden, useRadio, useRadioGroupContext} from "@heroui/react";
 import {Icon} from "@iconify/react";
-import {cn} from "@nextui-org/react";
+import {cn} from "@heroui/react";
 
 const RatingRadioItem = React.forwardRef((props, ref) => {
   const {

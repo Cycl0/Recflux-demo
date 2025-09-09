@@ -1,9 +1,9 @@
 "use client";
 
-import type {RadioProps} from "@nextui-org/react";
+import type {RadioProps} from "@heroui/react";
 
 import React from "react";
-import {VisuallyHidden, useRadio, useRadioGroupContext} from "@nextui-org/react";
+import {VisuallyHidden, useRadio, useRadioGroupContext} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import {cn} from "./cn";

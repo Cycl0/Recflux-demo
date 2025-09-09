@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Card, CardBody, CardHeader} from "@nextui-org/react";
+import {Card, CardBody, CardHeader} from "@heroui/react";
 
 const FeatureCard = React.forwardRef(({title, descriptions = [], icon, ...props}, ref) => {
   return (

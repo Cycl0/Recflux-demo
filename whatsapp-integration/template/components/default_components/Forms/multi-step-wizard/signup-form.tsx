@@ -1,9 +1,9 @@
 "use client";
 
-import type {InputProps} from "@nextui-org/react";
+import type {InputProps} from "@heroui/react";
 
 import React from "react";
-import {Input, Checkbox, Link} from "@nextui-org/react";
+import {Input, Checkbox, Link} from "@heroui/react";
 
 import {cn} from "./cn";
 

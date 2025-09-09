@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Chip, Divider} from "@nextui-org/react";
+import {Chip, Divider} from "@heroui/react";
 
 import {AcmeIcon} from "./acme";
 import ThemeSwitch from "./theme-switch";

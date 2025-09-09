@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Breadcrumbs, BreadcrumbItem, Button} from "@nextui-org/react";
+import {Breadcrumbs, BreadcrumbItem, Button} from "@heroui/react";
 
 import CheckoutForm from "./checkout-form";
 import OrderSummary from "./order-summary";

@@ -12,7 +12,7 @@ import {
   Input,
   Tabs,
   Tab,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import messagingChatList from "./messaging-chat-list";

@@ -14,7 +14,7 @@ import {
   Tabs,
   Tab,
   Spacer,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import countries from "./countries";

@@ -11,7 +11,7 @@ import {
   ModalHeader,
   Textarea,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 
 import RatingRadioGroup from "./rating-radio-group";
 

@@ -1945,6 +1945,19 @@ export class Task {
 									// open the editor and prepare to stream content in
 									await this.diffViewProvider.open(relPath)
 								}
+								
+								// Check for duplicate content even in partial updates
+								if (!block.partial && await this.isDuplicateContent(newContent, relPath)) {
+									this.consecutiveMistakeCount++
+									pushToolResult(formatResponse.toolError(
+										`Duplicate content detected in ${relPath}. This could cause an infinite loop. ` +
+										`Please ensure you are making meaningful changes rather than reproducing existing content.`
+									))
+									await this.diffViewProvider.revertChanges()
+									await this.diffViewProvider.reset()
+									break
+								}
+								
 								// editor is open, stream content in
 								await this.diffViewProvider.update(newContent, false)
 								break
@@ -1982,6 +1995,19 @@ export class Task {
 									await this.ask("tool", partialMessage, true).catch(() => {}) // sending true for partial even though it's not a partial, this shows the edit row before the content is streamed into the editor
 									await this.diffViewProvider.open(relPath)
 								}
+								
+								// Check for duplicate content to prevent infinite loops
+								if (await this.isDuplicateContent(newContent, relPath)) {
+									this.consecutiveMistakeCount++
+									pushToolResult(formatResponse.toolError(
+										`Duplicate content detected in ${relPath}. This could cause an infinite loop. ` +
+										`Please ensure you are making meaningful changes rather than reproducing existing content.`
+									))
+									await this.diffViewProvider.revertChanges()
+									await this.diffViewProvider.reset()
+									break
+								}
+								
 								await this.diffViewProvider.update(newContent, true)
 								await setTimeoutPromise(300) // wait for diff view to update
 								this.diffViewProvider.scrollToFirstDiff()
@@ -4003,5 +4029,621 @@ export class Task {
 		}
 
 		return `<environment_details>\n${details.trim()}\n</environment_details>`
+	}
+
+	/**
+	 * Comprehensive content validation to detect any structural or syntax issues
+	 */
+	private async isDuplicateContent(newContent: string, relPath: string): Promise<boolean> {
+		const originalContent = this.diffViewProvider.originalContent || ""
+		
+		// Skip check for new files
+		if (!originalContent.trim()) {
+			return false
+		}
+
+		// Enhanced normalization that preserves structure while allowing comparison
+		const normalizeContent = (content: string): string => {
+			return content
+				.replace(/\s+/g, ' ')           // Normalize whitespace
+				.replace(/;\s*$/gm, ';')        // Normalize semicolons
+				.replace(/,\s*$/gm, ',')        // Normalize commas
+				.replace(/\/\*[\s\S]*?\*\//g, '') // Remove block comments
+				.replace(/\/\/.*$/gm, '')       // Remove line comments
+				.replace(/^\s*[\r\n]/gm, '')    // Remove empty lines
+				.trim()
+		}
+
+		// Comprehensive structural integrity validation
+		if (this.detectStructuralIntegrityIssues(newContent, relPath)) {
+			return true
+		}
+
+		const normalizedNew = normalizeContent(newContent)
+		const normalizedOriginal = normalizeContent(originalContent)
+
+		// Generate content hash for fast comparison
+		const createHash = (content: string): string => {
+			let hash = 0
+			for (let i = 0; i < content.length; i++) {
+				const char = content.charCodeAt(i)
+				hash = ((hash << 5) - hash) + char
+				hash = hash & hash // Convert to 32bit integer
+			}
+			return hash.toString(36)
+		}
+
+		const newHash = createHash(normalizedNew)
+		const originalHash = createHash(normalizedOriginal)
+
+		// If content hashes are identical, it's definitely a duplicate
+		if (newHash === originalHash) {
+			console.log(`[DUPLICATE_DETECTION] Identical content hash detected in ${relPath} (${newHash})`)
+			return true
+		}
+
+		// Check for exact string match (handles edge cases where hash collision might occur)
+		if (normalizedNew === normalizedOriginal) {
+			console.log(`[DUPLICATE_DETECTION] Identical normalized content detected in ${relPath}`)
+			return true
+		}
+
+		// Enhanced JSX/React duplicate patterns with more robust detection
+		const jsxDuplicatePatterns = [
+			// Duplicate JSX elements with same props/content
+			/(<\w+[^>]*(?:className|id)=[^>]*>[^<]*<\/\w+>)[\s\S]*?\1/g,
+			// Duplicate function/arrow function components
+			/((?:function\s+\w+|const\s+\w+\s*=\s*(?:\([^)]*\)\s*=>|\w+\s*=>))[\s\S]*?\{[\s\S]*?\})[\s\S]*?\1/g,
+			// Duplicate export statements (exact duplicates)
+			/(export\s+(?:default\s+)?(?:function|const|class)\s+\w+[\s\S]*?)[\s\S]*?\1/g,
+			// Duplicate return JSX blocks
+			/(return\s*\([\s\S]*?\)\s*;?)[\s\S]*?\1/g,
+			// Duplicate import statements
+			/(import[\s\S]*?from\s+['"][^'"]+['"][\s\S]*?)[\s\S]*?\1/g,
+		]
+
+		for (const pattern of jsxDuplicatePatterns) {
+			const matches = Array.from(normalizedNew.matchAll(pattern))
+			if (matches.length > 0) {
+				// Check if matches are actually duplicates (not just pattern matches)
+				for (const match of matches) {
+					const matchedText = match[1]
+					if (matchedText && matchedText.length > 20) { // Only significant matches
+						const occurrences = (normalizedNew.match(new RegExp(this.escapeRegex(matchedText), 'g')) || []).length
+						if (occurrences > 1) {
+							console.log(`[DUPLICATE_DETECTION] JSX duplicate pattern found in ${relPath}: ${matchedText.substring(0, 100)}... (${occurrences} occurrences)`)
+							return true
+						}
+					}
+				}
+			}
+		}
+
+		// Check for stray code patterns (common issue from previous logs)
+		const strayCodePatterns = [
+			/(<Badge\s+content="[^"]*$)/g,        // Unclosed Badge components
+			/(<\w+[^>]*$)/g,                      // Unclosed HTML/JSX tags
+			/(}\s*\w+\s*{)/g,                     // Malformed object/JSX syntax
+			/(export\s+\w+\s*$)/g,                // Incomplete export statements
+			// Enhanced patterns for orphaned JSX code after component closure
+			/(};\s*\n\s*\w+\s*=)/g,               // Code after function closure
+			/(};\s*\n\s*<)/g,                     // JSX after function closure
+			/(};\s*\n\s*href\s*=)/g,              // Orphaned href attributes
+			/(};\s*\n\s*variant\s*=)/g,           // Orphaned variant attributes
+			/(};\s*\n\s*className\s*=)/g,         // Orphaned className attributes
+			/(};\s*\n\s*>\s*$)/g,                 // Orphaned closing brackets
+			/(\n\s*href\s*=\s*{\s*[\w.]+\s*}\s*$)/gm,  // Standalone href attributes
+			/(\n\s*variant\s*=\s*{\s*[\w.]+\s*}\s*$)/gm, // Standalone variant attributes
+			/(\n\s*>\s*\n\s*{\s*[\w.]+\s*}\s*$)/gm,    // Standalone JSX content
+		]
+
+		for (const pattern of strayCodePatterns) {
+			const matches = newContent.match(pattern)
+			if (matches) {
+				console.log(`[DUPLICATE_DETECTION] Stray code pattern detected in ${relPath}: ${matches[0]}`)
+				return true
+			}
+		}
+
+		// Progressive duplicate detection - check for content sections that appear multiple times
+		const detectProgressiveDuplicates = (content: string): boolean => {
+			const lines = content.split('\n')
+			const significantLines = lines.filter(line => line.trim().length > 10 && !line.trim().startsWith('//'))
+			
+			// Create sliding windows to detect repeated sections
+			const windowSizes = [3, 5, 8] // Different window sizes for various duplicate types
+			
+			for (const windowSize of windowSizes) {
+				const windows = new Map<string, number>()
+				
+				for (let i = 0; i <= significantLines.length - windowSize; i++) {
+					const window = significantLines.slice(i, i + windowSize).join('\n').trim()
+					const normalizedWindow = normalizeContent(window)
+					
+					if (normalizedWindow.length > 50) { // Only check substantial windows
+						const count = windows.get(normalizedWindow) || 0
+						windows.set(normalizedWindow, count + 1)
+						
+						if (count > 0) { // Found duplicate window
+							console.log(`[DUPLICATE_DETECTION] Repeated code section (${windowSize} lines) found in ${relPath}`)
+							return true
+						}
+					}
+				}
+			}
+			
+			return false
+		}
+
+		// Check for duplicate code sections that appear after component closure
+		const componentClosurePatterns = [
+			/\}\s*(?:export\s+default|\w+\s*=|$)[\s\S]*?\{/g,  // Original pattern
+			/};\s*\n[\s\S]*?(?:href|variant|className|onClick)\s*=/g,  // JSX attributes after closure
+			/};\s*\n[\s\S]*?<\w+/g,  // JSX elements after closure
+			/};\s*\n[\s\S]*?>\s*\n[\s\S]*?{/g,  // JSX content after closure
+		]
+		
+		for (const pattern of componentClosurePatterns) {
+			const afterClosureMatches = normalizedNew.match(pattern)
+			if (afterClosureMatches && afterClosureMatches.length > 0) {
+				console.log(`[DUPLICATE_DETECTION] Code after component closure detected in ${relPath}`)
+				return true
+			}
+		}
+
+		// Enhanced line growth analysis with context
+		const newLines = newContent.split('\n').length
+		const originalLines = originalContent.split('\n').length
+		
+		if (newLines > originalLines * 1.4 && originalLines > 15) {
+			const growthRatio = newLines / originalLines
+			console.log(`[DUPLICATE_DETECTION] Analyzing suspicious content growth in ${relPath}: ${originalLines} -> ${newLines} lines (${growthRatio.toFixed(2)}x)`)
+			
+			// Use progressive duplicate detection for large files
+			if (detectProgressiveDuplicates(newContent)) {
+				return true
+			}
+			
+			// Check if the growth matches patterns of common duplication errors
+			const newContentBlocks = newContent.split(/\n\s*\n/).filter(block => block.trim().length > 0)
+			const blockHashes = new Set<string>()
+			let duplicateBlocks = 0
+			
+			for (const block of newContentBlocks) {
+				const blockHash = createHash(normalizeContent(block))
+				if (blockHashes.has(blockHash)) {
+					duplicateBlocks++
+				} else {
+					blockHashes.add(blockHash)
+				}
+			}
+			
+			// If more than 20% of blocks are duplicates, flag as problematic
+			const duplicateBlockRatio = duplicateBlocks / newContentBlocks.length
+			if (duplicateBlockRatio > 0.2) {
+				console.log(`[DUPLICATE_DETECTION] High duplicate block ratio in ${relPath}: ${(duplicateBlockRatio * 100).toFixed(1)}%`)
+				return true
+			}
+		}
+
+		return false
+	}
+
+	/**
+	 * Comprehensive structural integrity detection system with context awareness
+	 */
+	private detectStructuralIntegrityIssues(content: string, relPath: string): boolean {
+		const originalContent = this.diffViewProvider.originalContent || ""
+		
+		// Context-aware validation - get file info
+		const fileInfo = this.getFileValidationContext(content, originalContent, relPath)
+		
+		// Skip validation for major content changes (likely legitimate rewrites)
+		if (fileInfo.isMajorUpdate) {
+			console.log(`[VALIDATION] Skipping validation for major update in ${relPath} (${fileInfo.contentSimilarity}% similar)`)
+			return false
+		}
+		
+		// Skip validation for large files (likely complete components)
+		if (fileInfo.isLargeFile) {
+			console.log(`[VALIDATION] Skipping validation for large file ${relPath} (${fileInfo.contentLength} chars)`)
+			return false
+		}
+		
+		// Use context-aware validation levels
+		const strictMode = fileInfo.isUtilityFile || fileInfo.isConfigFile
+		
+		// 1. Bracket/Brace Balance Analysis (less strict for React components)
+		if (this.detectUnbalancedStructures(content, relPath, fileInfo)) return true
+		
+		// 2. AST-like Structural Validation (skip for JSX-heavy files)
+		if (strictMode && this.detectASTStructuralIssues(content, relPath)) return true
+		
+		// 3. Code Flow Integrity (less strict for React components)
+		if (strictMode && this.detectCodeFlowIssues(content, relPath)) return true
+		
+		// 4. Orphaned Code Detection (skip for React components with exports)
+		if (!fileInfo.isReactComponent && this.detectOrphanedCode(content, relPath, fileInfo)) return true
+		
+		// 5. Malformed Patterns Detection (React-aware)
+		if (this.detectMalformedPatterns(content, relPath, fileInfo)) return true
+		
+		return false
+	}
+	
+	/**
+	 * Get validation context information for a file
+	 */
+	private getFileValidationContext(content: string, originalContent: string, relPath: string) {
+		const ext = relPath.toLowerCase().split('.').pop() || ''
+		const isReactFile = ['tsx', 'jsx'].includes(ext)
+		const isTypeScriptFile = ['ts', 'tsx'].includes(ext)
+		const isJavaScriptFile = ['js', 'jsx'].includes(ext)
+		
+		// Detect file types
+		const isReactComponent = isReactFile && (
+			content.includes('export default') ||
+			content.includes('function ') ||
+			content.includes('const ') ||
+			content.includes('<') && content.includes('>')
+		)
+		const isUtilityFile = relPath.includes('/utils/') || relPath.includes('/lib/') || relPath.includes('/helpers/')
+		const isConfigFile = relPath.includes('config') || relPath.includes('.config.') || relPath.includes('settings')
+		
+		// Content analysis
+		const contentLength = content.length
+		const isLargeFile = contentLength > 5000 // Skip validation for files >5KB
+		
+		// Calculate content similarity (basic approach)
+		const contentSimilarity = this.calculateContentSimilarity(content, originalContent)
+		const isMajorUpdate = contentSimilarity < 15 // Less than 15% similar = major rewrite
+		
+		// JSX detection
+		const hasJSX = content.includes('<') && content.includes('>') && (content.includes('className') || content.includes('onClick'))
+		const jsxDensity = hasJSX ? (content.match(/<\w+/g) || []).length / content.split('\n').length : 0
+		
+		return {
+			ext,
+			isReactFile,
+			isTypeScriptFile,
+			isJavaScriptFile,
+			isReactComponent,
+			isUtilityFile,
+			isConfigFile,
+			contentLength,
+			isLargeFile,
+			contentSimilarity,
+			isMajorUpdate,
+			hasJSX,
+			jsxDensity
+		}
+	}
+	
+	/**
+	 * Calculate basic content similarity percentage
+	 */
+	private calculateContentSimilarity(content1: string, content2: string): number {
+		if (!content1 || !content2) return 0
+		
+		const normalize = (str: string) => str
+			.replace(/\s+/g, ' ')
+			.replace(/[{}();,]/g, '')
+			.toLowerCase()
+			.trim()
+		
+		const norm1 = normalize(content1)
+		const norm2 = normalize(content2)
+		
+		if (norm1 === norm2) return 100
+		if (!norm1 || !norm2) return 0
+		
+		// Simple character-based similarity
+		const maxLength = Math.max(norm1.length, norm2.length)
+		let matches = 0
+		const minLength = Math.min(norm1.length, norm2.length)
+		
+		for (let i = 0; i < minLength; i++) {
+			if (norm1[i] === norm2[i]) matches++
+		}
+		
+		return Math.round((matches / maxLength) * 100)
+	}
+
+	/**
+	 * Detect unbalanced brackets, braces, and parentheses with context awareness
+	 */
+	private detectUnbalancedStructures(content: string, relPath: string, fileInfo?: any): boolean {
+		const structures = [
+			{ open: '{', close: '}', name: 'braces' },
+			{ open: '[', close: ']', name: 'brackets' },
+			{ open: '(', close: ')', name: 'parentheses' },
+			{ open: '<', close: '>', name: 'angle brackets' }
+		]
+		
+		for (const struct of structures) {
+			let count = 0
+			let inString = false
+			let inComment = false
+			let stringChar = ''
+			
+			for (let i = 0; i < content.length; i++) {
+				const char = content[i]
+				const prevChar = content[i - 1]
+				const nextChar = content[i + 1]
+				
+				// Handle string literals
+				if ((char === '"' || char === "'" || char === '`') && prevChar !== '\\') {
+					if (!inString) {
+						inString = true
+						stringChar = char
+					} else if (char === stringChar) {
+						inString = false
+					}
+					continue
+				}
+				
+				// Handle comments
+				if (!inString) {
+					if (char === '/' && nextChar === '/') {
+						inComment = true
+						i++ // Skip next char
+						continue
+					}
+					if (char === '\n' && inComment) {
+						inComment = false
+						continue
+					}
+					if (char === '/' && nextChar === '*') {
+						inComment = true
+						i++ // Skip next char
+						continue
+					}
+					if (char === '*' && nextChar === '/' && inComment) {
+						inComment = false
+						i++ // Skip next char
+						continue
+					}
+				}
+				
+				// Count structures outside strings and comments
+				if (!inString && !inComment) {
+					if (char === struct.open) count++
+					if (char === struct.close) count--
+					
+					// Detect negative counts (closing before opening)
+					if (count < 0) {
+						console.log(`[STRUCTURAL_INTEGRITY] Unmatched closing ${struct.name} in ${relPath}`)
+						return true
+					}
+				}
+			}
+			
+			// Detect unclosed structures
+			if (count > 0) {
+				console.log(`[STRUCTURAL_INTEGRITY] Unclosed ${struct.name} (${count} remaining) in ${relPath}`)
+				return true
+			}
+		}
+		
+		return false
+	}
+
+	/**
+	 * AST-like structural validation for common code patterns
+	 */
+	private detectASTStructuralIssues(content: string, relPath: string): boolean {
+		const lines = content.split('\n')
+		
+		// Track code structure state
+		let inFunction = false
+		let inClass = false
+		let inComponent = false
+		let inJSX = false
+		let functionDepth = 0
+		let jsxDepth = 0
+		
+		for (let i = 0; i < lines.length; i++) {
+			const line = lines[i].trim()
+			const lineNum = i + 1
+			
+			// Skip comments and empty lines
+			if (!line || line.startsWith('//') || line.startsWith('/*')) continue
+			
+			// Function/Component detection
+			if (line.match(/^(?:export\s+)?(?:default\s+)?(?:function|const|let|var)\s+\w+/)) {
+				inFunction = true
+				functionDepth++
+			}
+			
+			// Class detection
+			if (line.match(/^(?:export\s+)?(?:default\s+)?class\s+\w+/)) {
+				inClass = true
+			}
+			
+			// React component detection
+			if (line.match(/^(?:export\s+)?(?:default\s+)?(?:function|const)\s+[A-Z]\w*/)) {
+				inComponent = true
+			}
+			
+			// JSX detection
+			if (line.includes('<') && line.match(/<[A-Za-z]/)) {
+				inJSX = true
+				jsxDepth++
+			}
+			
+			// Function closing
+			if (line.includes('}') && inFunction) {
+				functionDepth--
+				if (functionDepth === 0) {
+					inFunction = false
+					inComponent = false
+				}
+			}
+			
+			// JSX closing
+			if (line.includes('>') || line.includes('/>')) {
+				jsxDepth--
+				if (jsxDepth <= 0) {
+					inJSX = false
+					jsxDepth = 0
+				}
+			}
+			
+			// Detect code after function closure
+			if (!inFunction && !inClass && line.match(/^\s*(?:href|variant|className|onClick|style)\s*=/)) {
+				console.log(`[STRUCTURAL_INTEGRITY] Orphaned JSX attribute after function closure at line ${lineNum} in ${relPath}`)
+				return true
+			}
+			
+			// Detect JSX outside components
+			if (!inComponent && !inJSX && line.match(/^\s*<[A-Z]\w+/)) {
+				console.log(`[STRUCTURAL_INTEGRITY] JSX element outside component at line ${lineNum} in ${relPath}`)
+				return true
+			}
+			
+			// Detect malformed JSX
+			if (line.match(/^\s*>\s*$/) && !inJSX) {
+				console.log(`[STRUCTURAL_INTEGRITY] Orphaned JSX closing bracket at line ${lineNum} in ${relPath}`)
+				return true
+			}
+		}
+		
+		return false
+	}
+
+	/**
+	 * Detect code flow integrity issues
+	 */
+	private detectCodeFlowIssues(content: string, relPath: string): boolean {
+		// Detect incomplete statements
+		const incompletePatterns = [
+			/^\s*export\s*$/gm,                    // Incomplete export
+			/^\s*import\s*$/gm,                    // Incomplete import
+			/^\s*return\s*$/gm,                    // Empty return
+			/^\s*if\s*\(\s*\)\s*$/gm,             // Empty if condition
+			/^\s*for\s*\(\s*\)\s*$/gm,            // Empty for loop
+			/^\s*while\s*\(\s*\)\s*$/gm,          // Empty while loop
+			/^\s*function\s*\(\s*\)\s*$/gm,       // Incomplete function
+			/^\s*const\s+\w+\s*=\s*$/gm,          // Incomplete assignment
+		]
+		
+		for (const pattern of incompletePatterns) {
+			const matches = content.match(pattern)
+			if (matches) {
+				console.log(`[STRUCTURAL_INTEGRITY] Incomplete statement detected in ${relPath}: ${matches[0].trim()}`)
+				return true
+			}
+		}
+		
+		// Detect unreachable code patterns
+		const unreachablePatterns = [
+			/return\s*[^;]*;\s*\n\s*(?!}|\)|\/\/|\/\*)[^\s]/gm,  // Code after return
+			/throw\s*[^;]*;\s*\n\s*(?!}|\)|\/\/|\/\*)[^\s]/gm,   // Code after throw
+			/break\s*;\s*\n\s*(?!}|case|default|\/\/|\/\*)[^\s]/gm, // Code after break
+		]
+		
+		for (const pattern of unreachablePatterns) {
+			const matches = content.match(pattern)
+			if (matches) {
+				console.log(`[STRUCTURAL_INTEGRITY] Unreachable code detected in ${relPath}`)
+				return true
+			}
+		}
+		
+		return false
+	}
+
+	/**
+	 * Detect orphaned code fragments
+	 */
+	private detectOrphanedCode(content: string, relPath: string, fileInfo?: any): boolean {
+		const lines = content.split('\n')
+		let lastMeaningfulLine = -1
+		let foundClosingBrace = false
+		
+		// Find the last meaningful closing brace (end of main component/function)
+		for (let i = lines.length - 1; i >= 0; i--) {
+			const line = lines[i].trim()
+			if (line === '};' || line === '}') {
+				foundClosingBrace = true
+				lastMeaningfulLine = i
+				break
+			}
+		}
+		
+		// Check for code after the main structure
+		if (foundClosingBrace && lastMeaningfulLine < lines.length - 1) {
+			for (let i = lastMeaningfulLine + 1; i < lines.length; i++) {
+				const line = lines[i].trim()
+				// Skip empty lines and simple exports
+				if (!line || line.startsWith('//') || line === 'export default' || line.match(/^export\s+default\s+\w+\s*;?\s*$/)) {
+					continue
+				}
+				
+				// Found orphaned code
+				console.log(`[STRUCTURAL_INTEGRITY] Orphaned code after main structure at line ${i + 1} in ${relPath}: ${line}`)
+				return true
+			}
+		}
+		
+		return false
+	}
+
+	/**
+	 * Detect malformed patterns that commonly cause build failures
+	 */
+	private detectMalformedPatterns(content: string, relPath: string, fileInfo?: any): boolean {
+		// Be less aggressive for React components and JSX-heavy files
+		const isReactFile = fileInfo?.isReactComponent || fileInfo?.hasJSX
+		const hasHighJSXDensity = (fileInfo?.jsxDensity || 0) > 0.1
+		
+		// Conservative pattern set - only catch truly problematic patterns
+		const criticalPatterns = [
+			// Only catch truly malformed object/array patterns
+			/{\s*,\s*}/gm,                            // Objects with only comma
+			/\[\s*,\s*\]/gm,                          // Arrays with only comma
+			
+			// Catch incomplete string concatenation
+			/['"`][\s\S]*?['"`]\s*\+\s*$/gm,          // Incomplete string concatenation
+		]
+		
+		// Additional patterns only for non-React files
+		const strictPatterns = [
+			// Function patterns (but allow empty React component functions)
+			/function\s*\(\s*\)\s*{\s*}/gm,           // Empty function bodies
+			
+			// Import/Export patterns
+			/import\s*{\s*}\s*from/gm,                // Empty imports
+			/export\s*{\s*}/gm,                       // Empty exports
+		]
+		
+		// Use critical patterns for all files
+		for (const pattern of criticalPatterns) {
+			const matches = content.match(pattern)
+			if (matches) {
+				console.log(`[VALIDATION] Critical malformed pattern detected in ${relPath}: ${matches[0].trim()}`)
+				return true
+			}
+		}
+		
+		// Use strict patterns only for non-React files or utility files
+		if (!isReactFile && !hasHighJSXDensity) {
+			for (const pattern of strictPatterns) {
+				const matches = content.match(pattern)
+				if (matches) {
+					console.log(`[VALIDATION] Strict malformed pattern detected in ${relPath}: ${matches[0].trim()}`)
+					return true
+				}
+			}
+		}
+		
+		return false
+	}
+
+	/**
+	 * Helper method to escape regex special characters
+	 */
+	private escapeRegex(string: string): string {
+		return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 	}
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import type {PopoverProps} from "@nextui-org/react";
+import type {PopoverProps} from "@heroui/react";
 
 import React from "react";
 import {
@@ -10,7 +10,7 @@ import {
   PopoverContent,
   PopoverTrigger,
   useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 export type PopoverFilterWrapperProps = Omit<PopoverProps, "children"> & {

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Avatar, Button, Spacer, useDisclosure} from "@nextui-org/react";
+import {Avatar, Button, Spacer, useDisclosure} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import {AcmeLogo} from "./acme";

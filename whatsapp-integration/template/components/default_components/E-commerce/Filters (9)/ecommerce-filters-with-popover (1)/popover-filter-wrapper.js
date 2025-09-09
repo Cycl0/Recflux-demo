@@ -8,7 +8,7 @@ import {
   PopoverContent,
   PopoverTrigger,
   useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 const PopoverFilterWrapper = React.forwardRef(({title, children, ...props}, ref) => {

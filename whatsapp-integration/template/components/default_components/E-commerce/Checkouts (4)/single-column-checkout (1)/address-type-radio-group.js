@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import {Radio, RadioGroup} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Radio, RadioGroup} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 const AddressTypeForm = React.forwardRef(({className, classNames = {}, ...props}, ref) => {
   return (

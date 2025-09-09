@@ -1,6 +1,7 @@
 import { spawn } from 'child_process';
 import { promises as fs } from 'fs';
 import path from 'path';
+import { watch, FSWatcher } from 'chokidar';
 
 export interface ValidationResult {
     isValid: boolean;
@@ -38,11 +39,437 @@ export interface AutoFixResult {
 }
 
 /**
+ * Detect if an import/export error is surgically fixable with targeted edits
+ * These errors can be fixed with simple import/export statement changes
+ * without requiring comprehensive code rewrites that might destroy creative content
+ */
+function isImportExportSurgicallyFixable(errorMessage: string): boolean {
+    const message = errorMessage.toLowerCase();
+    
+    // Import/export related errors that can be surgically fixed
+    const surgicalPatterns = [
+        // Module not found but file exists - usually path or export name issues
+        /module .+ has no exported member/,
+        /cannot find module .+ or its corresponding type declarations/,
+        /module .+ resolves to an untyped module/,
+        
+        // Named vs default import mismatches - easy to fix
+        /has no default export/,
+        /attempting to use the default export/,
+        /named export .+ not found/,
+        
+        // Simple syntax errors in import statements
+        /unexpected token in import/,
+        /import declaration can only be used at the top level/,
+        /import.*expected/,
+        /export.*expected/,
+        
+        // Missing file extension issues
+        /relative import path .+ which is not a module/,
+        /cannot resolve dependency/,
+        
+        // Type-only import/export issues
+        /imported name .+ is not exported/,
+        /this import is never used as a value/,
+        
+        // ESModule interop issues - can be fixed with import syntax changes
+        /can only be default-imported using.*esmoduleinterop/,
+    ];
+    
+    // Check if any surgical pattern matches
+    return surgicalPatterns.some(pattern => pattern.test(message));
+}
+
+/**
+ * ValidationLockManager handles file locking for validation operations
+ * to prevent concurrent validation/editing conflicts
+ */
+export class ValidationLockManager {
+    private static locks = new Map<string, Promise<void>>()
+    private static lockResolvers = new Map<string, () => void>()
+
+    /**
+     * Acquire a lock for a specific file or directory
+     */
+    static async acquireLock(filePath: string, timeoutMs: number = 30000): Promise<boolean> {
+        const normalizedPath = path.resolve(filePath).toLowerCase()
+        
+        try {
+            // Check if there's already a lock for this path
+            const existingLock = this.locks.get(normalizedPath)
+            
+            if (existingLock) {
+                console.log(`[VALIDATION_LOCK] Waiting for existing lock on ${filePath}`)
+                
+                // Wait for existing lock with timeout
+                await Promise.race([
+                    existingLock,
+                    new Promise((_, reject) => 
+                        setTimeout(() => reject(new Error('Validation lock timeout')), timeoutMs)
+                    )
+                ])
+            }
+
+            // Create a new lock
+            let resolveLock: () => void
+            const lockPromise = new Promise<void>((resolve) => {
+                resolveLock = resolve
+            })
+
+            this.locks.set(normalizedPath, lockPromise)
+            this.lockResolvers.set(normalizedPath, resolveLock!)
+
+            console.log(`[VALIDATION_LOCK] Acquired lock on ${filePath}`)
+            
+            // Auto-release lock after timeout as safety measure
+            setTimeout(() => {
+                if (this.locks.has(normalizedPath)) {
+                    console.log(`[VALIDATION_LOCK] Auto-releasing lock on ${filePath} after timeout`)
+                    this.releaseLock(filePath)
+                }
+            }, timeoutMs)
+
+            return true
+        } catch (error) {
+            console.warn(`[VALIDATION_LOCK] Failed to acquire lock on ${filePath}:`, error)
+            return false
+        }
+    }
+
+    /**
+     * Release the lock for a specific file or directory
+     */
+    static releaseLock(filePath: string): void {
+        const normalizedPath = path.resolve(filePath).toLowerCase()
+        
+        try {
+            const resolver = this.lockResolvers.get(normalizedPath)
+            if (resolver) {
+                resolver()
+                this.locks.delete(normalizedPath)
+                this.lockResolvers.delete(normalizedPath)
+                console.log(`[VALIDATION_LOCK] Released lock on ${filePath}`)
+            }
+        } catch (error) {
+            console.warn(`[VALIDATION_LOCK] Error releasing lock on ${filePath}:`, error)
+        }
+    }
+
+    /**
+     * Execute a validation operation with automatic locking
+     */
+    static async withLock<T>(filePath: string, operation: () => Promise<T>, timeoutMs: number = 30000): Promise<T> {
+        const lockAcquired = await this.acquireLock(filePath, timeoutMs)
+        if (!lockAcquired) {
+            throw new Error(`Could not acquire validation lock for ${filePath}`)
+        }
+
+        try {
+            return await operation()
+        } finally {
+            this.releaseLock(filePath)
+        }
+    }
+
+    /**
+     * Check if a file is currently locked
+     */
+    static isLocked(filePath: string): boolean {
+        const normalizedPath = path.resolve(filePath).toLowerCase()
+        return this.locks.has(normalizedPath)
+    }
+
+    /**
+     * Clear all locks (emergency cleanup)
+     */
+    static clearAllLocks(): void {
+        console.log(`[VALIDATION_LOCK] Clearing all locks (${this.locks.size} total)`)
+        
+        for (const resolver of this.lockResolvers.values()) {
+            try {
+                resolver()
+            } catch (error) {
+                console.warn(`[VALIDATION_LOCK] Error during lock cleanup:`, error)
+            }
+        }
+        
+        this.locks.clear()
+        this.lockResolvers.clear()
+    }
+}
+
+/**
+ * TemplateManager handles template isolation and file watcher management
+ * to prevent interference during Cline operations
+ */
+export class TemplateManager {
+    private static watchers = new Map<string, FSWatcher>()
+    private static templateSnapshots = new Map<string, { [filePath: string]: string }>()
+    private static watcherCallbacks = new Map<string, ((...args: any[]) => void)[]>()
+
+    /**
+     * Disable file watchers for a specific directory during operations
+     */
+    static async disableWatchers(projectDir: string): Promise<void> {
+        const normalizedPath = path.resolve(projectDir).toLowerCase()
+        
+        // Get existing watcher for this directory
+        const existingWatcher = this.watchers.get(normalizedPath)
+        if (existingWatcher) {
+            console.log(`[TEMPLATE_MANAGER] Pausing file watcher for ${projectDir}`)
+            await existingWatcher.close()
+        }
+
+        // Store any callbacks that were attached
+        const callbacks = this.watcherCallbacks.get(normalizedPath) || []
+        this.watcherCallbacks.set(normalizedPath, callbacks)
+        
+        console.log(`[TEMPLATE_MANAGER] File watchers disabled for ${projectDir}`)
+    }
+
+    /**
+     * Re-enable file watchers for a specific directory after operations
+     */
+    static async enableWatchers(projectDir: string): Promise<void> {
+        const normalizedPath = path.resolve(projectDir).toLowerCase()
+        
+        // Don't create new watchers unless there were callbacks stored
+        const callbacks = this.watcherCallbacks.get(normalizedPath)
+        if (!callbacks || callbacks.length === 0) {
+            console.log(`[TEMPLATE_MANAGER] No watchers to re-enable for ${projectDir}`)
+            return
+        }
+
+        try {
+            // Create new watcher
+            const watcher = watch(projectDir, {
+                ignored: /node_modules|\.git|default_components/,
+                ignoreInitial: true,
+                persistent: false
+            })
+
+            // Re-attach stored callbacks
+            for (const callback of callbacks) {
+                watcher.on('change', callback)
+            }
+
+            this.watchers.set(normalizedPath, watcher)
+            console.log(`[TEMPLATE_MANAGER] File watchers re-enabled for ${projectDir}`)
+        } catch (error) {
+            console.warn(`[TEMPLATE_MANAGER] Failed to re-enable watchers for ${projectDir}:`, error)
+        }
+    }
+
+    /**
+     * Create a snapshot of template files before operations
+     */
+    static async createSnapshot(projectDir: string, templatePaths: string[] = ['template/**/*']): Promise<void> {
+        const normalizedPath = path.resolve(projectDir).toLowerCase()
+        const snapshot: { [filePath: string]: string } = {}
+
+        try {
+            for (const templatePath of templatePaths) {
+                const fullPath = path.join(projectDir, templatePath)
+                const files = await this.findFilesRecursive(fullPath, ['.tsx', '.ts', '.jsx', '.js', '.json'])
+                
+                for (const filePath of files) {
+                    try {
+                        const content = await fs.readFile(filePath, 'utf8')
+                        const relativePath = path.relative(projectDir, filePath)
+                        snapshot[relativePath] = content
+                    } catch (error) {
+                        console.warn(`[TEMPLATE_MANAGER] Could not snapshot ${filePath}:`, error)
+                    }
+                }
+            }
+
+            this.templateSnapshots.set(normalizedPath, snapshot)
+            console.log(`[TEMPLATE_MANAGER] Created snapshot of ${Object.keys(snapshot).length} template files`)
+        } catch (error) {
+            console.warn(`[TEMPLATE_MANAGER] Failed to create template snapshot:`, error)
+        }
+    }
+
+    /**
+     * Restore template files from snapshot if they were corrupted
+     */
+    static async restoreFromSnapshot(projectDir: string): Promise<{ restored: string[]; failed: string[] }> {
+        const normalizedPath = path.resolve(projectDir).toLowerCase()
+        const snapshot = this.templateSnapshots.get(normalizedPath)
+        const restored: string[] = []
+        const failed: string[] = []
+
+        if (!snapshot) {
+            console.log(`[TEMPLATE_MANAGER] No snapshot available for ${projectDir}`)
+            return { restored, failed }
+        }
+
+        for (const [relativePath, originalContent] of Object.entries(snapshot)) {
+            const fullPath = path.join(projectDir, relativePath)
+            
+            try {
+                // Check if current file is different from snapshot
+                const currentContent = await fs.readFile(fullPath, 'utf8').catch(() => '')
+                
+                if (currentContent !== originalContent) {
+                    // File changed - check if it has syntax errors
+                    if (await this.hasSyntaxErrors(fullPath, currentContent)) {
+                        console.log(`[TEMPLATE_MANAGER] Restoring corrupted template file: ${relativePath}`)
+                        await fs.writeFile(fullPath, originalContent, 'utf8')
+                        restored.push(relativePath)
+                    }
+                }
+            } catch (error) {
+                console.warn(`[TEMPLATE_MANAGER] Failed to restore ${relativePath}:`, error)
+                failed.push(relativePath)
+            }
+        }
+
+        if (restored.length > 0) {
+            console.log(`[TEMPLATE_MANAGER] Restored ${restored.length} corrupted template files`)
+        }
+
+        return { restored, failed }
+    }
+
+    /**
+     * Check if a file has syntax errors
+     */
+    private static async hasSyntaxErrors(filePath: string, content: string): Promise<boolean> {
+        // Basic syntax check for common issues
+        const lines = content.split('\n')
+        let braceCount = 0
+        let parenCount = 0
+        let bracketCount = 0
+
+        for (const line of lines) {
+            for (const char of line) {
+                switch (char) {
+                    case '{': braceCount++; break
+                    case '}': braceCount--; break
+                    case '(': parenCount++; break
+                    case ')': parenCount--; break
+                    case '[': bracketCount++; break
+                    case ']': bracketCount--; break
+                }
+            }
+        }
+
+        // Check for unmatched brackets/braces/parens
+        if (braceCount !== 0 || parenCount !== 0 || bracketCount !== 0) {
+            return true
+        }
+
+        // Check for common JSX/React issues
+        if (filePath.endsWith('.tsx') || filePath.endsWith('.jsx')) {
+            // Look for unclosed JSX tags
+            const jsxTagPattern = /<(\w+)[^>]*>/g
+            const closingTagPattern = /<\/(\w+)>/g
+            
+            const openTags = content.match(jsxTagPattern) || []
+            const closeTags = content.match(closingTagPattern) || []
+            
+            if (openTags.length !== closeTags.length) {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    /**
+     * Clean up all template management resources
+     */
+    static async cleanup(): Promise<void> {
+        console.log(`[TEMPLATE_MANAGER] Cleaning up template management resources`)
+        
+        // Close all watchers
+        for (const [path, watcher] of this.watchers.entries()) {
+            try {
+                await watcher.close()
+                console.log(`[TEMPLATE_MANAGER] Closed watcher for ${path}`)
+            } catch (error) {
+                console.warn(`[TEMPLATE_MANAGER] Error closing watcher for ${path}:`, error)
+            }
+        }
+
+        this.watchers.clear()
+        this.templateSnapshots.clear()
+        this.watcherCallbacks.clear()
+    }
+
+    /**
+     * Execute an operation with template isolation
+     */
+    static async withTemplateIsolation<T>(
+        projectDir: string, 
+        operation: () => Promise<T>,
+        options: { createSnapshot?: boolean; restoreOnError?: boolean } = {}
+    ): Promise<T> {
+        const { createSnapshot = true, restoreOnError = true } = options
+
+        try {
+            // Disable watchers
+            await this.disableWatchers(projectDir)
+            
+            // Create snapshot if requested
+            if (createSnapshot) {
+                await this.createSnapshot(projectDir)
+            }
+
+            // Execute operation
+            const result = await operation()
+            
+            return result
+        } catch (error) {
+            // Restore from snapshot if operation failed and restore is enabled
+            if (restoreOnError) {
+                const { restored } = await this.restoreFromSnapshot(projectDir)
+                if (restored.length > 0) {
+                    console.log(`[TEMPLATE_MANAGER] Restored ${restored.length} files after operation failure`)
+                }
+            }
+            
+            throw error
+        } finally {
+            // Re-enable watchers
+            await this.enableWatchers(projectDir)
+        }
+    }
+
+    /**
+     * Helper method to find files recursively
+     */
+    private static async findFilesRecursive(dirPath: string, extensions: string[]): Promise<string[]> {
+        const files: string[] = []
+        
+        try {
+            const entries = await fs.readdir(dirPath, { withFileTypes: true })
+            
+            for (const entry of entries) {
+                const fullPath = path.join(dirPath, entry.name)
+                
+                if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
+                    const subFiles = await this.findFilesRecursive(fullPath, extensions)
+                    files.push(...subFiles)
+                } else if (entry.isFile() && extensions.some(ext => entry.name.endsWith(ext))) {
+                    files.push(fullPath)
+                }
+            }
+        } catch (error) {
+            // Directory doesn't exist or can't be read
+        }
+        
+        return files
+    }
+}
+
+/**
  * Run ESLint validation on the project directory
  */
 export async function validateWithESLint(projectDir: string): Promise<ValidationResult> {
     return new Promise((resolve) => {
-        const eslintProcess = spawn('npx', ['eslint', '**/*.{js,jsx,ts,tsx}', '--format', 'json', '--no-error-on-unmatched-pattern'], {
+        const eslintProcess = spawn('npx', ['eslint', '**/*.{js,jsx,ts,tsx}', '--ignore-pattern', '**/default_components/**', '--format', 'json', '--no-error-on-unmatched-pattern'], {
             cwd: projectDir,
             stdio: ['pipe', 'pipe', 'pipe']
         });
@@ -67,7 +494,13 @@ export async function validateWithESLint(projectDir: string): Promise<Validation
                     const eslintResults = JSON.parse(stdout);
                     
                     for (const fileResult of eslintResults) {
-                        const filePath = path.relative(projectDir, fileResult.filePath);
+                        // Use simple relative path from project root instead of complex relative paths
+                        let filePath = path.relative(projectDir, fileResult.filePath);
+                        // If the relative path goes up directories (..), use just the filename within project
+                        if (filePath.startsWith('..')) {
+                            const projectRelativePath = fileResult.filePath.replace(projectDir, '').replace(/^[\/\\]/, '');
+                            filePath = projectRelativePath || path.basename(fileResult.filePath);
+                        }
                         
                         for (const message of fileResult.messages) {
                             // Skip non-critical parsing errors that don't affect functionality
@@ -164,7 +597,13 @@ export async function autoFixWithESLint(projectDir: string): Promise<AutoFixResu
                     const eslintResults = JSON.parse(stdout);
                     
                     for (const fileResult of eslintResults) {
-                        const filePath = path.relative(projectDir, fileResult.filePath);
+                        // Use simple relative path from project root instead of complex relative paths
+                        let filePath = path.relative(projectDir, fileResult.filePath);
+                        // If the relative path goes up directories (..), use just the filename within project
+                        if (filePath.startsWith('..')) {
+                            const projectRelativePath = fileResult.filePath.replace(projectDir, '').replace(/^[\/\\]/, '');
+                            filePath = projectRelativePath || path.basename(fileResult.filePath);
+                        }
                         
                         // Check if file was modified (ESLint reports this in output)
                         if (fileResult.output !== undefined) {
@@ -625,9 +1064,93 @@ export async function validateButtonContrast(projectDir: string): Promise<Valida
 /**
  * Run comprehensive validation on a project directory
  */
-export async function validateProject(projectDir: string): Promise<ValidationResult> {
-    console.log(`[VALIDATION] Running comprehensive validation on: ${projectDir}`);
+export async function validateProject(projectDir: string, syntaxOnly: boolean = false): Promise<ValidationResult> {
+    console.log(`[VALIDATION] Running ${syntaxOnly ? 'syntax-only' : 'comprehensive'} validation on: ${projectDir}`);
 
+    // Use ValidationLockManager to prevent concurrent validation operations
+    return await ValidationLockManager.withLock(projectDir, async () => {
+        // First run syntax-only validation (fast)
+        const syntaxResult = await validateSyntaxOnly(projectDir);
+        if (!syntaxResult.isValid) {
+            console.log(`[VALIDATION] Syntax validation failed, ${syntaxOnly ? 'stopping here' : 'skipping full validation'}`);
+            return {
+                ...syntaxResult,
+                errors: enhanceErrorContext(syntaxResult.errors, projectDir)
+            };
+        }
+
+        // If syntax-only mode, return early
+        if (syntaxOnly) {
+            return syntaxResult;
+        }
+        
+        // Run all validation checks in parallel
+        const [eslintResult, buildResult, dependencyResult, buttonResult] = await Promise.all([
+            validateWithESLint(projectDir).catch(error => {
+                console.warn(`[VALIDATION] ESLint validation failed: ${error.message}`);
+                return {
+                    isValid: true, // Don't fail if ESLint is not available
+                    errors: [],
+                    warnings: [],
+                    fixableErrors: [],
+                    canAutoFix: false
+                };
+            }),
+            validateBuild(projectDir).catch(error => {
+                console.warn(`[VALIDATION] Build validation failed: ${error.message}`);
+                return {
+                    isValid: true, // Don't fail if build is not available
+                    errors: [],
+                    warnings: [],
+                    fixableErrors: [],
+                    canAutoFix: false
+                };
+            }),
+            validateDependencies(projectDir),
+            validateButtonContrast(projectDir)
+        ]);
+
+        // Combine results
+        const allErrors = [...eslintResult.errors, ...buildResult.errors, ...dependencyResult.errors, ...buttonResult.errors];
+        const allWarnings = [...eslintResult.warnings, ...buildResult.warnings, ...dependencyResult.warnings, ...buttonResult.warnings];
+        const allFixableErrors = [...eslintResult.fixableErrors, ...buildResult.fixableErrors, ...dependencyResult.fixableErrors, ...buttonResult.fixableErrors];
+
+        const result = {
+            isValid: allErrors.length === 0,
+            errors: enhanceErrorContext(allErrors, projectDir),
+            warnings: allWarnings,
+            fixableErrors: allFixableErrors,
+            canAutoFix: allFixableErrors.length > 0
+        };
+
+        console.log(`[VALIDATION] Validation complete: ${result.isValid ? 'PASSED' : 'FAILED'}`);
+        console.log(`[VALIDATION] Errors: ${result.errors.length}, Warnings: ${result.warnings.length}, Fixable: ${result.fixableErrors.length}`);
+
+        return result;
+    }); // Close ValidationLockManager.withLock
+}
+
+/**
+ * Run validation without locks (for use in retry loops where locks interfere with file writes)
+ */
+export async function validateProjectWithoutLock(projectDir: string, syntaxOnly: boolean = false): Promise<ValidationResult> {
+    console.log(`[VALIDATION] Running ${syntaxOnly ? 'syntax-only' : 'comprehensive'} validation on: ${projectDir} (without lock)`);
+
+    // First run syntax-only validation (fast)
+    const syntaxResult = await validateSyntaxOnly(projectDir);
+    if (!syntaxResult.isValid) {
+        console.log(`[VALIDATION] Syntax validation failed, ${syntaxOnly ? 'stopping here' : 'skipping full validation'}`);
+        return {
+            ...syntaxResult,
+            errors: enhanceErrorContext(syntaxResult.errors, projectDir)
+        };
+    }
+
+    // If syntax-only mode, return early
+    if (syntaxOnly) {
+        return syntaxResult;
+    }
+    
     // Run all validation checks in parallel
     const [eslintResult, buildResult, dependencyResult, buttonResult] = await Promise.all([
         validateWithESLint(projectDir).catch(error => {
@@ -661,7 +1184,7 @@ export async function validateProject(projectDir: string): Promise<ValidationRes
 
     const result = {
         isValid: allErrors.length === 0,
-        errors: allErrors,
+        errors: enhanceErrorContext(allErrors, projectDir),
         warnings: allWarnings,
         fixableErrors: allFixableErrors,
         canAutoFix: allFixableErrors.length > 0
@@ -671,6 +1194,278 @@ export async function validateProject(projectDir: string): Promise<ValidationRes
     console.log(`[VALIDATION] Errors: ${result.errors.length}, Warnings: ${result.warnings.length}, Fixable: ${result.fixableErrors.length}`);
 
     return result;
+}
+
+/**
+ * Run basic syntax validation (faster, syntax-only)
+ */
+export async function validateSyntaxOnly(projectDir: string): Promise<ValidationResult> {
+    console.log(`[VALIDATION] Running syntax-only validation on: ${projectDir}`);
+    
+    try {
+        // Quick TypeScript/JavaScript syntax check
+        const tscResult = await validateWithTSC(projectDir);
+        if (!tscResult.isValid) {
+            console.log(`[VALIDATION] TSC found ${tscResult.errors.length} errors`);
+            return tscResult;
+        }
+        
+        // Basic ESLint syntax check (no style rules)
+        const eslintResult = await validateWithESLintSyntaxOnly(projectDir);
+        if (!eslintResult.isValid) {
+            console.log(`[VALIDATION] ESLint found ${eslintResult.errors.length} errors`);
+            return eslintResult;
+        }
+        
+        // If both TSC and ESLint pass, but we suspect there might be build issues, run a quick build check
+        console.log(`[VALIDATION] TSC and ESLint passed, running quick build validation...`);
+        const buildResult = await validateBuild(projectDir);
+        
+        return buildResult;
+    } catch (error: any) {
+        console.warn(`[VALIDATION] Syntax validation failed: ${error.message}`);
+        return {
+            isValid: false,
+            errors: [{
+                type: 'syntax',
+                file: 'unknown',
+                message: `Syntax validation failed: ${error.message}`,
+                severity: 'error',
+                fixable: false
+            }],
+            warnings: [],
+            fixableErrors: [],
+            canAutoFix: false
+        };
+    }
+}
+
+/**
+ * Run TypeScript compiler check for syntax errors
+ */
+export async function validateWithTSC(projectDir: string): Promise<ValidationResult> {
+    return new Promise((resolve) => {
+        const tscProcess = spawn('npx', ['tsc', '--noEmit', '--skipLibCheck'], {
+            cwd: projectDir,
+            stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        tscProcess.stdout.on('data', (data) => {
+            stdout += data.toString();
+        });
+
+        tscProcess.stderr.on('data', (data) => {
+            stderr += data.toString();
+        });
+
+        tscProcess.on('close', (code) => {
+            const errors: ValidationError[] = [];
+            
+            // Parse TypeScript errors - check both stdout and stderr
+            const output = stdout + stderr;
+            console.log(`[VALIDATION] TSC output (code: ${code}):`, output.substring(0, 500));
+            
+            // Look for various error patterns
+            const lines = output.split('\n');
+            for (const line of lines) {
+                // Standard TypeScript error format
+                const tsMatch = line.match(/(.+?)\((\d+),(\d+)\): error TS\d+: (.+)/);
+                if (tsMatch) {
+                    const [, filePath, lineStr, columnStr, message] = tsMatch;
+                    // Use simple relative path from project root instead of complex relative paths
+                    let relativePath = path.relative(projectDir, filePath);
+                    // If the relative path goes up directories (..), use just the filename within project
+                    if (relativePath.startsWith('..')) {
+                        // Try to find the file within the project directory
+                        const fileName = path.basename(filePath);
+                        const projectRelativePath = filePath.replace(projectDir, '').replace(/^[\/\\]/, '');
+                        relativePath = projectRelativePath || fileName;
+                    }
+                    
+                    // Skip errors from default_components directory
+                    if (relativePath.includes('default_components')) {
+                        continue;
+                    }
+                    
+                    // Check if this is a surgically fixable import/export error
+                    const isFixableImportExport = isImportExportSurgicallyFixable(message.trim());
+                    
+                    errors.push({
+                        type: 'syntax',
+                        file: relativePath,
+                        line: parseInt(lineStr),
+                        column: parseInt(columnStr),
+                        message: message.trim(),
+                        severity: 'error',
+                        fixable: isFixableImportExport,
+                        rule: isFixableImportExport ? 'surgical-import-export' : undefined
+                    });
+                    continue;
+                }
+                
+                // Alternative error format
+                const altMatch = line.match(/(.+?):(\d+):(\d+) - error TS\d+: (.+)/);
+                if (altMatch) {
+                    const [, filePath, lineStr, columnStr, message] = altMatch;
+                    // Use simple relative path from project root instead of complex relative paths
+                    let relativePath = path.relative(projectDir, filePath);
+                    // If the relative path goes up directories (..), use just the filename within project
+                    if (relativePath.startsWith('..')) {
+                        // Try to find the file within the project directory
+                        const fileName = path.basename(filePath);
+                        const projectRelativePath = filePath.replace(projectDir, '').replace(/^[\/\\]/, '');
+                        relativePath = projectRelativePath || fileName;
+                    }
+                    
+                    // Skip errors from default_components directory
+                    if (relativePath.includes('default_components')) {
+                        continue;
+                    }
+                    
+                    // Check if this is a surgically fixable import/export error
+                    const isFixableImportExport = isImportExportSurgicallyFixable(message.trim());
+                    
+                    errors.push({
+                        type: 'syntax',
+                        file: relativePath,
+                        line: parseInt(lineStr),
+                        column: parseInt(columnStr),
+                        message: message.trim(),
+                        severity: 'error',
+                        fixable: isFixableImportExport,
+                        rule: isFixableImportExport ? 'surgical-import-export' : undefined
+                    });
+                    continue;
+                }
+                
+                // Generic error detection - skip compiler option errors and default_components
+                if (line.includes('error') && !line.includes('0 errors') && 
+                    !line.includes('Unknown compiler option') && 
+                    !line.includes('default_components')) {
+                    errors.push({
+                        type: 'syntax',
+                        file: 'unknown',
+                        message: line.trim(),
+                        severity: 'error',
+                        fixable: false
+                    });
+                }
+            }
+
+            // If code is non-zero but no errors found, create a generic error
+            if (code !== 0 && errors.length === 0) {
+                errors.push({
+                    type: 'syntax',
+                    file: 'unknown',
+                    message: `TypeScript compilation failed with code ${code}\n\nOutput: ${output.trim()}`,
+                    severity: 'error',
+                    fixable: false
+                });
+            }
+
+            // Calculate fixable errors
+            const fixableErrors = errors.filter(error => error.fixable);
+            const canAutoFix = fixableErrors.length > 0;
+
+            resolve({
+                isValid: code === 0 && errors.length === 0,
+                errors,
+                warnings: [],
+                fixableErrors,
+                canAutoFix
+            });
+        });
+    });
+}
+
+/**
+ * Run ESLint with only syntax rules (no style/formatting)
+ */
+export async function validateWithESLintSyntaxOnly(projectDir: string): Promise<ValidationResult> {
+    return new Promise((resolve) => {
+        const eslintProcess = spawn('npx', ['eslint', '**/*.{js,jsx,ts,tsx}', '--ignore-pattern', '**/default_components/**', '--format', 'json', '--no-error-on-unmatched-pattern', '--no-eslintrc', '--config', JSON.stringify({
+            parser: '@typescript-eslint/parser',
+            parserOptions: {
+                ecmaVersion: 2020,
+                sourceType: 'module',
+                ecmaFeatures: { jsx: true }
+            },
+            rules: {
+                'no-undef': 'error',
+                'no-unused-vars': 'off',
+                'no-console': 'off'
+            }
+        })], {
+            cwd: projectDir,
+            stdio: ['pipe', 'pipe', 'pipe']
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        eslintProcess.stdout.on('data', (data) => {
+            stdout += data.toString();
+        });
+
+        eslintProcess.stderr.on('data', (data) => {
+            stderr += data.toString();
+        });
+
+        eslintProcess.on('close', (code) => {
+            try {
+                const errors: ValidationError[] = [];
+                
+                if (stdout.trim()) {
+                    const eslintResults = JSON.parse(stdout);
+                    
+                    for (const fileResult of eslintResults) {
+                        // Use simple relative path from project root instead of complex relative paths
+                        let filePath = path.relative(projectDir, fileResult.filePath);
+                        // If the relative path goes up directories (..), use just the filename within project
+                        if (filePath.startsWith('..')) {
+                            const projectRelativePath = fileResult.filePath.replace(projectDir, '').replace(/^[\/\\]/, '');
+                            filePath = projectRelativePath || path.basename(fileResult.filePath);
+                        }
+                        
+                        for (const message of fileResult.messages) {
+                            if (message.severity === 2) { // Only errors
+                                errors.push({
+                                    type: 'syntax',
+                                    file: filePath,
+                                    line: message.line,
+                                    column: message.column,
+                                    message: message.message,
+                                    rule: message.ruleId,
+                                    severity: 'error',
+                                    fixable: message.fix !== undefined
+                                });
+                            }
+                        }
+                    }
+                }
+
+                resolve({
+                    isValid: errors.length === 0,
+                    errors,
+                    warnings: [],
+                    fixableErrors: errors.filter(e => e.fixable),
+                    canAutoFix: errors.some(e => e.fixable)
+                });
+                
+            } catch (parseError) {
+                resolve({
+                    isValid: true,
+                    errors: [],
+                    warnings: [],
+                    fixableErrors: [],
+                    canAutoFix: false
+                });
+            }
+        });
+    });
 }
 
 /**
@@ -769,53 +1564,174 @@ export async function autoFixButtonContrast(projectDir: string): Promise<AutoFix
 export async function autoFixProject(projectDir: string): Promise<AutoFixResult> {
     console.log(`[VALIDATION] Attempting auto-fix on: ${projectDir}`);
 
-    // Run ESLint auto-fix and button contrast fix in parallel
-    const [eslintFixResult, buttonFixResult] = await Promise.all([
-        autoFixWithESLint(projectDir),
-        autoFixButtonContrast(projectDir)
-    ]);
+    // Use ValidationLockManager to prevent concurrent auto-fix operations
+    return await ValidationLockManager.withLock(projectDir, async () => {
+        // Run ESLint auto-fix and button contrast fix in parallel
+        const [eslintFixResult, buttonFixResult] = await Promise.all([
+            autoFixWithESLint(projectDir),
+            autoFixButtonContrast(projectDir)
+        ]);
 
-    // Check if dependencies need to be installed
-    const dependencyValidation = await validateDependencies(projectDir);
-    const needsNpmInstall = dependencyValidation.errors.some(e => 
-        e.message.includes('node_modules') || e.message.includes('npm install')
-    );
+        // Check if dependencies need to be installed
+        const dependencyValidation = await validateDependencies(projectDir);
+        const needsNpmInstall = dependencyValidation.errors.some(e => 
+            e.message.includes('node_modules') || e.message.includes('npm install')
+        );
 
-    if (needsNpmInstall) {
-        console.log('[VALIDATION] Running npm install to fix dependency issues...');
-        await runNpmInstall(projectDir);
+        if (needsNpmInstall) {
+            console.log('[VALIDATION] Running npm install to fix dependency issues...');
+            await runNpmInstall(projectDir);
+        }
+
+        // Combine results
+        const allChangedFiles = [...eslintFixResult.changedFiles, ...buttonFixResult.changedFiles];
+        const uniqueChangedFiles = [...new Set(allChangedFiles)]; // Remove duplicates
+
+        return {
+            success: eslintFixResult.success || buttonFixResult.success,
+            fixedErrors: [...eslintFixResult.fixedErrors, ...buttonFixResult.fixedErrors],
+            remainingErrors: [...eslintFixResult.remainingErrors, ...buttonFixResult.remainingErrors],
+            changedFiles: uniqueChangedFiles
+        };
+    }); // Close ValidationLockManager.withLock
+}
+
+/**
+ * Enhance errors with better context and recovery suggestions
+ */
+export function enhanceErrorContext(errors: ValidationError[], projectDir: string): ValidationError[] {
+    // Filter out errors from default_components directory
+    const filteredErrors = errors.filter(error => !error.file.includes('default_components'));
+    
+    return filteredErrors.map(error => {
+        const enhancedError = { ...error };
+        
+        // Add recovery suggestions based on common patterns
+        const suggestions = getRecoverySuggestions(error);
+        if (suggestions.length > 0) {
+            enhancedError.message = `${error.message}\n\n🔧 Suggested fixes:\n${suggestions.map(s => `  • ${s}`).join('\n')}`;
+        }
+        
+        return enhancedError;
+    });
+}
+
+/**
+ * Get recovery suggestions for common error patterns
+ */
+export function getRecoverySuggestions(error: ValidationError): string[] {
+    const suggestions: string[] = [];
+    const message = error.message.toLowerCase();
+    
+    // JSX syntax errors
+    if (message.includes('unexpected token') && message.includes('expected jsx identifier')) {
+        suggestions.push('Check for missing closing tags or unclosed JSX elements');
+        suggestions.push('Verify all JSX elements are properly nested');
+        suggestions.push('Look for stray code outside the return statement');
     }
+    
+    // Expression expected errors
+    if (message.includes('expression expected')) {
+        suggestions.push('Check for incomplete JSX expressions or missing content');
+        suggestions.push('Verify all curly braces {} have valid expressions inside');
+        suggestions.push('Look for missing return statement content');
+    }
+    
+    // Missing semicolon or brace errors
+    if (message.includes('expected') && (message.includes(';') || message.includes('}') || message.includes('<eof>'))) {
+        suggestions.push('Check for missing closing braces } or parentheses )');
+        suggestions.push('Verify all functions and components are properly closed');
+        suggestions.push('Look for duplicate or extra code after component closure');
+    }
+    
+    // Import/Export errors
+    if (message.includes('import') || message.includes('export')) {
+        suggestions.push('Check import/export syntax and file paths');
+        suggestions.push('Verify component names match file exports');
+        suggestions.push('Remove duplicate export statements');
+    }
+    
+    // Duplicate code errors
+    if (message.includes('duplicate')) {
+        suggestions.push('Remove duplicate functions, variables, or exports');
+        suggestions.push('Check for copy-pasted code sections');
+        suggestions.push('Consolidate repeated JSX elements');
+    }
+    
+    return suggestions;
+}
 
-    // Combine results
-    const allChangedFiles = [...eslintFixResult.changedFiles, ...buttonFixResult.changedFiles];
-    const uniqueChangedFiles = [...new Set(allChangedFiles)]; // Remove duplicates
+/**
+ * Detect common error patterns that require different fixing strategies
+ */
+export function detectErrorPattern(errors: ValidationError[]): 'duplicate_code' | 'jsx_structure' | 'missing_brackets' | 'import_export' | 'mixed_issues' {
+    const duplicateCount = errors.filter(e => e.message.toLowerCase().includes('duplicate')).length;
+    const jsxCount = errors.filter(e => e.message.toLowerCase().includes('jsx') || e.message.toLowerCase().includes('unexpected token')).length;
+    const bracketCount = errors.filter(e => e.message.toLowerCase().includes('expected') && (e.message.includes(';') || e.message.includes('}'))).length;
+    const importCount = errors.filter(e => e.message.toLowerCase().includes('import') || e.message.toLowerCase().includes('export')).length;
+    
+    const total = errors.length;
+    
+    if (duplicateCount > total * 0.6) return 'duplicate_code';
+    if (jsxCount > total * 0.6) return 'jsx_structure';  
+    if (bracketCount > total * 0.6) return 'missing_brackets';
+    if (importCount > total * 0.6) return 'import_export';
+    
+    return 'mixed_issues';
+}
 
-    return {
-        success: eslintFixResult.success || buttonFixResult.success,
-        fixedErrors: [...eslintFixResult.fixedErrors, ...buttonFixResult.fixedErrors],
-        remainingErrors: [...eslintFixResult.remainingErrors, ...buttonFixResult.remainingErrors],
-        changedFiles: uniqueChangedFiles
-    };
+/**
+ * Get guidance for common error patterns
+ */
+function getPatternGuidance(pattern: string): string {
+    switch (pattern) {
+        case 'duplicate_code':
+            return 'Multiple duplicate exports/functions detected. Focus on removing duplicate code sections first.';
+        case 'jsx_structure':  
+            return 'JSX structural issues detected. Check for unclosed tags, missing brackets, or malformed JSX.';
+        case 'missing_brackets':
+            return 'Missing brackets/braces detected. Look for unclosed functions, objects, or JSX elements.';
+        case 'import_export':
+            return 'Import/Export issues detected. Check import paths and remove duplicate exports.';
+        case 'mixed_issues':
+            return 'Multiple error types detected. Fix syntax errors first, then address other issues.';
+        default:
+            return '';
+    }
 }
 
 /**
  * Generate a detailed error report for Cline CLI
  */
 export function generateErrorReport(validation: ValidationResult): string {
+    console.log(`[VALIDATION] Generating error report. isValid: ${validation.isValid}, errors: ${validation.errors.length}`);
+    
     if (validation.isValid) {
         return "✅ All validation checks passed! The project has no errors.";
+    }
+
+    if (validation.errors.length === 0) {
+        return "❌ Validation failed but no specific errors were captured. This may indicate a configuration or build issue.";
     }
 
     const report: string[] = [];
     report.push("❌ Validation failed. Please fix the following issues:\n");
 
+    // Detect error pattern and add pattern-specific guidance
+    const pattern = detectErrorPattern(validation.errors);
+    const patternGuidance = getPatternGuidance(pattern);
+    if (patternGuidance) {
+        report.push(`🎯 Error Pattern Detected: ${patternGuidance}\n`);
+    }
+
     // Group errors by file
     const errorsByFile: { [file: string]: ValidationError[] } = {};
     for (const error of validation.errors) {
-        if (!errorsByFile[error.file]) {
-            errorsByFile[error.file] = [];
+        const fileName = error.file || 'unknown';
+        if (!errorsByFile[fileName]) {
+            errorsByFile[fileName] = [];
         }
-        errorsByFile[error.file].push(error);
+        errorsByFile[fileName].push(error);
     }
 
     for (const [file, errors] of Object.entries(errorsByFile)) {
@@ -836,6 +1752,7 @@ export function generateErrorReport(validation: ValidationResult): string {
         report.push(`⚠️  ${validation.warnings.length} warnings found (not blocking deployment).`);
     }
 
+    console.log(`[VALIDATION] Generated error report:`, report.join('\n').substring(0, 500));
     return report.join('\n');
 }
 
@@ -982,7 +1899,7 @@ async function findFilesRecursive(dir: string, extensions: string[]): Promise<st
         for (const entry of entries) {
             const fullPath = path.join(dir, entry.name);
             
-            if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') {
+            if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules' && entry.name !== 'default_components') {
                 const subFiles = await findFilesRecursive(fullPath, extensions);
                 files.push(...subFiles);
             } else if (entry.isFile() && extensions.some(ext => entry.name.endsWith(ext))) {

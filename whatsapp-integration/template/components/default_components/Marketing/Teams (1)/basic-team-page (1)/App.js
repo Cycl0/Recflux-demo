@@ -1,6 +1,6 @@
 "use client";
 
-import {Button, Spacer} from "@nextui-org/react";
+import {Button, Spacer} from "@heroui/react";
 
 import TeamMemberCard from "./team-member-card";
 

@@ -9,7 +9,7 @@ import {
   CardFooter,
   CardHeader,
   type CardProps,
-} from "@nextui-org/react";
+} from "@heroui/react";
 
 import {AcmeLogo} from "./acme";
 

@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import {Textarea} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Textarea} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 const PromptInput = React.forwardRef(({classNames = {}, ...props}, ref) => {
   return (

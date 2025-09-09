@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import {Autocomplete, AutocompleteItem, Avatar, Input} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Autocomplete, AutocompleteItem, Avatar, Input} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 import countries from "./countries";
 

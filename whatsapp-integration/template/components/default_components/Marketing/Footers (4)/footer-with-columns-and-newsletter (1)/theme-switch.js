@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import {RadioGroup, VisuallyHidden, useRadio, useRadioGroupContext} from "@nextui-org/react";
+import {RadioGroup, VisuallyHidden, useRadio, useRadioGroupContext} from "@heroui/react";
 import {Icon} from "@iconify/react";
-import {cn} from "@nextui-org/react";
+import {cn} from "@heroui/react";
 
 const ThemeRadioItem = ({icon, ...props}) => {
   const {

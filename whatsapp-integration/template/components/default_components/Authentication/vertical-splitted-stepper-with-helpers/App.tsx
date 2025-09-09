@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Progress, Spacer} from "@nextui-org/react";
+import {Progress, Spacer} from "@heroui/react";
 
 import VerticalSteps from "./vertical-steps";
 import SupportCard from "./support-card";

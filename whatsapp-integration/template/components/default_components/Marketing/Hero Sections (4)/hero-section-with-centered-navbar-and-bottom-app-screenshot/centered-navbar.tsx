@@ -1,6 +1,6 @@
 "use client";
 
-import type {NavbarProps} from "@nextui-org/react";
+import type {NavbarProps} from "@heroui/react";
 
 import React from "react";
 import {
@@ -15,7 +15,7 @@ import {
   NavbarMenuItem,
   Divider,
   cn,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import {AcmeIcon} from "./social";

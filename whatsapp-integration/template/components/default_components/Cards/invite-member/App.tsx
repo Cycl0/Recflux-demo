@@ -1,6 +1,6 @@
 "use client";
 
-import type {CardProps, Selection} from "@nextui-org/react";
+import type {CardProps, Selection} from "@heroui/react";
 
 import React from "react";
 import {
@@ -18,7 +18,7 @@ import {
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import UserCell from "./user-cell";

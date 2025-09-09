@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import {Checkbox, Spacer} from "@nextui-org/react";
+import {Checkbox, Spacer} from "@heroui/react";
 import {AnimatePresence} from "framer-motion";
-import {cn} from "@nextui-org/react";
+import {cn} from "@heroui/react";
 
 import AddressTypeRadioGroup from "./address-type-radio-group";
 import PaymentMethodRadioGroup from "./payment-method-radio-group";

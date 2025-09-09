@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {Accordion, AccordionItem, Button} from "@nextui-org/react";
+import {Accordion, AccordionItem, Button} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import faqs from "./faqs";

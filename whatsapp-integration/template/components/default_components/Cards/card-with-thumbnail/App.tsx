@@ -1,9 +1,9 @@
 "use client";
 
-import type {CardProps} from "@nextui-org/react";
+import type {CardProps} from "@heroui/react";
 
 import React from "react";
-import {Card, Image, CardBody, CardFooter, Button, Spacer} from "@nextui-org/react";
+import {Card, Image, CardBody, CardFooter, Button, Spacer} from "@heroui/react";
 
 export default function Component(props: CardProps) {
   return (

@@ -1,9 +1,9 @@
 "use client";
 
-import type {CardProps} from "@nextui-org/react";
+import type {CardProps} from "@heroui/react";
 
 import React from "react";
-import {Card, CardBody, CardHeader} from "@nextui-org/react";
+import {Card, CardBody, CardHeader} from "@heroui/react";
 
 export type FeatureCardProps = CardProps & {
   title: string;

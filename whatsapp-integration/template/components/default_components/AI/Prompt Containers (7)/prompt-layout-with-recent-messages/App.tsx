@@ -8,9 +8,9 @@ import {
   DropdownSection,
   DropdownItem,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
-import {Card, CardHeader, CardBody} from "@nextui-org/react";
+import {Card, CardHeader, CardBody} from "@heroui/react";
 
 import SidebarContainer from "./sidebar-with-clear-with-toggle-button";
 

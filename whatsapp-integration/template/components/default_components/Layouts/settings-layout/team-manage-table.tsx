@@ -1,6 +1,6 @@
 "use client";
 
-import type {ChipProps, Selection} from "@nextui-org/react";
+import type {ChipProps, Selection} from "@heroui/react";
 
 import * as React from "react";
 import {
@@ -22,9 +22,9 @@ import {
   Tab,
   Card,
   CardBody,
-} from "@nextui-org/react";
-import {ChevronDownIcon, SearchIcon} from "@nextui-org/shared-icons";
-import {capitalize} from "@nextui-org/shared-utils";
+} from "@heroui/react";
+import {ChevronDownIcon, SearchIcon} from "@heroui/shared-icons";
+import {capitalize} from "@heroui/shared-utils";
 import {Icon} from "@iconify/react";
 
 import {columns, rolesOptions, statusOptions, users} from "./team-data";

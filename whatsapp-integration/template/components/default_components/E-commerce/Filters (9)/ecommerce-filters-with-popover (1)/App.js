@@ -9,7 +9,7 @@ import {
   RadioGroup,
   Select,
   SelectItem,
-} from "@nextui-org/react";
+} from "@heroui/react";
 
 import PriceSlider from "./price-slider";
 import ColorRadioItem from "./color-radio-item";

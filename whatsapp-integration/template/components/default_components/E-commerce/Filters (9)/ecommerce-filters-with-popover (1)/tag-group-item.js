@@ -1,9 +1,9 @@
 "use client";
 
 import React from "react";
-import {Chip, VisuallyHidden, useCheckbox} from "@nextui-org/react";
+import {Chip, VisuallyHidden, useCheckbox} from "@heroui/react";
 import {Icon} from "@iconify/react";
-import {cn} from "@nextui-org/react";
+import {cn} from "@heroui/react";
 
 const TagGroupItem = React.forwardRef(({icon, size = "md", ...props}, ref) => {
   const {children, isSelected, isFocusVisible, getBaseProps, getLabelProps, getInputProps} =

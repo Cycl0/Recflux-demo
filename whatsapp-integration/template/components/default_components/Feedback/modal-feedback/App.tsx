@@ -11,7 +11,7 @@ import {
   ModalHeader,
   Textarea,
   useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import FeedbackRating from "./feedback-rating";

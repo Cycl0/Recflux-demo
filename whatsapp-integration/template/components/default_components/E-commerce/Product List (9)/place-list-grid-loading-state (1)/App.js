@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import {Switch} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Switch} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 import PlaceListItem from "./place-list-item";
 import places from "./places";

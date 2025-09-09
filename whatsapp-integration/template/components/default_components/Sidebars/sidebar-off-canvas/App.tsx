@@ -10,7 +10,7 @@ import {
   ScrollShadow,
   Spacer,
   useDisclosure,
-} from "@nextui-org/react";
+} from "@heroui/react";
 import {Icon} from "@iconify/react";
 
 import {AcmeLogo} from "./acme";

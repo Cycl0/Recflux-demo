@@ -1,11 +1,11 @@
 "use client";
 
-import type {SliderProps} from "@nextui-org/react";
+import type {SliderProps} from "@heroui/react";
 import type {RangeFilter, RangeValue} from "./filters-types";
 
 import React from "react";
-import {Divider, Input, Slider} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Divider, Input, Slider} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 export type PriceSliderAnimation = "opacity" | "height";
 

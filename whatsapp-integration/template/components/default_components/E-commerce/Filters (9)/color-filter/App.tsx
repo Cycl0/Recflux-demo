@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import {RadioGroup} from "@nextui-org/react";
+import {RadioGroup} from "@heroui/react";
 
 import ColorRadioItem from "./color-radio-item";
 

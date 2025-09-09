@@ -1,8 +1,8 @@
 "use client";
 
 import React from "react";
-import {Avatar} from "@nextui-org/react";
-import {cn} from "@nextui-org/react";
+import {Avatar} from "@heroui/react";
+import {cn} from "@heroui/react";
 
 const TeamAvatar = React.forwardRef(({name, className, classNames = {}, ...props}, ref) => (
   <Avatar

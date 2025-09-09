@@ -1,6 +1,6 @@
 "use client";
 
-import type {NavbarProps} from "@nextui-org/react";
+import type {NavbarProps} from "@heroui/react";
 
 import React from "react";
 import {
@@ -13,7 +13,7 @@ import {
   NavbarMenuToggle,
   Link,
   Button,
-} from "@nextui-org/react";
+} from "@heroui/react";
 
 import {AcmeIcon} from "./social";
 
