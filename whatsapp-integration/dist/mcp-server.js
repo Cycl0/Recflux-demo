@@ -10,7 +10,102 @@ const pptr = puppeteer;
 import { deployToNetlify } from './deploy-netlify.js';
 import { getRedisCache } from './redis-cache.js';
 import { VisionDesignPrompts } from './vision-analyzer.js';
+import VideoAnalyzer from './video-analyzer.js';
+import { validateProject, generateErrorReport } from './validation.js';
 // Minimal MCP server exposing project_reset and CodeSandbox deployment only.
+// Helper function to get API key with standardized fallback order
+function getApiKey() {
+    const keys = [
+        { key: process.env.OPENROUTER_API_KEY, name: 'OPENROUTER_API_KEY' },
+        { key: process.env.OPENAI_API_KEY, name: 'OPENAI_API_KEY' },
+        { key: process.env.OPEN_ROUTER_API_KEY, name: 'OPEN_ROUTER_API_KEY' }
+    ];
+    for (const { key, name } of keys) {
+        if (key)
+            return { key, source: name };
+    }
+    return { key: null, source: 'none' };
+}
+// Helper function to generate multiple search queries for better video variety
+function generateVideoSearchQueries(originalTerm, theme) {
+    const queries = [originalTerm]; // Always include the original term
+    // Enhanced theme-based query variations with color and style awareness
+    const themeVariations = {
+        'business': {
+            keywords: ['professional', 'corporate', 'office', 'meeting', 'team', 'success'],
+            colors: ['blue', 'gray', 'white', 'silver'],
+            styles: ['clean', 'minimal', 'corporate', 'elegant']
+        },
+        'technology': {
+            keywords: ['digital', 'innovation', 'coding', 'data', 'network', 'future'],
+            colors: ['blue', 'cyan', 'dark', 'neon'],
+            styles: ['modern', 'sleek', 'futuristic', 'geometric']
+        },
+        'healthcare': {
+            keywords: ['medical', 'health', 'wellness', 'care', 'healing', 'treatment'],
+            colors: ['blue', 'green', 'white', 'soft'],
+            styles: ['calm', 'clean', 'peaceful', 'gentle']
+        },
+        'finance': {
+            keywords: ['money', 'investment', 'banking', 'growth', 'economy', 'financial'],
+            colors: ['blue', 'gold', 'green', 'dark'],
+            styles: ['premium', 'stable', 'secure', 'professional']
+        },
+        'food-drink': {
+            keywords: ['cooking', 'dining', 'restaurant', 'cuisine', 'recipe', 'kitchen'],
+            colors: ['warm', 'brown', 'orange', 'natural'],
+            styles: ['appetizing', 'cozy', 'rustic', 'fresh']
+        },
+        'travel': {
+            keywords: ['adventure', 'journey', 'destination', 'vacation', 'explore', 'tourism'],
+            colors: ['blue', 'earth', 'vibrant', 'sunset'],
+            styles: ['scenic', 'epic', 'breathtaking', 'wanderlust']
+        },
+        'fitness': {
+            keywords: ['workout', 'exercise', 'training', 'gym', 'health', 'active'],
+            colors: ['orange', 'green', 'energetic', 'bright'],
+            styles: ['dynamic', 'powerful', 'motivating', 'intense']
+        },
+        'real-estate': {
+            keywords: ['property', 'home', 'house', 'building', 'architecture', 'interior'],
+            colors: ['warm', 'neutral', 'earth', 'white'],
+            styles: ['luxurious', 'spacious', 'elegant', 'welcoming']
+        },
+        'fashion': {
+            keywords: ['style', 'clothing', 'design', 'trendy', 'outfit', 'apparel'],
+            colors: ['black', 'white', 'pastel', 'metallic'],
+            styles: ['chic', 'artistic', 'sophisticated', 'glamorous']
+        }
+    };
+    // Get theme-specific data or defaults
+    const themeData = themeVariations[theme] || {
+        keywords: ['background', 'professional', 'modern', 'clean'],
+        colors: ['neutral', 'white', 'soft'],
+        styles: ['minimal', 'elegant', 'contemporary']
+    };
+    // Add theme-specific keyword variations
+    themeData.keywords.slice(0, 2).forEach(keyword => {
+        queries.push(`${originalTerm} ${keyword}`);
+        queries.push(keyword);
+    });
+    // Add color-aware search terms
+    themeData.colors.slice(0, 2).forEach(color => {
+        queries.push(`${color} ${originalTerm}`);
+        queries.push(`${color} background`);
+    });
+    // Add style-aware search terms
+    themeData.styles.slice(0, 2).forEach(style => {
+        queries.push(`${style} ${originalTerm}`);
+        queries.push(`${style} background`);
+    });
+    // Add high-quality cinematic terms for better production values
+    const cinematicTerms = ['cinematic', 'slow motion', 'abstract', 'minimal', 'smooth', 'flowing'];
+    cinematicTerms.slice(0, 2).forEach(term => {
+        queries.push(term);
+    });
+    // Remove duplicates and limit to 8 queries for comprehensive coverage
+    return [...new Set(queries)].slice(0, 8);
+}
 const server = new McpServer({ name: 'recflux-deployer', version: '1.0.0' }, { capabilities: { tools: {} } });
 server.registerTool('project_reset', {
     description: 'Reset the project directory',
@@ -68,12 +163,11 @@ server.registerTool('color_palette_generator', {
         console.error(msg);
         fs.appendFile('mcp-color-palette.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => { });
     };
-    logMessage('[MCP_COLOR_PALETTE] *** TOOL CALLED! ***');
-    logMessage('[MCP_COLOR_PALETTE] Called with args: ' + JSON.stringify(args));
     const mode = args.mode || 'transformer';
     const numColors = Math.min(12, Math.max(2, args.numColors || 3));
     const temperature = Math.min(2.4, Math.max(0, args.temperature || 1.2));
     const baseColors = args.baseColors || [];
+    logMessage(`[MCP_COLOR_PALETTE] Generating palette: mode=${mode} | colors=${numColors} | temp=${temperature} | base_colors=${baseColors.length}`);
     // Create adjacency matrix (colors that work well together)
     // Higher values mean better compatibility
     const adjacencyMatrix = [];
@@ -155,19 +249,11 @@ server.registerTool('puppeteer_search', {
         console.error(msg);
         fs.appendFile('mcp-puppeteer.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => { });
     };
-    console.error('[MCP_PUPPETEER] *** TOOL CALLED! ***');
-    logMessage('[MCP_PUPPETEER] *** TOOL CALLED! ***');
-    logMessage('[MCP_PUPPETEER] Called with args: ' + JSON.stringify(args));
-    logMessage('[MCP_PUPPETEER] Args keys: ' + JSON.stringify(Object.keys(args || {})));
-    // Using Puppeteer (with stealth + proxy rotation) for all content extraction
+    logMessage(`[MCP_PUPPETEER] Search request: ${args.searchType || 'videos'} | term="${args.searchTerm || ''}" | theme=${args.theme || 'N/A'}`);
     const searchTerm = args.searchTerm || '';
     const searchType = args.searchType || 'videos';
     const theme = args.theme;
     const bypassCache = args.bypassCache || false;
-    logMessage('[MCP_PUPPETEER] Parsed searchTerm: ' + searchTerm);
-    logMessage('[MCP_PUPPETEER] Parsed searchType: ' + searchType);
-    logMessage('[MCP_PUPPETEER] Parsed theme: ' + theme);
-    logMessage('[MCP_PUPPETEER] Parsed bypassCache: ' + bypassCache);
     if (!searchTerm) {
         return { content: [{ type: 'text', text: 'Error: No search term provided' }] };
     }
@@ -264,36 +350,106 @@ server.registerTool('puppeteer_search', {
         logMessage(`[MCP_PUPPETEER] Cache bypass requested for: ${searchType}:${searchTerm}`);
     }
     try {
-        // Use Pexels API for videos only, PUPPETEER for all other content types including images
+        // Enhanced video search with multiple queries and AI analysis
         if (searchType === 'videos') {
-            logMessage(`[MCP_PUPPETEER] Using Pexels API for ${searchType}`);
+            logMessage(`[MCP_PUPPETEER] 🎥 ENTERING ENHANCED VIDEO SEARCH FLOW`);
             const PEXELS_API_KEY = process.env.PEXELS_API_KEY;
+            logMessage(`[MCP_PUPPETEER] 🔑 PEXELS_API_KEY check: ${PEXELS_API_KEY ? 'FOUND' : 'MISSING'}`);
             if (PEXELS_API_KEY) {
-                const apiUrl = `https://api.pexels.com/videos/search?query=${encodeURIComponent(searchTerm)}&per_page=3`;
-                logMessage(`[MCP_PUPPETEER] Calling Pexels API: ${apiUrl}`);
-                const headers = { 'Authorization': PEXELS_API_KEY };
-                const response = await fetch(apiUrl, { headers });
-                if (!response.ok) {
-                    throw new Error(`Pexels API error: ${response.status} ${response.statusText}`);
+                // Generate multiple search queries for better variety
+                const searchQueries = generateVideoSearchQueries(searchTerm, theme);
+                logMessage(`[MCP_PUPPETEER] Generated ${searchQueries.length} search queries: ${searchQueries.join(', ')}`);
+                let allVideoResults = [];
+                const seenVideoIds = new Set();
+                let totalResultsFromAllQueries = 0;
+                // Search with each query to get diverse results
+                for (let i = 0; i < searchQueries.length; i++) {
+                    const query = searchQueries[i];
+                    const perPage = Math.max(3, Math.floor(20 / searchQueries.length)); // Distribute API quota
+                    const apiUrl = `https://api.pexels.com/videos/search?query=${encodeURIComponent(query)}&per_page=${perPage}`;
+                    logMessage(`[MCP_PUPPETEER] Query ${i + 1}/${searchQueries.length}: "${query}" (${perPage} videos)`);
+                    try {
+                        const headers = { 'Authorization': PEXELS_API_KEY };
+                        const response = await fetch(apiUrl, { headers });
+                        if (!response.ok) {
+                            logMessage(`[MCP_PUPPETEER] Query "${query}" failed: ${response.status} ${response.statusText}`);
+                            continue;
+                        }
+                        const data = (await response.json());
+                        totalResultsFromAllQueries += data.total_results;
+                        const queryResults = data.videos?.map((video) => ({
+                            id: video.id,
+                            title: video.user?.name ? `Video by ${video.user.name}` : 'Untitled Video',
+                            url: video.url,
+                            preview_url: video.video_files?.[0]?.link || video.url,
+                            thumbnail: video.image,
+                            width: video.width,
+                            height: video.height,
+                            duration: video.duration,
+                            user: video.user,
+                            type: 'video',
+                            searchQuery: query // Track which query found this video
+                        })) || [];
+                        // Add unique videos only
+                        queryResults.forEach(video => {
+                            if (!seenVideoIds.has(video.id)) {
+                                seenVideoIds.add(video.id);
+                                allVideoResults.push(video);
+                            }
+                        });
+                        logMessage(`[MCP_PUPPETEER] Query "${query}": ${queryResults.length} videos (${allVideoResults.length} total unique)`);
+                        // Small delay between API calls to be respectful
+                        if (i < searchQueries.length - 1) {
+                            await new Promise(resolve => setTimeout(resolve, 500));
+                        }
+                    }
+                    catch (queryError) {
+                        logMessage(`[MCP_PUPPETEER] Error with query "${query}": ${queryError}`);
+                    }
                 }
-                const data = (await response.json());
-                logMessage(`[MCP_PUPPETEER] Pexels API returned ${data.total_results} results`);
-                const results = data.videos?.map((video) => ({
-                    title: video.user?.name ? `Video by ${video.user.name}` : 'Untitled Video',
-                    url: video.url,
-                    preview_url: video.video_files?.[0]?.link || video.url,
-                    thumbnail: video.image,
-                    width: video.width,
-                    height: video.height,
-                    duration: video.duration,
-                    type: 'video'
-                })) || [];
-                // Cache the results
+                logMessage(`[MCP_PUPPETEER] Collected ${allVideoResults.length} unique videos from ${searchQueries.length} queries`);
+                // Always use video analyzer if we have videos and API key
+                let selectedVideo = allVideoResults[0]; // fallback
+                let analysisResult = null;
+                const { key: apiKey, source: keySource } = getApiKey();
+                if (allVideoResults.length >= 1 && apiKey) {
+                    logMessage(`[MCP_PUPPETEER] Video analysis enabled - Using API key from: ${keySource} (${allVideoResults.length} videos to analyze)`);
+                    try {
+                        const videoAnalyzer = new VideoAnalyzer(apiKey);
+                        analysisResult = await videoAnalyzer.analyzeAndSelectBestVideo({
+                            videos: allVideoResults,
+                            theme: theme || 'general',
+                            websiteContext: `Website background video for ${searchTerm} related content`,
+                            bypassCache: args.bypassCache
+                        });
+                        selectedVideo = analysisResult.selectedVideo;
+                        logMessage(`[MCP_PUPPETEER] Video analysis complete. Selected: "${selectedVideo.title}" from query "${selectedVideo.searchQuery}" (confidence: ${analysisResult.confidence})`);
+                    }
+                    catch (analysisError) {
+                        logMessage(`[MCP_PUPPETEER] Video analysis failed, using first video as fallback: ${analysisError}`);
+                    }
+                }
+                else if (!apiKey) {
+                    logMessage(`[MCP_PUPPETEER] Skipping video analysis - no API key available`);
+                }
+                else {
+                    logMessage(`[MCP_PUPPETEER] Skipping video analysis - no videos found`);
+                }
+                // Return the selected video with analysis metadata
+                const results = [selectedVideo];
+                // Cache the results with analysis metadata
                 try {
-                    logMessage(`[MCP_PUPPETEER] Caching Pexels API results for theme: ${theme}`);
+                    logMessage(`[MCP_PUPPETEER] Caching Pexels API results with OpenRouter analysis for theme: ${theme}`);
                     await cache.setPuppeteerResults(theme, `${searchType}:${searchTerm}`, {
                         scrapedData: {
-                            videos: results.map(r => ({ src: r.preview_url, type: r.type, thumbnail: r.thumbnail })),
+                            videos: results.map(r => ({
+                                src: r.preview_url,
+                                type: r.type,
+                                thumbnail: r.thumbnail,
+                                videoId: r.id,
+                                title: r.title,
+                                analysisConfidence: analysisResult?.confidence
+                            })),
                             images: [],
                             icons: [],
                             vectors: [],
@@ -304,7 +460,7 @@ server.registerTool('puppeteer_search', {
                         },
                         metadata: {
                             scrapedAt: new Date().toISOString(),
-                            userAgent: 'Pexels API',
+                            userAgent: 'Pexels API + OpenRouter Video Analysis',
                             viewport: { width: 0, height: 0 },
                             loadTime: 0,
                             elementsFound: results.length
@@ -318,10 +474,24 @@ server.registerTool('puppeteer_search', {
                 return { content: [{ type: 'text', text: JSON.stringify({
                                 searchType,
                                 searchTerm,
-                                source: 'Pexels API',
-                                total_results: data.total_results,
+                                theme,
+                                source: 'Pexels API + OpenRouter AI Video Analysis',
+                                total_results: totalResultsFromAllQueries,
                                 results: results,
-                                cached: false
+                                cached: false,
+                                videoAnalysis: analysisResult ? {
+                                    selectedVideoId: analysisResult.selectedVideo.id,
+                                    selectedVideoTitle: analysisResult.selectedVideo.title,
+                                    selectedFromQuery: analysisResult.selectedVideo.searchQuery,
+                                    confidence: analysisResult.confidence,
+                                    reasoning: analysisResult.reasoning,
+                                    colorAnalysis: analysisResult.colorAnalysis,
+                                    totalVideosAnalyzed: analysisResult.metadata.totalAnalyzed,
+                                    totalQueriesUsed: searchQueries.length,
+                                    processingTime: analysisResult.metadata.processingTime,
+                                    alternativesAvailable: analysisResult.alternatives.length,
+                                    analysisType: analysisResult.metadata.analysisType
+                                } : null
                             }, null, 2) }] };
             }
             else {
@@ -824,9 +994,6 @@ server.registerTool('freepik_ai_image_generator', {
         console.error(msg);
         fs.appendFile('mcp-freepik-ai-image-generator.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => { });
     };
-    logMessage('[FREEPIK_AI] *** TOOL CALLED! ***');
-    logMessage('[FREEPIK_AI] Called with args: ' + JSON.stringify(args));
-    logMessage('[FREEPIK_AI] Args keys: ' + JSON.stringify(Object.keys(args || {})));
     try {
         const freepikApiKey = process.env.FREEPIK_API_KEY;
         if (!freepikApiKey) {
@@ -840,6 +1007,7 @@ server.registerTool('freepik_ai_image_generator', {
         const numImages = args.num_images || 1;
         const seed = args.seed || Math.floor(Math.random() * 4294967295);
         const bypassCache = args.bypassCache || false;
+        logMessage(`[FREEPIK_AI] Image generation request: "${prompt}" | aspect=${aspectRatio} | num_images=${numImages} | bypass_cache=${bypassCache}`);
         if (!prompt) {
             return { content: [{ type: 'text', text: 'Error: No prompt provided' }] };
         }
@@ -1037,10 +1205,9 @@ server.registerTool('web_crawler', {
         console.error(msg);
         fs.appendFile('mcp-crawl4ai-cli.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => { });
     };
-    logMessage('[CRAWL4AI_CLI] *** TOOL CALLED! ***');
-    logMessage('[CRAWL4AI_CLI] Called with args: ' + JSON.stringify(args));
     try {
         const { url, outputFormat = 'markdown', deepCrawl = false, deepCrawlStrategy = 'bfs', maxPages = 5, cssSelector, extractionQuery, userAgent, timeout = 30, bypassCache = false } = args;
+        logMessage(`[CRAWL4AI_CLI] Crawl request: ${url} | format=${outputFormat} | deep=${deepCrawl} | bypass_cache=${bypassCache}`);
         // Initialize Redis cache
         const cache = getRedisCache();
         // Try to connect to Redis (non-blocking)
@@ -1209,9 +1376,38 @@ server.registerTool('web_crawler', {
                 }
                 else {
                     const reason = killedByTimeout ? `timeout after ${computedTimeoutSec}s` : `code ${code}${signal ? `, signal ${signal}` : ''}`;
+                    let errorAnalysis = 'Crawl operation failed';
+                    let suggestions = [];
+                    // Analyze common error patterns
+                    if (stderr.includes('Executable doesn\'t exist')) {
+                        errorAnalysis = 'Playwright browser executable not found';
+                        suggestions = [
+                            'Run: /opt/crawl4ai-venv/bin/playwright install chromium',
+                            'Check if the browser cache directory has proper permissions',
+                            'Restart the container to ensure fresh browser installation'
+                        ];
+                    }
+                    else if (stderr.includes('BrowserType.launch')) {
+                        errorAnalysis = 'Browser launch failure - typically indicates missing dependencies or permissions';
+                        suggestions = [
+                            'Verify system dependencies are installed',
+                            'Check if running with sufficient privileges',
+                            'Ensure Chrome/Chromium browsers are properly installed'
+                        ];
+                    }
+                    else if (killedByTimeout) {
+                        errorAnalysis = 'Operation timed out - website may be slow or blocking requests';
+                        suggestions = [
+                            'Try with a simpler URL to test connectivity',
+                            'Increase timeout if dealing with slow websites',
+                            'Check if the website blocks automated requests'
+                        ];
+                    }
                     const errorResult = {
                         success: false,
                         error: `crwl command failed (${reason})`,
+                        errorAnalysis,
+                        suggestions,
                         stderr: stderr,
                         url: url,
                         timestamp: new Date().toISOString(),
@@ -1235,7 +1431,13 @@ server.registerTool('web_crawler', {
                     url: url,
                     timestamp: new Date().toISOString(),
                     crawler: 'crawl4ai-cli',
-                    suggestion: 'Make sure Crawl4AI CLI is installed: pip install crawl4ai'
+                    suggestion: 'Crawler initialization failed. This usually indicates missing dependencies or incorrect installation.',
+                    troubleshooting: [
+                        'Check if Crawl4AI is properly installed: /opt/crawl4ai-venv/bin/crwl --version',
+                        'Verify Playwright browsers are installed: /opt/crawl4ai-venv/bin/playwright install chromium',
+                        'Ensure proper permissions for the appuser account',
+                        'Check Docker container logs for dependency installation errors'
+                    ]
                 };
                 logMessage(`[CRAWL4AI_CLI] Spawn error: ${JSON.stringify(errorResult)}`);
                 resolve({
@@ -1277,23 +1479,33 @@ server.registerTool('vision_analyzer', {
         console.error(msg);
         fs.appendFile('mcp-vision-analyzer.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => { });
     };
-    logMessage('[VISION_ANALYZER] *** TOOL CALLED! ***');
-    logMessage('[VISION_ANALYZER] Called with args: ' + JSON.stringify(args));
     const { screenshotPath, analysisType = 'full', customPrompt, bypassCache = false } = args;
+    logMessage(`[VISION_ANALYZER] Analyzing screenshot: ${screenshotPath} | type=${analysisType} | bypass_cache=${bypassCache}`);
     if (!screenshotPath) {
         return { content: [{ type: 'text', text: 'Error: No screenshot path provided' }] };
     }
-    const openAIApiKey = process.env.OPENAI_API_KEY;
-    logMessage(`[VISION_ANALYZER] API Key found: ${openAIApiKey ? 'YES' : 'NO'}`);
-    logMessage(`[VISION_ANALYZER] API Key length: ${openAIApiKey?.length || 0}`);
-    logMessage(`[VISION_ANALYZER] API Key starts with: ${openAIApiKey?.substring(0, 20) || 'N/A'}...`);
-    if (!openAIApiKey) {
-        return { content: [{ type: 'text', text: 'Error: OPENAI_API_KEY environment variable is required' }] };
+    // Get API key using standardized helper
+    const { key: apiKey, source: keySource } = getApiKey();
+    if (!apiKey) {
+        const errorMsg = `Vision analysis failed - No API key found. Please set one of: OPENROUTER_API_KEY, OPENAI_API_KEY, or OPEN_ROUTER_API_KEY`;
+        logMessage(`[VISION_ANALYZER] ${errorMsg}`);
+        return { content: [{ type: 'text', text: JSON.stringify({
+                        success: false,
+                        error: errorMsg,
+                        screenshotPath: screenshotPath,
+                        timestamp: new Date().toISOString(),
+                        availableKeys: {
+                            OPENROUTER_API_KEY: !!process.env.OPENROUTER_API_KEY,
+                            OPENAI_API_KEY: !!process.env.OPENAI_API_KEY,
+                            OPEN_ROUTER_API_KEY: !!process.env.OPEN_ROUTER_API_KEY
+                        }
+                    }, null, 2) }] };
     }
+    logMessage(`[VISION_ANALYZER] Using API key from: ${keySource}`);
     try {
         // Initialize Vision Analyzer
         const { VisionAnalyzer } = await import('./vision-analyzer.js');
-        const analyzer = new VisionAnalyzer(openAIApiKey);
+        const analyzer = new VisionAnalyzer(apiKey);
         // Select appropriate prompt
         let prompt = customPrompt;
         if (!prompt) {
@@ -1389,16 +1601,15 @@ server.registerTool('design_inspiration_analyzer', {
         fs.appendFile('mcp-design-analyzer.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => { });
     }
     logWithTimestamp(`[DESIGN_ANALYZER] Starting analysis for theme: ${theme}`);
-    logWithTimestamp(`[DESIGN_ANALYZER] Environment check - OPENAI_API_KEY: ${process.env.OPENAI_API_KEY ? 'SET' : 'NOT SET'}`);
-    logWithTimestamp(`[DESIGN_ANALYZER] Environment check - OPENROUTER_API_KEY: ${process.env.OPENROUTER_API_KEY ? 'SET' : 'NOT SET'}`);
-    logWithTimestamp(`[DESIGN_ANALYZER] Environment check - OPEN_ROUTER_API_KEY: ${process.env.OPEN_ROUTER_API_KEY ? 'SET' : 'NOT SET'}`);
     try {
-        logWithTimestamp(`[DESIGN_ANALYZER] About to import DesignInspirationAnalyzer...`);
         // Dynamic import to handle the new module
         const { DesignInspirationAnalyzer } = await import('./design-inspiration-analyzer.js');
-        logWithTimestamp(`[DESIGN_ANALYZER] Import successful, creating analyzer instance...`);
-        const analyzer = new DesignInspirationAnalyzer(process.env.OPENAI_API_KEY || process.env.OPENROUTER_API_KEY || process.env.OPEN_ROUTER_API_KEY);
-        logWithTimestamp(`[DESIGN_ANALYZER] Analyzer instance created successfully`);
+        const { key: apiKey, source: keySource } = getApiKey();
+        if (!apiKey) {
+            throw new Error('No API key found. Please set OPENROUTER_API_KEY, OPENAI_API_KEY, or OPEN_ROUTER_API_KEY');
+        }
+        logWithTimestamp(`[DESIGN_ANALYZER] Using API key from: ${keySource}`);
+        const analyzer = new DesignInspirationAnalyzer(apiKey);
         // Perform the complete analysis
         const result = await analyzer.analyzeDesignInspiration(theme, bypassCache);
         // Clean up temporary files
@@ -1463,6 +1674,52 @@ server.registerTool('design_inspiration_analyzer', {
         };
     }
 });
+// Real-time validation tool for fix tasks - provides current error context
+server.registerTool('current_validation_status', {
+    description: 'Get current validation errors for fix task context - use this to check what errors still need fixing',
+    inputSchema: {
+        syntaxOnly: z.boolean()
+            .optional()
+            .default(true)
+            .describe('Whether to run syntax-only validation (faster)')
+    }
+}, async (args) => {
+    try {
+        const projectDir = process.env.CLONED_TEMPLATE_DIR || process.cwd();
+        const syntaxOnly = args.syntaxOnly ?? true;
+        console.error('[MCP_SERVER] Running current validation status check...');
+        // Run validation on current project state
+        const validation = await validateProject(projectDir, syntaxOnly);
+        // Generate focused error report for immediate context
+        const errorReport = generateErrorReport(validation, true); // isFixTask = true for focused format
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: JSON.stringify({
+                        isValid: validation.isValid,
+                        errorCount: validation.errors.length,
+                        warningCount: validation.warnings.length,
+                        fixableErrorCount: validation.fixableErrors.length,
+                        focusedErrorReport: errorReport,
+                        timestamp: new Date().toISOString()
+                    }, null, 2)
+                }
+            ]
+        };
+    }
+    catch (error) {
+        console.error('[MCP_SERVER] Validation status check failed:', error);
+        return {
+            content: [
+                {
+                    type: 'text',
+                    text: `Validation status check failed: ${error?.message || error}`
+                }
+            ]
+        };
+    }
+});
 async function main() {
     console.error('[MCP_SERVER] Starting MCP server with tools:');
     console.error('- project_reset');
@@ -1473,6 +1730,7 @@ async function main() {
     console.error('- web_crawler');
     console.error('- gemini_vision_analyzer');
     console.error('- design_inspiration_analyzer');
+    console.error('- current_validation_status');
     console.error('[MCP_SERVER] Process starting...');
     console.error('[MCP_SERVER] Working directory:', process.cwd());
     console.error('[MCP_SERVER] Environment CLONED_TEMPLATE_DIR:', process.env.CLONED_TEMPLATE_DIR);

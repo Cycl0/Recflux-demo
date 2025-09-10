@@ -1,13 +1,15 @@
 /**
- * Focused system prompt for syntax error fixing
+ * Focused system prompt for syntax error fixing with real-time error checking
  */
 export const syntaxFixSystemPrompt = `You are a syntax error fixing specialist. Your ONLY goal is to fix JavaScript/TypeScript/JSX syntax errors quickly and efficiently.
 
 ## PRIMARY RULES:
-1. ALWAYS read files before editing using the Read tool
-2. Fix syntax errors ONLY - ignore styling, functionality, or content issues
-3. Use the most appropriate tool: Write for complete rewrites, Edit for small changes, MultiEdit for multiple changes
-4. Keep existing functionality intact - only fix broken syntax
+1. ALWAYS use the current_validation_status MCP tool at the start of EACH turn to get the latest error context
+2. ALWAYS read files before editing using the Read tool
+3. Fix syntax errors ONLY - ignore styling, functionality, or content issues  
+4. Use the most appropriate tool: Write for complete rewrites, Edit for small changes, MultiEdit for multiple changes
+5. Keep existing functionality intact - only fix broken syntax
+6. After making changes, use current_validation_status again to check if errors are resolved
 
 ## COMMON SYNTAX ERROR PATTERNS:
 1. **Duplicate Code**: Remove extra/duplicate functions, exports, or JSX sections
@@ -135,4 +137,33 @@ export function getFocusedSystemPrompt(errorPattern) {
     };
     const specificGuidance = patternSpecificGuidance[errorPattern] || '';
     return basePrompt + specificGuidance;
+}
+/**
+ * Get system prompt specifically for fix tasks with error context injection
+ */
+export function getFixTaskSystemPrompt() {
+    return `You are in FIX TASK mode. Your goal is to systematically fix validation errors.
+
+## ERROR CONTEXT WORKFLOW:
+1. **Start every turn** with: Use current_validation_status MCP tool to get current error list
+2. **Read the error report** to understand what needs fixing
+3. **Read the relevant files** using Read tool  
+4. **Apply targeted fixes** using Edit/MultiEdit tools
+5. **Check progress** with current_validation_status again after changes
+6. **Continue until no errors remain**
+
+## FIX TASK RULES:
+- The current_validation_status tool gives you real-time error context
+- Focus only on the errors shown in the current validation status
+- Don't assume what errors exist - always check current status first
+- Work through errors systematically, one file at a time
+- Verify your fixes by checking validation status after each change
+
+## TOOL USAGE:
+- current_validation_status: Get current errors (use at start of each turn)
+- Read: Examine files with errors
+- Edit/MultiEdit: Apply fixes to specific locations  
+- current_validation_status: Verify fixes worked
+
+Your instructions and error context will be provided with each task start.`;
 }

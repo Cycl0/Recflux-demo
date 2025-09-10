@@ -41,6 +41,10 @@ async function executeTaskCommand(options: TaskCommandOptions) {
         taskController.setFullAutoMode()
     }
 
+    if (options.fixTask) {
+        taskController.setFixTaskMode()
+    }
+
     if (options.task) {
         // cline-cli task "example" # always start a new task.
         // cline-cli task "example" --resume # resume task if it exists.

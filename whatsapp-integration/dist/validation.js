@@ -1468,16 +1468,21 @@ function getPatternGuidance(pattern) {
     }
 }
 /**
- * Generate a detailed error report for Cline CLI
+ * Generate error report for Cline CLI - focused format for fix tasks
  */
-export function generateErrorReport(validation) {
-    console.log(`[VALIDATION] Generating error report. isValid: ${validation.isValid}, errors: ${validation.errors.length}`);
+export function generateErrorReport(validation, isFixTask = false) {
+    console.log(`[VALIDATION] Generating error report. isValid: ${validation.isValid}, errors: ${validation.errors.length}, fixTask: ${isFixTask}`);
     if (validation.isValid) {
         return "✅ All validation checks passed! The project has no errors.";
     }
     if (validation.errors.length === 0) {
         return "❌ Validation failed but no specific errors were captured. This may indicate a configuration or build issue.";
     }
+    // Use focused format for fix tasks to prevent model sidetracking
+    if (isFixTask) {
+        return generateFocusedErrorReport(validation);
+    }
+    // Original verbose format for initial reports
     const report = [];
     report.push("❌ Validation failed. Please fix the following issues:\n");
     // Detect error pattern and add pattern-specific guidance
@@ -1512,6 +1517,72 @@ export function generateErrorReport(validation) {
     }
     console.log(`[VALIDATION] Generated error report:`, report.join('\n').substring(0, 500));
     return report.join('\n');
+}
+/**
+ * Generate focused error report specifically for fix tasks - errors first, no strategy text
+ */
+function generateFocusedErrorReport(validation) {
+    const report = [];
+    report.push("🚨 CURRENT ERRORS TO FIX:");
+    report.push("");
+    // Group errors by file
+    const errorsByFile = {};
+    for (const error of validation.errors) {
+        const fileName = error.file || 'unknown';
+        if (!errorsByFile[fileName]) {
+            errorsByFile[fileName] = [];
+        }
+        errorsByFile[fileName].push(error);
+    }
+    for (const [file, errors] of Object.entries(errorsByFile)) {
+        for (const error of errors) {
+            const location = error.line ? `:${error.line}${error.column ? `:${error.column}` : ''}` : '';
+            report.push(`${file}${location}`);
+            report.push(`❌ ${error.message}`);
+            // Add specific fix instruction based on error type
+            const fixInstruction = getSpecificFixInstruction(error);
+            if (fixInstruction) {
+                report.push(`🔧 ${fixInstruction}`);
+            }
+            report.push('');
+        }
+    }
+    return report.join('\n');
+}
+/**
+ * Get specific fix instruction for common error patterns
+ */
+function getSpecificFixInstruction(error) {
+    const message = error.message.toLowerCase();
+    // Import/Export errors - handle "Cannot find name" specifically
+    if (message.includes('cannot find name')) {
+        const match = error.message.match(/Cannot find name '([^']+)'/);
+        const componentName = match ? match[1] : 'component';
+        if (componentName === 'Code') {
+            return `Missing import: Add \`import { Code } from "@heroui/code"\` OR replace \`<Code>\` with \`<span>\``;
+        }
+        return `Missing import: Add \`import { ${componentName} } from "@heroui/${componentName.toLowerCase()}"\` OR replace with valid element`;
+    }
+    // Type assignment errors - handle specific HeroUI component prop errors
+    if (message.includes('not assignable to type')) {
+        if (message.includes('"default"') && message.includes('"primary"')) {
+            return `Invalid Button/Chip color prop: Change string variable to literal like "primary", "secondary", "warning", "danger"`;
+        }
+        return `Invalid prop value: Change to one of the allowed type values`;
+    }
+    // Duplicate code
+    if (message.includes('duplicate')) {
+        return `Remove duplicate ${message.includes('export') ? 'export' : 'declaration'}`;
+    }
+    // JSX errors
+    if (message.includes('jsx') || message.includes('unexpected token')) {
+        return `Fix JSX syntax: Check for unclosed tags, missing brackets, or malformed elements`;
+    }
+    // Missing brackets/braces
+    if (message.includes('expected') && (message.includes('}') || message.includes(';'))) {
+        return `Add missing bracket/brace: Check function closures and JSX element closing`;
+    }
+    return `Fix syntax error at specified location`;
 }
 // Helper functions
 /**

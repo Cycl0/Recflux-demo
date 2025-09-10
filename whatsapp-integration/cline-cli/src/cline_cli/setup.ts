@@ -27,6 +27,7 @@ export type TaskCommandOptions = {
     fullAuto: boolean
     resume: boolean
     resumeOrNew: boolean
+    fixTask: boolean
 }
 
 type CommandHandlers = {
@@ -75,6 +76,7 @@ program
     .option("--auto-approve-mcp", "automatically approve all MCP tool usage requests, including those that normally require explicit confirmation")
     .option("--resume", "resume an existing incomplete task")
     .option("--resume-or-new", "resume an existing incomplete task if one exists, otherwise create a new task")
+    .option("--fix-task", "enable fix task mode with real-time error context injection")
     .action((task: string | undefined, opts: OptionValues) => {
         commandType = CommandType.Task
 
@@ -87,6 +89,7 @@ program
             fullAuto: !!opts.fullAuto,
             resume: !!opts.resume,
             resumeOrNew: !!opts.resumeOrNew,
+            fixTask: !!opts.fixTask,
         }
 
         vsCodeImpls = setupVsCode(getWorkspacePath(opts.workspace), opts.visibleFiles || [])

@@ -209,6 +209,7 @@ export type ClineSay =
 	| "clineignore_error"
 	| "checkpoint_created"
 	| "load_mcp_documentation"
+	| "tool_guidance"
 
 export interface ClineSayTool {
 	tool:

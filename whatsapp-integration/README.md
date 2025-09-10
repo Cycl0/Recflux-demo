@@ -20,9 +20,12 @@ WHATSAPP_PHONE_NUMBER_ID=1234567890
 WHATSAPP_VERIFY_TOKEN=some-verify-string
 MCP_COMMAND=node
 MCP_ARGS=dist/mcp-server.js
-OPENAI_API_KEY=sk-...
+OPENROUTER_API_KEY=sk-...  # Preferred - OpenRouter API key for vision analysis, video selection
+OPENAI_API_KEY=sk-...      # Fallback - Can also be used for OpenRouter access
 OPENAI_MODEL=gpt-4o-mini
 ```
+
+**Note**: Video analysis and vision features use OpenRouter API. The system checks for API keys in this order: `OPENROUTER_API_KEY` → `OPENAI_API_KEY` → `OPEN_ROUTER_API_KEY`.
 
 3) Build and run
 ```bash

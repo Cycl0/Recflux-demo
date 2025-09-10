@@ -25,7 +25,7 @@ import {
  type ValidationResult,
  type ValidationError
 } from './validation.js';
-import { getFocusedSystemPrompt } from './syntax-fix-prompt.js';
+import { getFocusedSystemPrompt, getFixTaskSystemPrompt } from './syntax-fix-prompt.js';
 
 // ESM-compatible __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -549,19 +549,19 @@ function getProgressiveFixingStrategy(
         const strategyInstructions = {
             'targeted_edit': {
                 instruction: "TARGETED EDIT: Make minimal, precise changes to fix specific errors. Use Edit tool for small fixes.",
-                guidance: "🎯 Strategy: Focus on exact error locations with minimal disruption to working code."
+                guidance: ""
             },
             'comprehensive_edit': {
                 instruction: "COMPREHENSIVE EDIT: Use MultiEdit to make coordinated changes across multiple sections.",
-                guidance: "🔧 Strategy: Address related issues together while preserving overall structure."
+                guidance: ""
             },
             'clean_rewrite': {
                 instruction: "CLEAN REWRITE: Use Write tool to create a fresh version focusing on fixing core issues.",
-                guidance: "✨ Strategy: Start with a clean slate while maintaining functionality."
+                guidance: ""
             },
             'comprehensive_cleanup': {
                 instruction: "COMPREHENSIVE CLEANUP: Complete file restructure with proper organization and syntax.",
-                guidance: "🔄 Strategy: Last resort - rebuild file with correct structure and clean code."
+                guidance: ""
             }
         }
         
@@ -618,8 +618,9 @@ if (hasCircuitBreakerIssues) reasons.push('circuit breaker failures');
 console.log(`[ENHANCED_CLINE] 🚀 Using better model (grok-code-fast-1) for syntax fix - reason: ${reasons.join(', ')}`);
 }
 
-console.log(`[DEBUG] About to call runClineCLIInDir - attempt: ${attempt}, useBetterModel: ${useBetterModel}`);
-const clineResult = await runClineCLIInDir(cwd, userPrompt, systemAppend, useBetterModel);
+const isFixAttempt = attempt > 1; // First attempt is initial request, subsequent are fixes
+console.log(`[DEBUG] About to call runClineCLIInDir - attempt: ${attempt}, useBetterModel: ${useBetterModel}, isFixTask: ${isFixAttempt}`);
+const clineResult = await runClineCLIInDir(cwd, userPrompt, systemAppend, useBetterModel, isFixAttempt);
  
  // If Cline CLI failed, return immediately
  if (clineResult.code !== 0) {
@@ -679,7 +680,7 @@ const clineResult = await runClineCLIInDir(cwd, userPrompt, systemAppend, useBet
  
  // If we have remaining errors and attempts left, ask Cline to fix them
  if (attempt < maxRetries) {
- const errorReport = generateErrorReport(lastValidation || validation);
+ const errorReport = generateErrorReport(lastValidation || validation, true); // isFixTask = true for focused format
  const pattern = detectErrorPattern(validation.errors);
  
  // Apply enhanced circuit breaker logic for problematic files
@@ -754,19 +755,16 @@ For these files, consider:
 7. AVOID Write, execute_command, and write_to_file tools if they're failing`
  }
  
- const fixPrompt = `${strategy.instruction}
+ // Put errors FIRST, then brief instruction
+ const fixPrompt = `${errorReport}
 
-${errorReport}
-
-${strategy.guidance}${forceCleanWriteGuidance}
-
-Original request: ${userPrompt}`;
+${strategy.instruction}${forceCleanWriteGuidance}`;
  
  console.log(`[ENHANCED_CLINE] 🔄 Asking Cline to fix errors (attempt ${attempt + 1}, strategy: ${pattern})...`);
  userPrompt = fixPrompt; // Update prompt for next iteration
  
- // Use focused system prompt for error fixing
- systemAppend = getFocusedSystemPrompt(pattern);
+ // Use fix task system prompt for error-aware conversation
+ systemAppend = getFixTaskSystemPrompt();
  }
  }
  
@@ -785,7 +783,7 @@ Original request: ${userPrompt}`;
  }); // Close TemplateManager.withTemplateIsolation
 }
 
-async function runClineCLIInDir(cwd: string, userPrompt: string, systemAppend: string, useBetterModelForSyntax?: boolean): Promise<ClineResult> {
+async function runClineCLIInDir(cwd: string, userPrompt: string, systemAppend: string, useBetterModelForSyntax?: boolean, isFixTask?: boolean): Promise<ClineResult> {
 	// Resolve absolute project directory and prepare prompts
 	const absProjectDir = path.resolve(cwd);
 	const userArg = userPrompt;
@@ -814,6 +812,7 @@ async function runClineCLIInDir(cwd: string, userPrompt: string, systemAppend: s
 	
 	return new Promise((resolve, reject) => {
 		
+		// Add fix-task flag for error-aware conversations
 		const baseArgs = shouldResumeIncompleteTask ? [
 			'task',
 			'--full-auto',
@@ -821,6 +820,7 @@ async function runClineCLIInDir(cwd: string, userPrompt: string, systemAppend: s
 			'--settings', clineConfigPath,
 			'--workspace', absProjectDir,
 			'--custom-instructions', systemAppend,
+			...(isFixTask ? ['--fix-task'] : []), // Add fix-task flag for error context injection
 			'--resume-or-new',  // Use resume-or-new flag to automatically resume incomplete tasks
 			userArg
 		] : [
@@ -830,6 +830,7 @@ async function runClineCLIInDir(cwd: string, userPrompt: string, systemAppend: s
 			'--settings', clineConfigPath,
 			'--workspace', absProjectDir,
 			'--custom-instructions', systemAppend,
+			...(isFixTask ? ['--fix-task'] : []), // Add fix-task flag for error context injection
 			userArg
 		];
 		
@@ -2464,7 +2465,10 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		 - Use os dados consolidados para informar TODAS as decisões de design subsequentes
 		 - O analisador automaticamente seleciona, captura e analisa sites de inspiração baseado no tema
 		 - Documente claramente como cada elemento de inspiração foi aplicado
-		6) ADICIONE VÍDEOS PROFISSIONAIS: Use mcp__recflux__puppeteer_search com searchType='videos' para encontrar vídeos de background relevantes ao tema para o hero
+		6) ADICIONE VÍDEOS PROFISSIONAIS: Use mcp__recflux__puppeteer_search com searchType='videos' para encontrar e analisar vídeos de background relevantes ao tema para o hero
+		 - O sistema irá automaticamente analisar até 10 vídeos e selecionar o melhor para o tema
+		 - A análise considera relevância temática, qualidade profissional, adequação como background e apelo estético
+		 - Use o vídeo selecionado pelo AI com sua análise de confiança e raciocínio fornecidos
 		 🚨 REMINDER: NavBar is already in layout.tsx - NEVER add NavBar to page.tsx 🚨
 		 🚨 REMINDER: DO NOT CREATE NEW NAVIGATION - NavBar exists in app/layout.tsx 🚨
 		 🚨 FOOTER MODIFICATION RULE: ALWAYS modify footer content in app/layout.tsx, NOT in page.tsx 🚨

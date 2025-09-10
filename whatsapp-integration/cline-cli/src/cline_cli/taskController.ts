@@ -212,6 +212,15 @@ export class TaskController {
         this._fullAuto = true
     }
 
+    setFixTaskMode() {
+        // Fix task mode enables real-time error context injection
+        // This can be used by the AI assistant to get current validation status
+        console.log('[TaskController] Fix task mode enabled - real-time error context available')
+        
+        // Set a global flag that the Task class can check during initialization
+        global.CLINE_FIX_TASK_MODE = true
+    }
+
     startNewTask(task: string) {
         this._task = task
         this._clineAPI.startNewTask(task)

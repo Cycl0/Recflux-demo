@@ -1,11 +1,14 @@
 {
   "name": "test-project",
   "version": "1.0.0",
+  "type": "module",
   "scripts": {
-    "build": "echo 'Build would run here'"
+    "build": "tsc",
+    "lint": "eslint .",
+    "test": "echo 'No tests specified' && exit 0"
   },
-  "dependencies": {
-    "react": "^18.0.0",
-    "react-dom": "^18.0.0"
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "eslint": "^8.0.0"
   }
 }

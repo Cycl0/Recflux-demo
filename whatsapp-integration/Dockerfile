@@ -83,10 +83,24 @@ RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | gpg --d
 RUN python3 -m venv /opt/crawl4ai-venv \
     && /opt/crawl4ai-venv/bin/pip install --upgrade pip \
     && /opt/crawl4ai-venv/bin/pip install crawl4ai \
-    && ln -sf /opt/crawl4ai-venv/bin/crwl /usr/local/bin/crwl
+    && ln -sf /opt/crawl4ai-venv/bin/crwl /usr/local/bin/crwl \
+    && ln -sf /opt/crawl4ai-venv/bin/crawl4ai-setup /usr/local/bin/crawl4ai-setup
+
+# Run crawl4ai-setup as root first
+RUN crawl4ai-setup
+
+# Install playwright system dependencies as root first
+RUN /opt/crawl4ai-venv/bin/playwright install-deps chromium
 
 # Create non-root user with home directory
 RUN groupadd -r appuser && useradd -r -g appuser -m appuser
+
+# Install playwright browsers as appuser (this ensures they're in the right location)
+USER appuser
+RUN /opt/crawl4ai-venv/bin/playwright install chromium
+
+# Switch back to root for the remaining file operations
+USER root
 
 # Copy built artifacts and config
 COPY --from=builder /app/dist ./dist
@@ -130,6 +144,7 @@ ENV MCP_ARGS="dist/mcp-server.js"
 ENV OPENAI_API_KEY=""
 ENV OPEN_AI_API_KEY=""
 ENV OPEN_ROUTER_API_KEY=""
+ENV OPENROUTER_API_KEY=""
 ENV GROQ_API_KEY=""
 ENV SERVICES_HOST="localhost"
 ENV SERVICES_SCHEME="http"
@@ -146,6 +161,8 @@ ENV ANTHROPIC_API_KEY=""
 ENV BROWSERBASE_API_KEY=""
 ENV BROWSERBASE_PROJECT_ID=""
 ENV PEXELS_API_KEY=""
+ENV IMGBB_API_KEY=""
+ENV FREEPIK_API_KEY=""
 
 # Project directory inside container (should be a volume)
 ENV CLONED_TEMPLATE_DIR="/workspace/project"
