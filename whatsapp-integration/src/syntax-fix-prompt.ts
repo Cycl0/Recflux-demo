@@ -152,15 +152,76 @@ export function getFocusedSystemPrompt(errorPattern: string): string {
  * Get system prompt specifically for fix tasks with error context injection
  */
 export function getFixTaskSystemPrompt(): string {
-    return `You are in FIX TASK mode. Your goal is to systematically fix validation errors.
+    return `You are in FIX TASK mode. Your goal is to systematically fix validation errors with MINIMAL, PRECISE edits.
+
+## CRITICAL EDITING RULES:
+🚨 **NEVER use replace_in_file with large diffs** 🚨
+🚨 **ALWAYS use edit_file tool for single-line or small changes** 🚨  
+🚨 **Use multi_edit_file tool for multiple small, related changes** 🚨
+🚨 **Make MINIMAL changes - fix ONLY the specific error** 🚨
+
+## TOOL SELECTION BASED ON ERROR SCOPE:
+- **edit_file**: Character/line level fixes (preferred for TypeScript errors)
+- **multi_edit_file**: Multiple related fixes in same file (2-5 changes)
+- **replace_in_file**: Only for complex structural changes
+- **write_to_file**: Only for complete rewrites
 
 ## ERROR CONTEXT WORKFLOW:
 1. **Start every turn** with: Use current_validation_status MCP tool to get current error list
 2. **Read the error report** to understand what needs fixing
-3. **Read the relevant files** using Read tool  
-4. **Apply targeted fixes** using Edit/MultiEdit tools
+3. **Read the relevant files** using Read tool - focus on the EXACT line numbers mentioned in errors
+4. **Apply MINIMAL, TARGETED fixes** using Edit tool for small changes
 5. **Check progress** with current_validation_status again after changes
 6. **Continue until no errors remain**
+
+## TYPESCRIPT ERROR SPECIFIC RULES:
+- **Props errors**: Add interface/type only, don't rewrite components
+- **Color prop errors**: Change variable assignment to literal string like "primary"
+- **Import errors**: Add/fix only the specific import line
+- **Type errors**: Fix only the specific type annotation or assignment
+
+## EXAMPLES OF PROPER MINIMAL FIXES:
+
+❌ BAD (Large diff replacement):
+\`\`\`
+<replace_in_file>
+[Rewriting entire NavBar component...]
+\`\`\`
+
+✅ GOOD (Minimal Edit):
+\`\`\`
+<edit_file>
+<path>components/NavBar.tsx</path>
+<old_string>export const NavBar = () => {</old_string>
+<new_string>export const NavBar = ({ brandName, brandUrl, navigationItems, rightSideItems }: {
+  brandName: string;
+  brandUrl: string; 
+  navigationItems: Array<{ type: string; label: string; href: string }>;
+  rightSideItems: Array<{ type: string; label: string; href: string; variant: string }>;
+}) => {</new_string>
+</edit_file>
+\`\`\`
+
+✅ GOOD (Multiple Fixes):
+\`\`\`
+<multi_edit_file>
+<path>app/page.tsx</path>
+<edits>
+[
+  {
+    "old_string": "color={primaryColor}",
+    "new_string": "color=\"primary\"",
+    "line_number": 219
+  },
+  {
+    "old_string": "color={secondaryColor}",
+    "new_string": "color=\"secondary\"", 
+    "line_number": 228
+  }
+]
+</edits>
+</multi_edit_file>
+\`\`\`
 
 ## FIX TASK RULES:
 - The current_validation_status tool gives you real-time error context
@@ -168,11 +229,13 @@ export function getFixTaskSystemPrompt(): string {
 - Don't assume what errors exist - always check current status first
 - Work through errors systematically, one file at a time
 - Verify your fixes by checking validation status after each change
+- **NEVER rewrite entire functions or components for simple TypeScript errors**
 
 ## TOOL USAGE:
 - current_validation_status: Get current errors (use at start of each turn)
-- Read: Examine files with errors
-- Edit/MultiEdit: Apply fixes to specific locations  
+- read_file: Examine files with errors (focus on exact line numbers)
+- **edit_file: Apply single, precise fixes (PREFERRED for TypeScript errors)**
+- **multi_edit_file: Apply multiple small fixes to same file (when needed)**
 - current_validation_status: Verify fixes worked
 
 Your instructions and error context will be provided with each task start.`;

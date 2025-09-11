@@ -9,7 +9,10 @@
       "Bash(npx mocha:*)",
       "Bash(node:*)",
       "Bash(npm test)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(docker cp:*)",
+      "Bash(find:*)",
+      "Bash(sed:*)"
     ],
     "deny": [],
     "ask": []

@@ -3,6 +3,47 @@ import { promises as fs } from 'fs';
 import path from 'path';
 import { watch, FSWatcher } from 'chokidar';
 
+// Import for enhanced contextual error analysis
+interface StructureAnalyzer {
+    analyzeEditScope(error: any, fileContent: string, filePath: string): any;
+}
+
+// Mock StructureAnalyzer for now - will be replaced with actual import when cline-cli is integrated
+const mockStructureAnalyzer: StructureAnalyzer = {
+    analyzeEditScope(error: any, fileContent: string, filePath: string) {
+        const message = error.message?.toLowerCase() || '';
+        
+        // Determine edit scope based on error type
+        let scopeLevel: 'character' | 'line' | 'expression' | 'block' | 'function' = 'line';
+        let recommendedTool: 'edit_file' | 'multi_edit_file' | 'replace_in_file' = 'edit_file';
+        
+        if (message.includes('cannot find name') || message.includes('missing import')) {
+            scopeLevel = 'line';
+            recommendedTool = 'edit_file';
+        } else if (message.includes('not assignable to type')) {
+            scopeLevel = 'expression';
+            recommendedTool = 'edit_file';
+        } else if (message.includes('has no properties in common')) {
+            scopeLevel = 'line';
+            recommendedTool = 'edit_file';
+        } else if (message.includes('jsx') || message.includes('tag')) {
+            scopeLevel = 'block';
+            recommendedTool = 'multi_edit_file';
+        }
+        
+        return {
+            editScope: {
+                level: scopeLevel,
+                operation: 'replace',
+                requiresMultiEdit: recommendedTool === 'multi_edit_file',
+                confidence: 0.8
+            },
+            recommendedTool,
+            contextualGuidance: `${scopeLevel.toUpperCase()}-LEVEL fix using ${recommendedTool}`
+        };
+    }
+};
+
 export interface ValidationResult {
     isValid: boolean;
     errors: ValidationError[];
@@ -1703,7 +1744,7 @@ function getPatternGuidance(pattern: string): string {
 /**
  * Generate error report for Cline CLI - focused format for fix tasks
  */
-export function generateErrorReport(validation: ValidationResult, isFixTask: boolean = false): string {
+export async function generateErrorReport(validation: ValidationResult, isFixTask: boolean = false): Promise<string> {
     console.log(`[VALIDATION] Generating error report. isValid: ${validation.isValid}, errors: ${validation.errors.length}, fixTask: ${isFixTask}`);
     
     if (validation.isValid) {
@@ -1716,7 +1757,7 @@ export function generateErrorReport(validation: ValidationResult, isFixTask: boo
 
     // Use focused format for fix tasks to prevent model sidetracking
     if (isFixTask) {
-        return generateFocusedErrorReport(validation);
+        return await generateFocusedErrorReport(validation);
     }
 
     // Original verbose format for initial reports
@@ -1765,7 +1806,7 @@ export function generateErrorReport(validation: ValidationResult, isFixTask: boo
 /**
  * Generate focused error report specifically for fix tasks - errors first, no strategy text
  */
-function generateFocusedErrorReport(validation: ValidationResult): string {
+async function generateFocusedErrorReport(validation: ValidationResult): Promise<string> {
     const report: string[] = [];
     report.push("🚨 CURRENT ERRORS TO FIX:");
     report.push("");
@@ -1786,8 +1827,8 @@ function generateFocusedErrorReport(validation: ValidationResult): string {
             report.push(`${file}${location}`);
             report.push(`❌ ${error.message}`);
             
-            // Add specific fix instruction based on error type
-            const fixInstruction = getSpecificFixInstruction(error);
+            // Add specific fix instruction based on error type with StructureAnalyzer enhancement
+            const fixInstruction = await getSpecificFixInstruction(error);
             if (fixInstruction) {
                 report.push(`🔧 ${fixInstruction}`);
             }
@@ -1802,43 +1843,72 @@ function generateFocusedErrorReport(validation: ValidationResult): string {
 /**
  * Get specific fix instruction for common error patterns
  */
-function getSpecificFixInstruction(error: ValidationError): string {
+async function getSpecificFixInstruction(error: ValidationError): Promise<string> {
     const message = error.message.toLowerCase();
+    
+    // Try to get file content for StructureAnalyzer
+    let fileContent = '';
+    let analysisResult = null;
+    
+    try {
+        if (error.file && error.file !== 'unknown') {
+            fileContent = await fs.readFile(error.file, 'utf8');
+            analysisResult = mockStructureAnalyzer.analyzeEditScope(error, fileContent, error.file);
+        }
+    } catch (e) {
+        // Continue without structure analysis if file read fails
+    }
+    
+    // Build base fix instruction
+    let baseInstruction = '';
     
     // Import/Export errors - handle "Cannot find name" specifically
     if (message.includes('cannot find name')) {
         const match = error.message.match(/Cannot find name '([^']+)'/);
         const componentName = match ? match[1] : 'component';
         if (componentName === 'Code') {
-            return `Missing import: Add \`import { Code } from "@heroui/code"\` OR replace \`<Code>\` with \`<span>\``;
+            baseInstruction = `Missing import: Add \`import { Code } from "@heroui/code"\` OR replace \`<Code>\` with \`<span>\``;
+        } else {
+            baseInstruction = `Missing import: Add \`import { ${componentName} } from "@heroui/${componentName.toLowerCase()}"\` OR replace with valid element`;
         }
-        return `Missing import: Add \`import { ${componentName} } from "@heroui/${componentName.toLowerCase()}"\` OR replace with valid element`;
     }
-    
     // Type assignment errors - handle specific HeroUI component prop errors
-    if (message.includes('not assignable to type')) {
+    else if (message.includes('not assignable to type')) {
         if (message.includes('"default"') && message.includes('"primary"')) {
-            return `Invalid Button/Chip color prop: Change string variable to literal like "primary", "secondary", "warning", "danger"`;
+            baseInstruction = `Invalid Button/Chip color prop: Change string variable to literal like "primary", "secondary", "warning", "danger"`;
+        } else {
+            baseInstruction = `Invalid prop value: Change to one of the allowed type values`;
         }
-        return `Invalid prop value: Change to one of the allowed type values`;
     }
-    
+    // Interface/Props errors
+    else if (message.includes('has no properties in common')) {
+        baseInstruction = `Fix syntax error at specified location`;
+    }
     // Duplicate code
-    if (message.includes('duplicate')) {
-        return `Remove duplicate ${message.includes('export') ? 'export' : 'declaration'}`;
+    else if (message.includes('duplicate')) {
+        baseInstruction = `Remove duplicate ${message.includes('export') ? 'export' : 'declaration'}`;
     }
-    
     // JSX errors
-    if (message.includes('jsx') || message.includes('unexpected token')) {
-        return `Fix JSX syntax: Check for unclosed tags, missing brackets, or malformed elements`;
+    else if (message.includes('jsx') || message.includes('unexpected token')) {
+        baseInstruction = `Fix JSX syntax: Check for unclosed tags, missing brackets, or malformed elements`;
+    }
+    // Generic fix instruction
+    else {
+        baseInstruction = `Fix syntax error`;
     }
     
-    // Missing brackets/braces
-    if (message.includes('expected') && (message.includes('}') || message.includes(';'))) {
-        return `Add missing bracket/brace: Check function closures and JSX element closing`;
+    // Enhance with StructureAnalyzer recommendations if available
+    if (analysisResult) {
+        const toolRecommendation = analysisResult.recommendedTool === 'edit_file' ? 
+            'Use edit_file for targeted fix' : 
+            analysisResult.recommendedTool === 'multi_edit_file' ? 
+            'Use multi_edit_file for multiple related changes' : 
+            'Use replace_in_file for complex changes';
+        
+        return `${baseInstruction} (${toolRecommendation})`;
     }
     
-    return `Fix syntax error at specified location`;
+    return baseInstruction;
 }
 
 // Helper functions

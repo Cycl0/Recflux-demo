@@ -198,19 +198,34 @@ IMPORTANT: Respond with ONLY the JSON object above. No additional text or explan
                 logWithTimestamp(`[VIDEO_ANALYZER] Video ${index + 1}: "${video.title}" - Thumbnail: ${video.thumbnail}`);
             });
             // Prepare vision API request with thumbnail URLs directly
-            const imageContent = videosToAnalyze.map((video, index) => [
-                {
-                    type: 'text',
-                    text: `VIDEO ${index + 1} (${video.title}):`
-                },
-                {
-                    type: 'image_url',
-                    image_url: {
-                        url: video.thumbnail,
-                        detail: 'low' // Use low detail for faster processing of multiple images
-                    }
+            // Strip query parameters from thumbnail URLs for better vision model compatibility
+            const cleanThumbnailUrl = (url) => {
+                try {
+                    const urlObj = new URL(url);
+                    return urlObj.origin + urlObj.pathname;
                 }
-            ]).flat();
+                catch (error) {
+                    logWithTimestamp(`[VIDEO_ANALYZER] Warning: Could not parse URL ${url}, using original`);
+                    return url;
+                }
+            };
+            const imageContent = videosToAnalyze.map((video, index) => {
+                const cleanUrl = cleanThumbnailUrl(video.thumbnail);
+                logWithTimestamp(`[VIDEO_ANALYZER] Video ${index + 1} clean URL: ${cleanUrl}`);
+                return [
+                    {
+                        type: 'text',
+                        text: `VIDEO ${index + 1} (${video.title}):`
+                    },
+                    {
+                        type: 'image_url',
+                        image_url: {
+                            url: cleanUrl,
+                            detail: 'low' // Use low detail for faster processing of multiple images
+                        }
+                    }
+                ];
+            }).flat();
             const visionRequest = {
                 model: this.config.model,
                 max_tokens: this.config.maxTokens,

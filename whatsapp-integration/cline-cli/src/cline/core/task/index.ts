@@ -1380,6 +1380,8 @@ export class Task {
 					]
 				case "write_to_file":
 				case "replace_in_file":
+				case "edit_file":
+				case "multi_edit_file":
 					return [
 						this.autoApprovalSettings.actions.editFiles,
 						this.autoApprovalSettings.actions.editFilesExternally ?? false,
@@ -1676,6 +1678,10 @@ export class Task {
 						case "write_to_file":
 							return `[${block.name} for '${block.params.path}']`
 						case "replace_in_file":
+							return `[${block.name} for '${block.params.path}']`
+						case "edit_file":
+							return `[${block.name} for '${block.params.path}']`
+						case "multi_edit_file":
 							return `[${block.name} for '${block.params.path}']`
 						case "search_files":
 							return `[${block.name} for '${block.params.regex}'${
@@ -2155,6 +2161,209 @@ export class Task {
 
 							break
 						}
+					}
+					case "edit_file": {
+						const relPath: string | undefined = block.params.path
+						const oldString: string | undefined = block.params.old_string
+						const newString: string | undefined = block.params.new_string
+						const lineNumber: number | undefined = block.params.line_number
+						
+						if (!relPath || oldString === undefined || newString === undefined) {
+							this.consecutiveMistakeCount++
+							pushToolResult(formatResponse.toolError(
+								"edit_file requires path, old_string, and new_string parameters"
+							))
+							break
+						}
+
+						const accessAllowed = this.clineIgnoreController.validateAccess(relPath)
+						if (!accessAllowed) {
+							await this.say("clineignore_error", relPath)
+							pushToolResult(formatResponse.toolError(formatResponse.clineIgnoreError(relPath)))
+							break
+						}
+
+						try {
+							const absolutePath = path.resolve(cwd, relPath)
+							const fileExists = await fileExistsAtPath(absolutePath)
+							
+							if (!fileExists) {
+								pushToolResult(formatResponse.toolError(`File does not exist: ${relPath}`))
+								break
+							}
+
+							// Read current file content
+							const originalContent = await fs.readFile(absolutePath, "utf8")
+							
+							// Find and replace the exact string
+							const newContent = originalContent.replace(oldString, newString)
+							
+							if (newContent === originalContent) {
+								pushToolResult(formatResponse.toolError(
+									`String not found in ${relPath}: "${oldString}"`
+								))
+								break
+							}
+
+							// Write the updated content
+							await fs.writeFile(absolutePath, newContent, "utf8")
+
+							// Track the edit
+							this.fileContextTracker.markFileAsEditedByCline(relPath)
+							await this.fileContextTracker.trackFileContext(relPath, "cline_edited")
+							this.didEditFile = true
+
+							const sharedMessageProps: ClineSayTool = {
+								tool: "editedExistingFile",
+								path: getReadablePath(cwd, relPath),
+								content: `${oldString} → ${newString}`,
+								operationIsLocatedInWorkspace: isLocatedInWorkspace(relPath),
+							}
+
+							if (this.shouldAutoApproveToolWithPath(block.name, relPath)) {
+								await this.say("tool", JSON.stringify(sharedMessageProps))
+								this.consecutiveAutoApprovedRequestsCount++
+								telemetryService.captureToolUsage(this.taskId, block.name, true, true)
+							} else {
+								const { response, text, images } = await this.ask("tool", JSON.stringify(sharedMessageProps))
+								if (response !== "yesButtonClicked") {
+									// Revert the change
+									await fs.writeFile(absolutePath, originalContent, "utf8")
+									pushToolResult("The user denied this operation. The file was not updated.")
+									if (text || images?.length) {
+										pushAdditionalToolFeedback(text, images)
+										await this.say("user_feedback", text, images)
+									}
+									this.didRejectTool = true
+									telemetryService.captureToolUsage(this.taskId, block.name, false, false)
+									break
+								} else {
+									if (text || images?.length) {
+										pushAdditionalToolFeedback(text, images)
+										await this.say("user_feedback", text, images)
+									}
+									telemetryService.captureToolUsage(this.taskId, block.name, false, true)
+								}
+							}
+
+							pushToolResult(formatResponse.fileEditWithoutUserChanges(relPath, "", newContent, ""))
+							await this.saveCheckpoint()
+
+						} catch (error) {
+							await handleError("editing file", error)
+						}
+
+						break
+					}
+					case "multi_edit_file": {
+						const relPath: string | undefined = block.params.path
+						const edits: Array<{old_string: string, new_string: string, line_number?: number}> | undefined = block.params.edits
+						
+						if (!relPath || !edits || !Array.isArray(edits) || edits.length === 0) {
+							this.consecutiveMistakeCount++
+							pushToolResult(formatResponse.toolError(
+								"multi_edit_file requires path and edits array parameters"
+							))
+							break
+						}
+
+						const accessAllowed = this.clineIgnoreController.validateAccess(relPath)
+						if (!accessAllowed) {
+							await this.say("clineignore_error", relPath)
+							pushToolResult(formatResponse.toolError(formatResponse.clineIgnoreError(relPath)))
+							break
+						}
+
+						try {
+							const absolutePath = path.resolve(cwd, relPath)
+							const fileExists = await fileExistsAtPath(absolutePath)
+							
+							if (!fileExists) {
+								pushToolResult(formatResponse.toolError(`File does not exist: ${relPath}`))
+								break
+							}
+
+							// Read current file content
+							let currentContent = await fs.readFile(absolutePath, "utf8")
+							const originalContent = currentContent
+							
+							// Apply all edits sequentially
+							const appliedEdits: string[] = []
+							for (const edit of edits) {
+								if (edit.old_string === undefined || edit.new_string === undefined) {
+									pushToolResult(formatResponse.toolError(
+										"Each edit must have old_string and new_string"
+									))
+									break
+								}
+								
+								const beforeEdit = currentContent
+								currentContent = currentContent.replace(edit.old_string, edit.new_string)
+								
+								if (currentContent === beforeEdit) {
+									pushToolResult(formatResponse.toolError(
+										`String not found in ${relPath}: "${edit.old_string}"`
+									))
+									break
+								}
+								
+								appliedEdits.push(`${edit.old_string} → ${edit.new_string}`)
+							}
+
+							if (appliedEdits.length !== edits.length) {
+								// Some edits failed, don't apply any changes
+								break
+							}
+
+							// Write the updated content
+							await fs.writeFile(absolutePath, currentContent, "utf8")
+
+							// Track the edit
+							this.fileContextTracker.markFileAsEditedByCline(relPath)
+							await this.fileContextTracker.trackFileContext(relPath, "cline_edited")
+							this.didEditFile = true
+
+							const sharedMessageProps: ClineSayTool = {
+								tool: "editedExistingFile",
+								path: getReadablePath(cwd, relPath),
+								content: appliedEdits.join("; "),
+								operationIsLocatedInWorkspace: isLocatedInWorkspace(relPath),
+							}
+
+							if (this.shouldAutoApproveToolWithPath(block.name, relPath)) {
+								await this.say("tool", JSON.stringify(sharedMessageProps))
+								this.consecutiveAutoApprovedRequestsCount++
+								telemetryService.captureToolUsage(this.taskId, block.name, true, true)
+							} else {
+								const { response, text, images } = await this.ask("tool", JSON.stringify(sharedMessageProps))
+								if (response !== "yesButtonClicked") {
+									// Revert the changes
+									await fs.writeFile(absolutePath, originalContent, "utf8")
+									pushToolResult("The user denied this operation. The file was not updated.")
+									if (text || images?.length) {
+										pushAdditionalToolFeedback(text, images)
+										await this.say("user_feedback", text, images)
+									}
+									this.didRejectTool = true
+									telemetryService.captureToolUsage(this.taskId, block.name, false, false)
+									break
+								} else {
+									if (text || images?.length) {
+										pushAdditionalToolFeedback(text, images)
+										await this.say("user_feedback", text, images)
+									}
+									telemetryService.captureToolUsage(this.taskId, block.name, false, true)
+								}
+							}
+
+							pushToolResult(formatResponse.fileEditWithoutUserChanges(relPath, "", currentContent, ""))
+							await this.saveCheckpoint()
+
+						} catch (error) {
+							await handleError("editing file", error)
+						}
+
+						break
 					}
 					case "read_file": {
 						const relPath: string | undefined = block.params.path

@@ -10,6 +10,7 @@ import path from 'path';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import puppeteer from 'puppeteer';
+import ffmpeg from 'fluent-ffmpeg';
 import { configureAuth, getUserByWhatsApp } from './auth.js';
 import { createClient } from '@supabase/supabase-js';
 import { deployToNetlify } from './deploy-netlify.js';
@@ -564,7 +565,7 @@ async function runClineCLIInDirWithValidation(cwd, userPrompt, systemAppend, max
             }
             // If we have remaining errors and attempts left, ask Cline to fix them
             if (attempt < maxRetries) {
-                const errorReport = generateErrorReport(lastValidation || validation, true); // isFixTask = true for focused format
+                const errorReport = await generateErrorReport(lastValidation || validation, true); // isFixTask = true for focused format
                 const pattern = detectErrorPattern(validation.errors);
                 // Apply enhanced circuit breaker logic for problematic files
                 const problemFiles = validation.errors.map(e => e.file).filter(f => f && f !== 'unknown');
@@ -643,13 +644,14 @@ ${strategy.instruction}${forceCleanWriteGuidance}`;
         }
         // All attempts exhausted
         console.log(`[ENHANCED_CLINE] ❌ All ${maxRetries} attempts exhausted. Final validation result:`);
-        console.log(generateErrorReport(lastValidation));
+        const finalErrorReport = await generateErrorReport(lastValidation);
+        console.log(finalErrorReport);
         return {
             code: lastValidation?.isValid ? 0 : 1,
-            stderr: generateErrorReport(lastValidation),
+            stderr: finalErrorReport,
             stdout: `Validation failed after ${maxRetries} attempts`,
             stdoutLen: 0,
-            stderrLen: generateErrorReport(lastValidation).length,
+            stderrLen: finalErrorReport.length,
             validationResult: lastValidation || undefined
         };
     }); // Close TemplateManager.withTemplateIsolation
@@ -808,148 +810,248 @@ async function runClineCLIInDir(cwd, userPrompt, systemAppend, useBetterModelFor
         });
     });
 }
-async function takeScreenshot(targetUrl) {
-    console.log('Taking screenshot...');
-    const browser = await puppeteer.launch({
-        args: ['--no-sandbox', '--disable-setuid-sandbox'],
-        executablePath: '/usr/bin/google-chrome-stable',
-    });
+// Global browser instance for reuse - major performance improvement
+let globalBrowser = null;
+async function getOrCreateBrowser() {
+    if (!globalBrowser || globalBrowser.process()?.killed) {
+        console.log('[SCREENSHOT] Creating new browser instance...');
+        globalBrowser = await puppeteer.launch({
+            args: ['--no-sandbox', '--disable-setuid-sandbox'],
+            executablePath: '/usr/bin/google-chrome-stable',
+        });
+        // Auto-close after 5 minutes of inactivity to prevent memory leaks
+        setTimeout(() => {
+            if (globalBrowser) {
+                globalBrowser.close().catch(() => { });
+                globalBrowser = null;
+            }
+        }, 5 * 60 * 1000);
+    }
+    return globalBrowser;
+}
+async function takeScreenshot(targetUrl, createGif = true) {
+    console.log(`[SCREENSHOT] ${createGif ? '🎬 Creating GIF preview' : '📸 Taking screenshot'} for: ${targetUrl}`);
+    const startTime = Date.now();
+    const browser = await getOrCreateBrowser();
     const page = await browser.newPage();
-    await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 });
-    // Navigate to intended URL
     try {
-        await page.goto(targetUrl, { waitUntil: 'networkidle0', timeout: 60000 });
-    }
-    catch (networkError) {
-        console.warn('networkidle0 failed, trying domcontentloaded:', networkError);
-        await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 30000 });
-        await new Promise(resolve => setTimeout(resolve, 2000));
-    }
-    // Wait for Netlify site to be ready (if needed)
-    try {
-        const current = page.url();
-        // Check if Netlify site is showing a loading state
-        const hasLoadingState = await page.evaluate(() => {
-            const doc = globalThis.document;
-            const bodyText = ((doc?.body?.innerText) || '').toLowerCase();
-            return bodyText.includes('deploying') || bodyText.includes('building') || bodyText.includes('please wait');
-        }).catch(() => false);
-        if (hasLoadingState) {
-            console.log('[SCREENSHOT] Netlify site appears to be loading, waiting a moment...');
-            await new Promise(resolve => setTimeout(resolve, 5000));
-            // Try a light refresh to get the latest state
-            try {
-                await page.reload({ waitUntil: 'networkidle0', timeout: 30000 });
-            }
-            catch {
-                await page.reload({ waitUntil: 'domcontentloaded', timeout: 15000 });
-            }
+        await page.setViewport({ width: 1280, height: 720, deviceScaleFactor: 1 });
+        // MUCH faster navigation - reduced from 60s to 12s max
+        console.log('[SCREENSHOT] 🚀 Fast navigation...');
+        try {
+            await page.goto(targetUrl, { waitUntil: 'domcontentloaded', timeout: 12000 });
         }
-    }
-    catch (e) {
-        console.warn('[SCREENSHOT] Netlify loading check failed:', e?.message || e);
-    }
-    // Check if site is fully ready (for any deployment platform)
-    async function waitUntilSiteReady(maxMs) {
-        const start = Date.now();
-        while (Date.now() - start < maxMs) {
-            const loading = await page.evaluate(() => {
-                const doc = globalThis.document;
-                if (!doc || !doc.body)
-                    return true;
-                const text = ((doc.body.innerText || '').toLowerCase());
-                const hasLoader = text.includes('loading') || text.includes('building') ||
-                    text.includes('deploying') || text.includes('installing') ||
-                    text.includes('preparing');
-                return hasLoader;
-            });
-            if (!loading)
-                return true;
-            console.log('[SCREENSHOT] Site still loading, waiting 5s…');
-            await new Promise(res => setTimeout(res, 5000));
-            // Do a light reload every 20s to check for updates
-            if ((Date.now() - start) % 20000 < 5000) {
-                try {
-                    await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
-                }
-                catch { }
-            }
+        catch (navError) {
+            console.warn('[SCREENSHOT] ⚠️  Initial nav failed, trying networkidle2...', navError);
+            await page.goto(targetUrl, { waitUntil: 'networkidle2', timeout: 15000 });
         }
-        return false;
-    }
-    const siteReady = await waitUntilSiteReady(180000); // up to 3 minutes
-    if (!siteReady) {
-        console.warn('[SCREENSHOT] Timed out waiting for site to load; proceeding anyway');
-    }
-    // Wait for meaningful content to render (avoid blank screenshot)
-    async function waitForMeaningfulContent(maxMs) {
-        const start = Date.now();
-        while (Date.now() - start < maxMs) {
-            const hasContent = await page.evaluate(() => {
+        // Quick content readiness check - reduced from 3+ minutes to 8 seconds max
+        console.log('[SCREENSHOT] ⏳ Quick content check...');
+        const waitStart = Date.now();
+        let isContentReady = false;
+        while (Date.now() - waitStart < 8000 && !isContentReady) {
+            isContentReady = await page.evaluate(() => {
                 const doc = globalThis.document;
                 if (!doc || !doc.body)
                     return false;
-                // Candidates for app roots
-                const roots = ['#root', '#app', 'main', 'body'];
-                for (const sel of roots) {
-                    const el = doc.querySelector(sel);
-                    if (el && el.getBoundingClientRect) {
-                        const r = el.getBoundingClientRect();
-                        if (r && r.width * r.height > 50000)
-                            return true;
-                    }
-                }
-                // Any large visible element
-                const nodes = Array.from(doc.querySelectorAll('*'));
-                for (const n of nodes) {
-                    if (!n || !n.getBoundingClientRect)
-                        continue;
-                    const s = doc.defaultView.getComputedStyle(n);
-                    if (!s || s.visibility === 'hidden' || s.display === 'none')
-                        continue;
-                    const r = n.getBoundingClientRect();
-                    if (r && r.width * r.height > 50000)
-                        return true;
-                }
-                // Any loaded image
-                const imgs = Array.from(doc.images || []);
-                if (imgs.some(img => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0))
-                    return true;
-                // Fallback: sufficient text content
-                const textLen = ((doc.body.innerText || '').trim()).length;
-                return textLen > 50;
+                const text = (doc.body.innerText || '').toLowerCase();
+                const hasLoadingText = text.includes('loading') ||
+                    text.includes('deploying') ||
+                    text.includes('building') ||
+                    text.includes('please wait') ||
+                    text.includes('just a moment');
+                // Check for meaningful content
+                const textLength = text.length;
+                const hasImages = doc.querySelectorAll('img').length > 0;
+                const hasButtons = doc.querySelectorAll('button, .btn, a[href]').length > 0;
+                const hasHeadings = doc.querySelectorAll('h1, h2, h3').length > 0;
+                const hasContent = textLength > 100 && (hasImages || hasButtons || hasHeadings);
+                return hasContent && !hasLoadingText;
+            }).catch(() => false);
+            if (!isContentReady) {
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+        }
+        if (!isContentReady) {
+            console.log('[SCREENSHOT] ⚡ Content not fully ready, proceeding anyway...');
+        }
+        else {
+            console.log('[SCREENSHOT] ✅ Content ready!');
+        }
+        // Allow frames to render
+        await page.evaluate(() => new Promise(r => globalThis.requestAnimationFrame(r)));
+        if (createGif) {
+            // Create animated GIF preview
+            console.log('[SCREENSHOT] 🎬 Creating animated GIF...');
+            const gifData = await createAnimatedPreview(page);
+            const duration = Date.now() - startTime;
+            console.log(`[SCREENSHOT] ✨ GIF created in ${duration}ms (${Math.round(duration / 1000)}s)`);
+            return gifData;
+        }
+        else {
+            // Single optimized screenshot
+            console.log('[SCREENSHOT] 📸 Taking optimized screenshot...');
+            const screenshotBuffer = await page.screenshot({
+                encoding: 'base64',
+                fullPage: false,
+                quality: 80,
+                type: 'jpeg' // JPEG is smaller than PNG
             });
-            if (hasContent)
-                return true;
-            await new Promise(res => setTimeout(res, 1000));
+            const duration = Date.now() - startTime;
+            console.log(`[SCREENSHOT] ✅ Screenshot taken in ${duration}ms (${Math.round(duration / 1000)}s)`);
+            return screenshotBuffer;
         }
-        return false;
     }
-    let contentReady = await waitForMeaningfulContent(20000);
-    if (!contentReady) {
-        console.warn('[SCREENSHOT] No meaningful content detected, reloading once...');
+    finally {
+        await page.close();
+    }
+}
+async function createAnimatedPreview(page) {
+    console.log('[VIDEO] 🎥 Recording 30fps compressed video...');
+    // Create temporary directory for video
+    const tempDir = path.join(__dirname, '..', 'temp');
+    await fs.mkdir(tempDir, { recursive: true });
+    const videoPath = path.join(tempDir, 'screen_recording.mp4');
+    // Use puppeteer's built-in screenshot capabilities for frame capture
+    const recordingDuration = 3000; // 3 seconds of recording
+    const frameRate = 30; // 30 fps
+    const totalFrames = Math.floor((recordingDuration / 1000) * frameRate);
+    const frameInterval = 1000 / frameRate; // ~33ms per frame
+    console.log(`[VIDEO] 📹 Recording ${totalFrames} frames at ${frameRate}fps over ${recordingDuration}ms...`);
+    const frames = [];
+    const recordingStart = Date.now();
+    // Record frames at 30fps while creating animations
+    for (let frameIndex = 0; frameIndex < totalFrames; frameIndex++) {
+        const frameStart = Date.now();
+        const progress = frameIndex / totalFrames; // 0 to 1
+        // Create smooth animations based on progress
+        await page.evaluate((progressValue) => {
+            // Get the full page height to scroll through entire website
+            const doc = globalThis.document;
+            const body = doc.body;
+            const html = doc.documentElement;
+            const fullHeight = Math.max(body.scrollHeight, body.offsetHeight, html.clientHeight, html.scrollHeight, html.offsetHeight);
+            const viewportHeight = globalThis.window.innerHeight;
+            const maxScrollY = Math.max(0, fullHeight - viewportHeight);
+            // Smooth scroll from top to bottom over the duration
+            const scrollY = progressValue * maxScrollY;
+            globalThis.window.scrollTo({
+                top: scrollY,
+                behavior: 'instant' // Use instant for smoother recording
+            });
+            // Interactive element animations based on what's currently visible
+            const interactiveElements = doc.querySelectorAll('button, a, .card, [class*="hover"], .btn, .link, h1, h2, h3, .hero, .section');
+            if (interactiveElements.length > 0) {
+                // Find elements that are currently in viewport
+                const viewportTop = scrollY;
+                const viewportBottom = scrollY + viewportHeight;
+                interactiveElements.forEach((el, idx) => {
+                    if (el.style && el.getBoundingClientRect) {
+                        const rect = el.getBoundingClientRect();
+                        const elementTop = rect.top + scrollY;
+                        const elementBottom = elementTop + rect.height;
+                        // Check if element is in viewport
+                        const isVisible = elementTop < viewportBottom && elementBottom > viewportTop;
+                        if (isVisible) {
+                            // Create subtle highlight for visible elements
+                            const highlightIntensity = Math.sin(progressValue * Math.PI * 6) * 0.3 + 0.7; // Pulsing between 0.4 and 1
+                            const scale = 1 + (Math.sin(progressValue * Math.PI * 10 + idx) * 0.02); // Individual element pulse
+                            el.style.transform = `scale(${scale})`;
+                            el.style.transition = 'transform 0.1s ease, opacity 0.2s ease';
+                            el.style.opacity = highlightIntensity.toString();
+                            // Add subtle glow to important elements
+                            if (el.tagName && ['H1', 'H2', 'BUTTON', 'A'].includes(el.tagName)) {
+                                el.style.textShadow = '0 0 8px rgba(0,123,255,0.3)';
+                                el.style.boxShadow = '0 2px 12px rgba(0,123,255,0.15)';
+                            }
+                        }
+                        else {
+                            // Reset non-visible elements
+                            el.style.transform = 'scale(1)';
+                            el.style.opacity = '1';
+                            el.style.textShadow = '';
+                            el.style.boxShadow = '';
+                        }
+                    }
+                });
+            }
+        }, progress);
+        // Capture frame
+        const frameBuffer = await page.screenshot({
+            type: 'png',
+            fullPage: false
+        });
+        frames.push(frameBuffer);
+        // Wait for next frame time
+        const frameElapsed = Date.now() - frameStart;
+        const frameWait = Math.max(0, frameInterval - frameElapsed);
+        if (frameWait > 0) {
+            await new Promise(resolve => setTimeout(resolve, frameWait));
+        }
+    }
+    const recordingDurationActual = Date.now() - recordingStart;
+    console.log(`[VIDEO] 📹 Recorded ${frames.length} frames in ${recordingDurationActual}ms (${Math.round(frames.length / (recordingDurationActual / 1000))} fps)`);
+    if (frames.length === 0) {
+        throw new Error('No frames were recorded');
+    }
+    // Create video from recorded frames
+    console.log('[VIDEO] 🎞️ Creating compressed video from frames...');
+    // Save frames as images
+    for (let i = 0; i < frames.length; i++) {
+        const framePath = path.join(tempDir, `frame_${i.toString().padStart(4, '0')}.png`);
+        await fs.writeFile(framePath, frames[i]);
+    }
+    // Create high-quality compressed video using ffmpeg
+    await new Promise((resolve, reject) => {
+        const inputPattern = path.join(tempDir, 'frame_%04d.png');
+        ffmpeg()
+            .input(inputPattern)
+            .inputOptions([
+            '-framerate 30', // 30 fps
+            '-pix_fmt rgba'
+        ])
+            .outputOptions([
+            '-c:v libx264', // H.264 codec
+            '-pix_fmt yuv420p', // Compatible pixel format
+            '-movflags +faststart', // Fast start for web
+            '-crf 28', // Higher compression (28 is good for mobile)
+            '-preset veryfast', // Fast encoding
+            '-vf scale=1280:720', // Ensure consistent resolution
+            '-profile:v baseline', // Mobile compatibility
+            '-level 3.0'
+        ])
+            .output(videoPath)
+            .on('start', (commandLine) => {
+            console.log('[VIDEO] 🔄 FFmpeg command:', commandLine);
+        })
+            .on('progress', (progress) => {
+            console.log(`[VIDEO] 📊 Encoding: ${progress.percent}% done`);
+        })
+            .on('end', () => {
+            console.log('[VIDEO] ✅ Video encoding completed!');
+            resolve();
+        })
+            .on('error', (err) => {
+            console.error('[VIDEO] ❌ FFmpeg error:', err);
+            reject(err);
+        })
+            .run();
+    });
+    // Read the final video
+    const videoBuffer = await fs.readFile(videoPath);
+    const videoBase64 = videoBuffer.toString('base64');
+    console.log(`[VIDEO] ✅ Video created: ${videoBuffer.length} bytes`);
+    // Clean up frames (keep video for now)
+    for (let i = 0; i < frames.length; i++) {
         try {
-            await page.reload({ waitUntil: 'domcontentloaded', timeout: 30000 });
-            await new Promise(res => setTimeout(res, 2000));
-            contentReady = await waitForMeaningfulContent(20000);
+            const framePath = path.join(tempDir, `frame_${i.toString().padStart(4, '0')}.png`);
+            await fs.unlink(framePath);
         }
-        catch (e) {
-            console.warn('[SCREENSHOT] Reload failed:', e?.message);
+        catch (cleanupError) {
+            // Ignore cleanup errors
         }
     }
-    // Final small settle to ensure painting
-    await page.evaluate(() => new Promise(r => globalThis.requestAnimationFrame(() => globalThis.requestAnimationFrame(r))));
-    // Wait a bit for any animations to settle
-    await new Promise(res => setTimeout(res, 1000));
-    let screenshotBuffer = await page.screenshot({ encoding: 'base64', fullPage: false });
-    // If image is suspiciously small (possibly blank), retry once after short wait
-    if (!screenshotBuffer || screenshotBuffer.length < 1000) {
-        await new Promise(res => setTimeout(res, 2000));
-        screenshotBuffer = await page.screenshot({ encoding: 'base64', fullPage: false });
-    }
-    await browser.close();
-    console.log('Screenshot taken successfully.');
-    return screenshotBuffer;
+    return videoBase64;
 }
 async function hashDirectory(root) {
     async function walk(dir, prefix = '') {
@@ -1027,6 +1129,23 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
         return { text: '⚠️ Projeto ausente. Use /login ou peça project_reset para recriar a pasta.' };
     }
     const system = `
+		🚨 CRITICAL REQUIREMENTS FOR COMPLETE WEBSITE 🚨
+		
+		📄 MANDATORY PAGE CREATION: You MUST create these missing pages:
+		✅ app/about/page.tsx - About page with theme content
+		✅ app/contact/page.tsx - Contact page with forms  
+		✅ app/pricing/page.tsx - Pricing page (if applicable to theme)
+		✅ app/blog/page.tsx - Blog listing page
+		✅ app/docs/page.tsx - Documentation page (if applicable)
+		
+		🎬 ANIMATION FIX REQUIREMENTS: Prevent elements being stuck in display:none
+		✅ Use initial={{ opacity: 1, y: 0 }} for motion components
+		✅ Add className="opacity-100" to ensure visibility
+		✅ Test all animations load properly on page load
+		
+		⚡ USE TARGETED EDITS - Don't rewrite entire files unnecessarily
+		⚡ FOCUS on missing pages and animation initialization
+		
 		🚫🚫🚫 NEVER EDIT NAVBAR.JSX - NEVER MODIFY NAVBAR COMPONENT 🚫🚫🚫
 		🚫🚫🚫 NEVER EDIT CTABUTTON.JSX - NEVER MODIFY CTABUTTON COMPONENT 🚫🚫🚫
 		
@@ -1245,7 +1364,7 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 
 		REGRAS DE FERRAMENTAS:
 		1. Use o tool mcp__recflux__color_palette_generator para gerar paletas de cores harmoniosas e profissionais antes de começar o design.
-		2. Use o tool mcp__recflux__puppeteer_search para buscar recursos audiovisuais relevantes. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
+		2. Use o tool mcp__recflux__puppeteer_search para buscar recursos audiovisuais relevantes. PARA VÍDEOS DE BACKGROUND: use termos ABSTRATOS como "particles", "gradient", "neon", "abstract" que funcionam como backgrounds. PARA OUTROS RECURSOS: use termos específicos do tema. NUNCA busque pessoas, objetos literais ou gameplay real para backgrounds.
 		3. Atualize package.json quando necessário (dependências Tailwind já estão no template).
 		
 		ARQUIVOS-ALVO PRINCIPAIS:
@@ -1361,8 +1480,8 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		- Não use emojis, use icons no lugar.
 		
 		RECURSOS (OBRIGATÓRIOS):
-		- Animations devem ser buscadas via mcp__recflux__puppeteer_search e colocadas em partes além do hero. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
-		- Video deve ser buscado via mcp__recflux__puppeteer_search e colocado no background do hero para um visual mais profissional. UTILIZE APENAS UMA PALAVRA CHAVE PARA CADA BUSCA EM INGLÊS PARA AUMENTAR AS CHANCES DE ENCONTRAR CONTEÚDO RELEVANTE.
+		- Animations devem ser buscadas via mcp__recflux__puppeteer_search e colocadas em partes além do hero. USE TERMOS ESPECÍFICOS: "particle" para gaming, "fade" para business, "bounce" para e-commerce.
+		- Video deve ser buscado via mcp__recflux__puppeteer_search e colocado no background do hero para um visual mais profissional. USE TERMOS ABSTRATOS: "particles" para NFT/jogos, "gradient" para business, "colorful" para e-commerce. EVITE conteúdo literal como pessoas ou objetos específicos.
 		- Imagens devem ser geradas via mcp__recflux__freepik_ai_image_generator.
 		- Fontes devem ser usadas apenas as fontes listadas: Inter, Roboto, Poppins, Montserrat, Fira Sans, Proxima Nova, Raleway, Helvetica, Ubuntu, Lato, Seb Neue, Rust, Arial, Go, Cormorant Garamond, Nunito Sans, Source Serif, Segoe UI, Cascadia Code PL, Chakra Petch, IBM Plex Sans, Avenir, Black Ops One, JetBrains Monospace, Roboto Slab, New Times Roman, Futura
 		- Sempre verifique o padding e margin, ajuste se necessário
@@ -1926,8 +2045,56 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		 🚨 CRITICAL: If you see NavBar import, DO NOT modify the NavBar component file! 🚨
 		 🚨 CRITICAL: If you see CTAButton import, DO NOT modify the CTAButton component file! 🚨
 		 🌍 LANGUAGE CHECK: Detect user's language from their messages and prepare to generate content in that language 🌍
+
+		2) NAVBAR CUSTOMIZATION RULES - MINIMAL CHANGES ONLY:
+		 🚨 NAVBAR MODIFICATION LIMITS: Only make MINOR edits to navConfig in layout.tsx 🚨
+		 ✅ ALLOWED NavBar Changes (in layout.tsx only):
+		 - Change brandName (company/site name)
+		 - Modify navigationItems (menu links and labels)
+		 - Update rightSideItems (CTA buttons in header)
+		 - Adjust colors to match new theme
+		 ❌ FORBIDDEN NavBar Changes:
+		 - Do NOT edit NavBar component file directly
+		 - Do NOT change NavBar structure or functionality
+		 - Do NOT add complex features to navbar
+		 - Keep navigation simple and functional
+
+		3) COMPREHENSIVE WEBSITE CUSTOMIZATION - FOCUS ON FUNCTIONALITY:
+		 🎯 PRIMARY CUSTOMIZATION TARGETS (REQUIRED):
+		 a) COLOR PALETTE: Complete theme transformation with new colors
+		 b) BACKGROUND VIDEO: Replace with theme-appropriate video content
+		 c) ALL TEXT CONTENT: Update copy, headings, descriptions to match theme
+		 d) ALL IMAGES: Replace with theme-relevant, AI-generated images
+		 e) FOOTER CONTENT: Update footer in layout.tsx with relevant links/info
+		 f) FUNCTIONAL FEATURES: Add working components for the business type
+
+		 🚀 FUNCTIONAL FEATURES IMPLEMENTATION (MANDATORY):
+		 ✅ REQUIRED: Add functional components based on business type:
+		 - E-commerce: Shopping cart, product search, wishlist, checkout simulation
+		 - SaaS: Free trial signup, pricing calculator, feature demos
+		 - Restaurant: Menu browsing, reservation system, order tracking
+		 - Portfolio: Project filters, contact forms, skill showcases
+		 - Real Estate: Property search, mortgage calculator, virtual tours
+		 - Education: Course enrollment, progress tracking, certificate system
+		 - Healthcare: Appointment booking, symptom checker, patient portal
+		 ✅ REQUIRED: All features should be SIMULATED but FUNCTIONAL (working UI/UX)
+		 ✅ REQUIRED: Use local state management for cart/forms/interactions
+		 ✅ REQUIRED: Add realistic data and smooth user interactions
+
+		 📄 ADDITIONAL PAGES CREATION (MANDATORY):
+		 ✅ REQUIRED: Create ALL relevant pages for the business type:
+		 - /about: Company story, team, mission with real content
+		 - /contact: Contact form, location, support info
+		 - /services or /products: Detailed offerings with images
+		 - /marketplace or /shop: Product/service listings (if relevant)
+		 - /pricing: Pricing tiers with feature comparisons (if relevant)
+		 - /blog: Sample blog posts related to the business
+		 - /faq: Frequently asked questions with answers
+		 ✅ REQUIRED: Each page must have unique, theme-relevant content
+		 ✅ REQUIRED: All pages must be fully styled and functional
+		 ✅ REQUIRED: Add proper navigation between pages
 		
-		2) GERAÇÃO DE PALETA DE CORES TEMÁTICA AVANÇADA COM INSPIRAÇÃO - Execute estes passos:
+		4) GERAÇÃO DE PALETA DE CORES TEMÁTICA AVANÇADA COM INSPIRAÇÃO - Execute estes passos:
 		 a) ANÁLISE DETALHADA DO TEMA: Identifique o tema específico e subtema (ex: gaming→RPG, business→fintech, food→italian)
 		 b) EXTRAÇÃO DE CORES DOS SITES DE INSPIRAÇÃO: Com base na análise híbrida do step 5, identifique:
 		 DADOS DO CRAWLING TEXTUAL:
@@ -1969,7 +2136,7 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		 - Compare paleta gerada com hex codes extraídos pelos screenshots
 		 - Confirme que as cores principais dos sites de inspiração estão representadas
 		 - Ajuste se necessário para manter fidelidade visual à inspiração
-		3) Implemente a UI no src/App.jsx com componentes customizados, aplicando as cores da paleta gerada
+		5) Implemente a UI no src/App.jsx com componentes customizados, aplicando as cores da paleta gerada
 		 
 		 🚫🚫🚫 CRITICAL WARNING: DO NOT EDIT EXISTING NAVBAR OR CTABUTTON COMPONENTS 🚫🚫🚫
 		 ❌ FORBIDDEN: Modifying template/src/components/NavBar.jsx
@@ -2018,7 +2185,7 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		 - Implemente hover states via HeroUI/ variants + Tailwind transitions
 		 ❌ NO custom components when HeroUI or exists - CHECK HEROUI FIRST ❌
 		 ❌ NO custom CSS, NO inline styles, NO other frameworks ❌
-		4) ANÁLISE E CRIAÇÃO DE COMPONENTES CUSTOMIZADOS:
+		6) ANÁLISE E CRIAÇÃO DE COMPONENTES CUSTOMIZADOS:
 		 🚨 WARNING: When creating components, NEVER modify existing NavBar.jsx or CTAButton.jsx 🚨
 		 🚨 CRITICAL: Check HeroUI library FIRST before creating ANY new component 🚨
 		 🚨 SECONDARY: Check library ONLY if HeroUI doesn't have it 🚨
@@ -2039,7 +2206,7 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		 ❌ NO CSS files in components/ folder - HeroUI + Tailwind utilities only ❌
 		 ✅ Import HeroUI: import { Button, Card, Input } from '@heroui/react' ✅
 		 ✅ Import (if needed): import { Button, Card, Input } from '@/components/ui' ✅
-		5) ANÁLISE COMPLETA DE INSPIRAÇÃO DE DESIGN - Execute estes passos OBRIGATORIAMENTE:
+		7) ANÁLISE COMPLETA DE INSPIRAÇÃO DE DESIGN - Execute estes passos OBRIGATORIAMENTE:
 		 a) IDENTIFICAÇÃO DE SITES DE INSPIRAÇÃO: Identifique 2-4 sites de referência relevantes ao tema solicitado
 		 ESTRATÉGIA DE SELEÇÃO:
 		 1. SITES DIRETOS DE REFERÊNCIA (use 1-2 destes baseado no tema):
@@ -2328,7 +2495,31 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		 - Use os dados consolidados para informar TODAS as decisões de design subsequentes
 		 - O analisador automaticamente seleciona, captura e analisa sites de inspiração baseado no tema
 		 - Documente claramente como cada elemento de inspiração foi aplicado
-		6) ADICIONE VÍDEOS PROFISSIONAIS: Use mcp__recflux__puppeteer_search com searchType='videos' para encontrar e analisar vídeos de background relevantes ao tema para o hero
+		8) ADICIONE VÍDEOS PROFISSIONAIS: Use mcp__recflux__puppeteer_search com searchType='videos' para encontrar e analisar vídeos de background relevantes ao tema para o hero
+		 - CRITICAL: Choose search strategy based on business type:
+		 
+		 **ABSTRACT CONTENT (Tech/Digital businesses):**
+		   * NFT/Gaming: "particles", "neon", "hologram", "matrix", "digital", "cyber", "glow"
+		   * SaaS/Tech: "abstract", "gradient", "geometric", "minimal", "motion", "fluid"
+		   * E-commerce: "colorful", "dynamic", "modern", "clean", "bright", "energy"
+		   * Portfolio: "creative", "artistic", "abstract", "colorful", "dynamic", "modern"
+		 
+		 **REAL-LIFE CONTENT (Service/Physical businesses):**
+		   * Beauty/Salon: "salon", "beauty", "spa", "hair", "makeup", "skincare"
+		   * Restaurant/Food: "cooking", "chef", "kitchen", "food", "dining", "restaurant", "pizza"
+		   * Car/Automotive: "cars", "driving", "automotive", "vehicles", "luxury"
+		   * Fitness/Gym: "fitness", "workout", "gym", "training", "sports"
+		   * Medical/Health: "medical", "healthcare", "clinic", "wellness", "professional"
+		   * Real Estate: "home", "house", "property", "architecture", "luxury"
+		   * Fashion/Retail: "fashion", "clothing", "style", "boutique", "shopping"
+		   * Travel/Hotel: "travel", "hotel", "vacation", "destination", "luxury"
+		 
+		 - GOAL: Match video type to business nature - abstract for digital, real-life for physical services
+		 - PERFECT ABSTRACT VIDEOS: Particle animations, gradient flows, geometric patterns, light effects
+		 - PERFECT REAL-LIFE VIDEOS: Professional service footage, product demonstrations, lifestyle content
+		 - AVOID: Amateur content, poor quality, irrelevant scenes, overly busy content
+		 - SEMPRE analyze the user's specific request to determine if they need abstract or real-life content
+		 - SELECTION CRITERIA: Videos should complement the business type, be professional quality, and work as subtle backgrounds
 		 - O sistema irá automaticamente analisar até 10 vídeos e selecionar o melhor para o tema
 		 - A análise considera relevância temática, qualidade profissional, adequação como background e apelo estético
 		 - Use o vídeo selecionado pelo AI com sua análise de confiança e raciocínio fornecidos
@@ -2339,8 +2530,16 @@ async function buildAndDeployFromPrompt(nlPrompt, whatsappFrom) {
 		 
 		7) ADICIONE CONTEÚDO VISUAL PROFISSIONAL - Execute estes passos:
 		 a) ANIMAÇÕES: Use mcp__recflux__puppeteer_search com searchType='animations' para encontrar animações relevantes ao tema
+		    - NFT/Gaming: "particle", "glow", "neon", "digital", "cyber"
+		    - Business: "smooth", "professional", "fade", "slide"
+		    - E-commerce: "product", "cart", "shopping", "transition"
 		 b) ÍCONES: Use mcp__recflux__puppeteer_search com searchType='icons' para encontrar ícones profissionais (NUNCA use emojis)
+		    - NFT/Gaming: "gaming", "crypto", "blockchain", "controller", "coin"
+		    - Business: "business", "corporate", "finance", "growth", "strategy"
+		    - E-commerce: "shopping", "cart", "payment", "delivery", "store"
 		 c) EFEITOS VISUAIS: Use mcp__recflux__puppeteer_search com searchType='vfx' para efeitos visuais especiais quando apropriado
+		    - NFT/Gaming: "particle", "hologram", "matrix", "cyber", "neon"
+		    - Business: "professional", "corporate", "clean", "modern"
 		 d) INTEGRAÇÃO: Integre estes recursos encontrados no código usando as URLs retornadas
 		 REGRAS CRÍTICAS - OBRIGATÓRIO SEGUIR:
 		 - SEMPRE use as ferramentas de busca para encontrar conteúdo visual real
@@ -2732,6 +2931,54 @@ async function sendWhatsappImage(to, base64Image, caption) {
         throw err;
     }
 }
+async function sendWhatsappVideo(to, base64Video, caption) {
+    try {
+        console.log(`[WHATSAPP_API] Sending video to ${to} (${Math.round(base64Video.length / 1024)}KB)`);
+        // Convert base64 to buffer
+        const videoBuffer = Buffer.from(base64Video, 'base64');
+        // First, upload the media
+        const uploadUrl = `https://graph.facebook.com/v20.0/${WHATSAPP_PHONE_NUMBER_ID}/media`;
+        const formData = new FormData();
+        formData.append('messaging_product', 'whatsapp');
+        formData.append('file', videoBuffer, {
+            filename: 'animation.mp4',
+            contentType: 'video/mp4'
+        });
+        formData.append('type', 'video/mp4');
+        const uploadResp = await axios.post(uploadUrl, formData, {
+            headers: {
+                Authorization: `Bearer ${WHATSAPP_TOKEN}`,
+                ...formData.getHeaders()
+            }
+        });
+        const mediaId = uploadResp.data.id;
+        console.log(`[WHATSAPP_API] Video uploaded successfully, ID: ${mediaId}`);
+        // Then send the video message
+        const messageUrl = `https://graph.facebook.com/v20.0/${WHATSAPP_PHONE_NUMBER_ID}/messages`;
+        const payload = {
+            messaging_product: 'whatsapp',
+            to,
+            type: 'video',
+            video: {
+                id: mediaId,
+                caption: caption || ''
+            }
+        };
+        const resp = await axios.post(messageUrl, payload, {
+            headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` }
+        });
+        console.log(`[WHATSAPP_API] Video sent successfully, status=${resp.status}`);
+        return resp.data;
+    }
+    catch (err) {
+        const status = err?.response?.status;
+        const dataPreview = err?.response?.data ? (typeof err.response.data === 'string' ? err.response.data.slice(0, 500) : JSON.stringify(err.response.data).slice(0, 500)) : '';
+        console.error(`[WHATSAPP_API] Video send error status=${status} message=${err?.message}`);
+        if (dataPreview)
+            console.error(`[WHATSAPP_API] Video send error body=${dataPreview}`);
+        throw err;
+    }
+}
 const app = express();
 app.use(bodyParser.json());
 // Optional Google auth setup
@@ -2962,17 +3209,28 @@ ${deploymentResult.adminUrl}`;
                 // 2. Send the link immediately when ready
                 console.log(`[WEBHOOK] Sending deployment result to ${from}`);
                 await sendWhatsappText(from, result.text);
-                // 3. Take and send screenshot asynchronously (don't wait)
+                // 3. Take and send animated GIF preview asynchronously (don't wait)
                 if (result.shouldSendImage && result.previewUrl) {
-                    console.log(`[WEBHOOK] Taking screenshot asynchronously for ${from}`);
+                    console.log(`[WEBHOOK] 🎬 Creating animated preview for ${from}`);
                     // Don't await - run in background
-                    takeScreenshot(result.previewUrl)
-                        .then(async (screenshotData) => {
-                        console.log(`[WEBHOOK] Screenshot ready, sending to ${from}`);
-                        await sendWhatsappImage(from, screenshotData, result.imageCaption || '📸 Preview do seu site');
+                    takeScreenshot(result.previewUrl, true) // true = create GIF
+                        .then(async (gifData) => {
+                        console.log(`[WEBHOOK] ✨ Animated preview ready, sending to ${from}`);
+                        await sendWhatsappVideo(from, gifData, result.imageCaption || '🎬 Preview animado do seu site');
                     })
                         .catch((screenshotError) => {
-                        console.warn(`[WEBHOOK] Screenshot failed for ${from}:`, screenshotError);
+                        console.warn(`[WEBHOOK] ⚠️  Animated preview failed for ${from}:`, screenshotError);
+                        // Fallback to regular screenshot
+                        if (result.previewUrl) {
+                            console.log(`[WEBHOOK] 📸 Trying regular screenshot as fallback...`);
+                            takeScreenshot(result.previewUrl, false)
+                                .then(async (fallbackData) => {
+                                await sendWhatsappImage(from, fallbackData, '📸 Preview do seu site');
+                            })
+                                .catch(() => {
+                                console.error(`[WEBHOOK] ❌ Both GIF and screenshot failed for ${from}`);
+                            });
+                        }
                     });
                 }
                 // Return early since we already sent the message(s)
