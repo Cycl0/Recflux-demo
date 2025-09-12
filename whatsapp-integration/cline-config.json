@@ -1,9 +1,13 @@
 {
   "globalState": {
-    "apiProvider": "openrouter",
-    "modelId": "openrouter/sonoma-sky-alpha",
-    "openRouterModelId": "openrouter/sonoma-sky-alpha",
-    "openRouterModelInfo": { "supportsPromptCache": true, "inputPrice": 0.2, "outputPrice": 1.5  },
+    "apiProvider": "openai",
+    "openAiBaseUrl": "https://api.z.ai/api/coding/paas/v4",
+    "openAiModelId": "glm-4.5",
+    "openAiModelInfo": { 
+      "supportsPromptCache": true, 
+      "inputPrice": 0.0, 
+      "outputPrice": 0.0
+    },
     "autoApprovalSettings": {
       "enabled": true,
       "actions": {
