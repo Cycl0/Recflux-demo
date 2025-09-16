@@ -2,7 +2,12 @@
 
 import { useEffect, useRef, useMemo } from 'react';
 
-export default function CTAButton(props) {
+export default function CTAButton(props: {
+  text?: string;
+  href?: string;
+  className?: string;
+  glowingColor?: string;
+}) {
   const {
     text = 'Click me',
     href = '#action',
@@ -10,17 +15,17 @@ export default function CTAButton(props) {
     glowingColor = undefined,
   } = props;
 
-  function hexToRgbA(hex, opacity) {
+  function hexToRgbA(hex: string, opacity: number) {
     var c;
     if (/^#([A-Fa-f0-9]{3}){1,2}$/.test(hex)) {
       c = hex.substring(1).split('');
       if (c.length == 3) {
         c = [c[0], c[0], c[1], c[1], c[2], c[2]];
       }
-      c = '0x' + c.join('');
+      const num = parseInt('0x' + c.join(''), 16);
       return (
         'rgba(' +
-        [(c >> 16) & 255, (c >> 8) & 255, c & 255].join(',') +
+        [(num >> 16) & 255, (num >> 8) & 255, num & 255].join(',') +
         `,${opacity})`
       );
     }
@@ -28,8 +33,8 @@ export default function CTAButton(props) {
   }
   
   // --- Color helpers to derive gradients from a base glow color ---
-  function clamp01(x) { return Math.max(0, Math.min(1, x)); }
-  function hexToRgb(hex) {
+  function clamp01(x: number): number { return Math.max(0, Math.min(1, x)); }
+  function hexToRgb(hex: string): { r: number; g: number; b: number } {
     // Coerce invalid values to a safe fallback
     const fallback = '#000000';
     if (typeof hex !== 'string') hex = fallback;
@@ -38,21 +43,21 @@ export default function CTAButton(props) {
     if (hex[0] !== '#') hex = `#${hex}`;
     let c = hex.replace('#','');
     if (!/^([A-Fa-f0-9]{3}){1,2}$/.test(c)) c = '000000';
-    if (c.length === 3) c = c.split('').map(ch => ch + ch).join('');
+    if (c.length === 3) c = c.split('').map((ch: string) => ch + ch).join('');
     const num = parseInt(c, 16);
     return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
   }
-  function rgbToHex(r, g, b) {
-    const toHex = v => v.toString(16).padStart(2, '0');
+  function rgbToHex(r: number, g: number, b: number): string {
+    const toHex = (v: number): string => v.toString(16).padStart(2, '0');
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
   }
-  function withAlphaHex(hex, alpha) {
+  function withAlphaHex(hex: string, alpha: number): string {
     const { r, g, b } = hexToRgb(hex);
     return `rgba(${r},${g},${b},${clamp01(alpha)})`;
   }
   
   // RGB <-> HSL conversions for perceptual adjustments
-  function rgbToHsl(r, g, b) {
+  function rgbToHsl(r: number, g: number, b: number): { h: number; s: number; l: number } {
     r /= 255; g /= 255; b /= 255;
     const max = Math.max(r, g, b), min = Math.min(r, g, b);
     let h, s, l = (max + min) / 2;
@@ -70,12 +75,12 @@ export default function CTAButton(props) {
     }
     return { h, s, l };
   }
-  function hslToRgb(h, s, l) {
+  function hslToRgb(h: number, s: number, l: number): { r: number; g: number; b: number } {
     let r, g, b;
     if (s === 0) {
       r = g = b = l;
     } else {
-      const hue2rgb = (p, q, t) => {
+      const hue2rgb = (p: number, q: number, t: number): number => {
         if (t < 0) t += 1;
         if (t > 1) t -= 1;
         if (t < 1/6) return p + (q - p) * 6 * t;
@@ -91,13 +96,13 @@ export default function CTAButton(props) {
     }
     return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
   }
-  function hslToHex(h, s, l) {
+  function hslToHex(h: number, s: number, l: number): string {
     const { r, g, b } = hslToRgb(h, s, l);
     return rgbToHex(r, g, b);
   }
   
   // Calculate relative luminance for contrast calculations
-  function getLuminance(hex) {
+  function getLuminance(hex: string): number {
     const { r, g, b } = hexToRgb(hex);
     const [rs, gs, bs] = [r, g, b].map(c => {
       c = c / 255;
@@ -107,7 +112,7 @@ export default function CTAButton(props) {
   }
   
   // Calculate contrast ratio between two colors
-  function getContrastRatio(color1, color2) {
+  function getContrastRatio(color1: string, color2: string): number {
     const lum1 = getLuminance(color1);
     const lum2 = getLuminance(color2);
     const brightest = Math.max(lum1, lum2);
@@ -116,7 +121,7 @@ export default function CTAButton(props) {
   }
   
   // Generate optimal text color based on glow color and button background
-  function getOptimalTextColor(glowHex, buttonBg = '#d1d1d1') {
+  function getOptimalTextColor(glowHex: string, buttonBg: string = '#d1d1d1'): string {
     const isDefaultColor = glowHex.toLowerCase() === '#ff0000';
     
     if (isDefaultColor) {
@@ -147,7 +152,7 @@ export default function CTAButton(props) {
       return '#000000';
     }
   }
-  function lerpHue(a, b, t) {
+  function lerpHue(a: number, b: number, t: number): number {
     // a,b in [0,1). Interpolate with smart path selection
     let shortPath = b - a;
     if (shortPath > 0.5) shortPath -= 1;
@@ -178,7 +183,7 @@ export default function CTAButton(props) {
   }
   
   // Alternative approach: blend in RGB space for more predictable color mixing
-  function blendRGB(baseHex, targetHex, influence) {
+  function blendRGB(baseHex: string, targetHex: string, influence: number): string {
     const base = hexToRgb(baseHex);
     const target = hexToRgb(targetHex);
     const t = clamp01(influence);
@@ -189,11 +194,11 @@ export default function CTAButton(props) {
     
     return rgbToHex(r, g, b);
   }
-  function hexToHsl(hex) {
+  function hexToHsl(hex: string): { h: number; s: number; l: number } {
     const { r, g, b } = hexToRgb(hex);
     return rgbToHsl(r, g, b);
   }
-  function tintTowards(baseHex, glowHex, hueInfluence, satInfluence, lightInfluence) {
+  function tintTowards(baseHex: string, glowHex: string, hueInfluence: number, satInfluence: number, lightInfluence: number): string {
     const b = hexToHsl(baseHex);
     const g = hexToHsl(glowHex);
     
@@ -222,7 +227,7 @@ export default function CTAButton(props) {
       return hslToHex(h, s, l);
     }
   }
-  function tintTowardsRGBA(baseHex, glowHex, hueInfluence, satInfluence, lightInfluence, alpha) {
+  function tintTowardsRGBA(baseHex: string, glowHex: string, hueInfluence: number, satInfluence: number, lightInfluence: number, alpha: number): string {
     const hex = tintTowards(baseHex, glowHex, hueInfluence, satInfluence, lightInfluence);
     return withAlphaHex(hex, alpha);
   }
@@ -280,17 +285,17 @@ export default function CTAButton(props) {
     }
   }, [glowHex]);
 
-  const wrapperRef = useRef(null);
-  const buttonRef = useRef(null);
-  const orbRef = useRef(null);
-  const blurPrimaryRef = useRef(null); // right-side glow
-  const blurMirroredRef = useRef(null); // left-side glow (mirrored)
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLAnchorElement>(null);
+  const orbRef = useRef<HTMLDivElement>(null);
+  const blurPrimaryRef = useRef<HTMLDivElement>(null); // right-side glow
+  const blurMirroredRef = useRef<HTMLDivElement>(null); // left-side glow (mirrored)
 
-  const currentRef = useRef(0);
-  const targetRef = useRef(0);
-  const minXRef = useRef(0);
-  const maxXRef = useRef(0);
-  const rafRef = useRef(null);
+  const currentRef = useRef<number>(0);
+  const targetRef = useRef<number>(0);
+  const minXRef = useRef<number>(0);
+  const maxXRef = useRef<number>(0);
+  const rafRef = useRef<number | null>(null);
   const visiblePx = 120;
 
   useEffect(() => {
@@ -341,10 +346,10 @@ export default function CTAButton(props) {
       if (!rafRef.current) animate();
     };
 
-    const onMove = e => {
+    const onMove = (e: Event) => {
       const rect = button.getBoundingClientRect();
       const orbWidth = orb.offsetWidth || 204;
-      const cursorX = (e.clientX ?? 0) - rect.left;
+      const cursorX = ((e as MouseEvent).clientX ?? 0) - rect.left;
       let x = cursorX - orbWidth / 2;
       x = Math.max(minXRef.current, Math.min(maxXRef.current, x));
       targetRef.current = x;

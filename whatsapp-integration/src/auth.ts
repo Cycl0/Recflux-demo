@@ -95,19 +95,54 @@ export function configureAuth(app: Express) {
 			// } catch (e: any) {
 			// 	console.warn('[AUTH] Failed to initialize project from template:', e?.message || e);
 			// }
-			// Redirect back to WhatsApp chat using wa.me deep link.
-			const from = typeof req.query.state === 'string' ? req.query.state : undefined;
-			const businessNumber = process.env.WHATSAPP_PHONE_NUMBER;
-			// Link WhatsApp sender to logged in user for future tool calls
-			if (from) {
-				try { linkWhatsAppToUser(from, req.session.user as User); } catch {}
+			// Parse state to get platform and user ID info
+			const stateParam = typeof req.query.state === 'string' ? req.query.state : undefined;
+			let platform = 'whatsapp'; // default
+			let userId = stateParam;
+			
+			// Try to parse JSON state (new format with platform info)
+			if (stateParam) {
+				try {
+					const parsed = JSON.parse(decodeURIComponent(stateParam));
+					if (parsed.platform && parsed.userId) {
+						platform = parsed.platform;
+						userId = parsed.userId;
+					}
+				} catch {
+					// If not JSON, treat as plain WhatsApp user ID (legacy format)
+					userId = stateParam;
+				}
 			}
-			// wa.me only needs the number (recipient). If we have `from`, prefer redirecting to our business chat page.
-			// Fallback to /auth/success if we lack context
-			if (businessNumber) {
-				const waUrl = `https://wa.me/${businessNumber}`;
-				return res.redirect(waUrl);
+			
+			console.log(`[AUTH] OAuth callback - platform: ${platform}, userId: ${userId}`);
+			
+			// Link user to logged in Google account for future tool calls
+			if (userId) {
+				try { 
+					linkWhatsAppToUser(userId, req.session.user as User); 
+					console.log(`[AUTH] Linked ${platform} user ${userId} to Google account ${req.session.user?.email}`);
+				} catch (e) {
+					console.error(`[AUTH] Failed to link user:`, e);
+				}
 			}
+			
+			// Redirect based on platform
+			if (platform === 'telegram') {
+				// For Telegram, redirect directly to the bot using Telegram deep link
+				// Format: https://t.me/botusername or tg://resolve?domain=botusername
+				const telegramBotUsername = process.env.TELEGRAM_BOT_USERNAME || 'your_bot_name_bot';
+				const telegramUrl = `https://t.me/${telegramBotUsername}`;
+				console.log(`[AUTH] Redirecting Telegram user to: ${telegramUrl}`);
+				return res.redirect(telegramUrl);
+			} else {
+				// For WhatsApp, redirect to wa.me deep link
+				const businessNumber = process.env.WHATSAPP_PHONE_NUMBER;
+				if (businessNumber) {
+					const waUrl = `https://wa.me/${businessNumber}`;
+					return res.redirect(waUrl);
+				}
+			}
+			
 			return res.redirect('/auth/success');
 		}
 	);

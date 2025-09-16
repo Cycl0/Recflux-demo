@@ -15,17 +15,17 @@ const mockStructureAnalyzer: StructureAnalyzer = {
         
         // Determine edit scope based on error type
         let scopeLevel: 'character' | 'line' | 'expression' | 'block' | 'function' = 'line';
-        let recommendedTool: 'edit_file' | 'multi_edit_file' | 'replace_in_file' = 'edit_file';
+        let recommendedTool: 'multi_edit_file' | 'replace_in_file' = 'multi_edit_file';
         
         if (message.includes('cannot find name') || message.includes('missing import')) {
             scopeLevel = 'line';
-            recommendedTool = 'edit_file';
+            recommendedTool = 'multi_edit_file';
         } else if (message.includes('not assignable to type')) {
             scopeLevel = 'expression';
-            recommendedTool = 'edit_file';
+            recommendedTool = 'multi_edit_file';
         } else if (message.includes('has no properties in common')) {
             scopeLevel = 'line';
-            recommendedTool = 'edit_file';
+            recommendedTool = 'multi_edit_file';
         } else if (message.includes('jsx') || message.includes('tag')) {
             scopeLevel = 'block';
             recommendedTool = 'multi_edit_file';
@@ -1899,10 +1899,8 @@ async function getSpecificFixInstruction(error: ValidationError): Promise<string
     
     // Enhance with StructureAnalyzer recommendations if available
     if (analysisResult) {
-        const toolRecommendation = analysisResult.recommendedTool === 'edit_file' ? 
-            'Use edit_file for targeted fix' : 
-            analysisResult.recommendedTool === 'multi_edit_file' ? 
-            'Use multi_edit_file for multiple related changes' : 
+        const toolRecommendation = analysisResult.recommendedTool === 'multi_edit_file' ?
+            'Use multi_edit_file for targeted fix' :
             'Use replace_in_file for complex changes';
         
         return `${baseInstruction} (${toolRecommendation})`;

@@ -56,13 +56,18 @@ if (lines.length > 0 && finalLastLine) {
 
 ---
 
-### 3. **Tool Avoidance in Syntax Fix Prompts** ❌→✅
+### 3. **Tool Migration from edit_file to multi_edit_file** ❌→✅
 
-**Problem**: Prompts were instructing to avoid tools instead of using them properly.
+**Problem**: System was still referencing the deprecated edit_file tool instead of the new multi_edit_file tool.
 
-**Location**: `src/syntax-fix-prompt.ts`
+**Location**: Multiple files including `src/syntax-fix-prompt.ts`, `cline-cli/src/cline/core/assistant-message/index.ts`, and documentation files.
 
-**Changed**: Updated prompts to encourage proper tool usage instead of avoidance, now that tools work reliably.
+**Changes**:
+- Removed "edit_file" from toolUseNames array in assistant-message/index.ts
+- Updated all system prompts to use multi_edit_file instead of edit_file
+- Updated tool recommendation logic in validation.ts
+- Updated documentation examples to use multi_edit_file format
+- Removed edit_file validation logic from parse-assistant-message.ts
 
 ---
 

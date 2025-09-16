@@ -13,6 +13,8 @@ import { getRedisCache } from './redis-cache.js';
 import { VisionAnalyzer, VisionDesignPrompts } from './vision-analyzer.js';
 import VideoAnalyzer from './video-analyzer.js';
 import { validateProject, generateErrorReport, type ValidationResult } from './validation.js';
+// @ts-ignore - Package has type issues with ES modules
+import { AIHorde } from '@zeldafan0225/ai_horde';
 
 // Minimal MCP server exposing project_reset and CodeSandbox deployment only.
 
@@ -1112,44 +1114,49 @@ server.registerTool(
 	}
 );
 
-// Freepik AI Image Generation Tool
+// AI Horde Image Generation Tool
 server.registerTool(
-	'freepik_ai_image_generator',
+	'ai_horde_image_generator',
 	{
-		description: 'Generate images using Freepik AI text-to-image with flux-dev model',
+		description: 'Generate images using AI Horde text-to-image models',
 		inputSchema: {
 			prompt: z.string().describe('The text prompt to generate an image from'),
 			htmlContext: z.string().describe('REQUIRED: The HTML/component structure where this image will be placed (for contextual analysis). Must include titles, descriptions, and surrounding context.'),
 			componentContext: z.string().optional().describe('Description of the component/use case where this image will be used (e.g., "hero section for a travel website", "card image for a restaurant app")'),
 			imageRole: z.string().optional().describe('Specific role of the image (e.g., "background", "icon", "illustration", "photo", "avatar")'),
-			aspect_ratio: z.enum(['square_1_1', 'classic_4_3', 'traditional_3_4', 'widescreen_16_9', 'social_story_9_16', 'standard_3_2', 'portrait_2_3', 'horizontal_2_1', 'vertical_1_2']).default('square_1_1').optional().describe('Aspect ratio of the generated image'),
-			num_images: z.number().min(1).max(4).default(1).optional().describe('Number of images to generate (1-4)'),
+			aspect_ratio: z.enum(['1:1', '4:3', '3:4', '16:9', '9:16', '3:2', '2:3', '2:1', '1:2', '5:4', '4:5']).default('1:1').optional().describe('Aspect ratio of the generated image'),
+			num_images: z.number().min(1).max(20).default(1).optional().describe('Number of images to generate (1-20, AI Horde supports up to 20)'),
 			seed: z.number().min(1).max(4294967295).optional().describe('Seed for reproducible generation'),
+			steps: z.number().min(1).max(500).default(30).optional().describe('Number of generation steps (1-500, higher = better quality but slower)'),
+			cfg_scale: z.number().min(0).max(100).default(7.5).optional().describe('Classifier-free guidance scale (0-100, higher = more prompt adherence)'),
+			sampler_name: z.enum(['k_euler_a', 'k_euler', 'k_lms', 'k_heun', 'k_dpm_2', 'k_dpm_2_a', 'DDIM', 'PLMS']).default('k_euler_a').optional().describe('Sampling method for generation'),
+			trusted_workers: z.boolean().default(true).optional().describe('Use only trusted workers for generation'),
 			bypassCache: z.boolean().default(false).optional().describe('Bypass Redis cache and force fresh image generation')
 		}
 	},
 	async (args: any) => {
 		const logMessage = (msg: string) => {
 			console.error(msg);
-			fs.appendFile('mcp-freepik-ai-image-generator.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => {});
+			fs.appendFile('mcp-ai-horde-image-generator.log', new Date().toISOString() + ': ' + msg + '\n').catch(() => {});
 		};
 		try {
-			const freepikApiKey = process.env.FREEPIK_API_KEY;
-
-			if (!freepikApiKey) {
-				return { content: [{ type: 'text', text: 'Error: Freepik API key not configured' }] } as const;
-			}
+			// AI Horde doesn't require API key for anonymous usage
+			const aiHordeApiKey = process.env.AI_HORDE_API_KEY || '0000000000'; // Anonymous key
 
 			const prompt = args.prompt || '';
 			const htmlContext = args.htmlContext || '';
 			const componentContext = args.componentContext || '';
 			const imageRole = args.imageRole || '';
-			const aspectRatio = args.aspect_ratio || 'square_1_1';
+			const aspectRatio = args.aspect_ratio || '1:1';
 			const numImages = args.num_images || 1;
 			const seed = args.seed || Math.floor(Math.random() * 4294967295);
+			const steps = args.steps || 30;
+			const cfgScale = args.cfg_scale || 7.5;
+			const samplerName = args.sampler_name || 'k_euler_a';
+			const trustedWorkers = args.trusted_workers !== undefined ? args.trusted_workers : true;
 			const bypassCache = args.bypassCache || false;
 			
-			logMessage(`[FREEPIK_AI] Image generation request: "${prompt}" | aspect=${aspectRatio} | num_images=${numImages} | bypass_cache=${bypassCache}`);
+			logMessage(`[AI_HORDE] Image generation request: "${prompt}" | aspect=${aspectRatio} | num_images=${numImages} | steps=${steps} | cfg_scale=${cfgScale} | sampler=${samplerName} | trusted=${trustedWorkers} | bypass_cache=${bypassCache}`);
 			
 			if (!prompt) {
 				return { content: [{ type: 'text', text: 'Error: No prompt provided' }] } as const;
@@ -1165,12 +1172,12 @@ server.registerTool(
 			if (!bypassCache) {
 				try {
 					await cache.connect();
-					logMessage(`[FREEPIK_AI] Checking cache for prompt: ${prompt.substring(0, 50)}...`);
+					logMessage(`[AI_HORDE] Checking cache for prompt: ${prompt.substring(0, 50)}...`);
 					
 					const cachedResults = await cache.getImageGenerationResults(prompt);
 					
 					if (cachedResults) {
-						logMessage(`[FREEPIK_AI] Cache hit! Using cached image for prompt: ${prompt.substring(0, 50)}...`);
+						logMessage(`[AI_HORDE] Cache hit! Using cached image for prompt: ${prompt.substring(0, 50)}...`);
 						
 						return { 
 							content: [{ 
@@ -1182,8 +1189,8 @@ server.registerTool(
 									totalImages: cachedResults.allImages.length,
 									filename: `cached_${Date.now()}.jpg`,
 									format: 'jpeg',
-									model: 'freepik-flux-dev',
-									hosting: 'Freepik CDN',
+									model: 'ai-horde',
+									hosting: 'AI Horde CDN',
 									aspectRatio: cachedResults.metadata.aspectRatio,
 									seed: cachedResults.metadata.seed,
 									taskId: cachedResults.metadata.taskId,
@@ -1193,159 +1200,204 @@ server.registerTool(
 							}] 
 						} as const;
 					} else {
-						logMessage(`[FREEPIK_AI] Cache miss, proceeding with fresh generation for: ${prompt.substring(0, 50)}...`);
+						logMessage(`[AI_HORDE] Cache miss, proceeding with fresh generation for: ${prompt.substring(0, 50)}...`);
 					}
 				} catch (cacheError) {
-					logMessage(`[FREEPIK_AI] Cache check failed: ${cacheError}. Proceeding with fresh generation.`);
+					logMessage(`[AI_HORDE] Cache check failed: ${cacheError}. Proceeding with fresh generation.`);
 				}
 			} else {
-				logMessage(`[FREEPIK_AI] Cache bypass requested for prompt: ${prompt.substring(0, 50)}...`);
+				logMessage(`[AI_HORDE] Cache bypass requested for prompt: ${prompt.substring(0, 50)}...`);
 			}
 
 			// Simple prompt - let the system prompt handle the contextual analysis
 			const contextualPrompt = prompt;
 			
-			logMessage(`[FREEPIK_AI] Original prompt: "${prompt}"`);
-			logMessage(`[FREEPIK_AI] HTML context provided: ${!!htmlContext}`);
-			logMessage(`[FREEPIK_AI] HTML context length: ${htmlContext.length}`);
-			logMessage(`[FREEPIK_AI] HTML context preview: ${htmlContext.substring(0, 300)}...`);
-			logMessage(`[FREEPIK_AI] Component context: "${componentContext}"`);
-			logMessage(`[FREEPIK_AI] Image role: "${imageRole}"`);
-			logMessage(`[FREEPIK_AI] Aspect ratio: "${aspectRatio}"`);
+			logMessage(`[AI_HORDE] Original prompt: "${prompt}"`);
+			logMessage(`[AI_HORDE] HTML context provided: ${!!htmlContext}`);
+			logMessage(`[AI_HORDE] HTML context length: ${htmlContext.length}`);
+			logMessage(`[AI_HORDE] HTML context preview: ${htmlContext.substring(0, 300)}...`);
+			logMessage(`[AI_HORDE] Component context: "${componentContext}"`);
+			logMessage(`[AI_HORDE] Image role: "${imageRole}"`);
+			logMessage(`[AI_HORDE] Aspect ratio: "${aspectRatio}"`);
 
-			console.error(`[FREEPIK_AI] Generating image with contextual prompt: "${contextualPrompt}"`);
+			console.error(`[AI_HORDE] Generating image with contextual prompt: "${contextualPrompt}"`);
 
-			const requestBody = {
-				prompt: contextualPrompt,
-				aspect_ratio: aspectRatio,
-				seed: seed
-			};
+			// Initialize AI Horde client
+			const ai_horde = new AIHorde({
+				cache_interval: 1000 * 10,
+				cache: {
+					generations_check: 1000 * 30
+				},
+				client_agent: "WhatsApp-Integration:v1.0.0:recflux@contact",
+				default_token: aiHordeApiKey
+			});
 
-			logMessage(`[FREEPIK_AI] Request body: ${JSON.stringify(requestBody)}`);
-
-			const response = await axios.post(
-				'https://api.freepik.com/v1/ai/text-to-image/flux-dev',
-				requestBody,
-				{
-					headers: {
-						'x-freepik-api-key': freepikApiKey,
-						'Content-Type': 'application/json'
-					}
-				}
-			);
-
-			logMessage('[FREEPIK_AI] API returned status: ' + response.status);
-			if (response.status === 200 || response.status === 202) {
-				logMessage('[FREEPIK_AI] Image generation request submitted successfully');
-				logMessage(`[FREEPIK_AI] Response data: ${JSON.stringify(response.data)}`);
-				
-				// Freepik returns a task_id for async processing
-				const taskId = response.data?.data?.task_id;
-				if (!taskId) {
-					return { content: [{ type: 'text', text: 'Error: No task ID returned from Freepik API' }] } as const;
-				}
-				
-				logMessage(`[FREEPIK_AI] Task ID: ${taskId}`);
-				
-				// Poll for job completion (simplified approach - in production you'd use webhooks)
-				let attempts = 0;
-				const maxAttempts = 30; // 30 attempts with 2 second intervals = 1 minute max wait
-				let imageUrl = null;
-				let allGeneratedImages = [];
-				
-				while (attempts < maxAttempts && !imageUrl) {
-					attempts++;
-					logMessage(`[FREEPIK_AI] Polling attempt ${attempts}/${maxAttempts}`);
-					
-					await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
-					
-					try {
-						const statusResponse = await axios.get(
-							`https://api.freepik.com/v1/ai/text-to-image/flux-dev/${taskId}`,
-							{
-								headers: {
-									'x-freepik-api-key': freepikApiKey
-								}
-							}
-						);
-						
-						logMessage(`[FREEPIK_AI] Status check ${attempts}: ${statusResponse.data?.data?.status}`);
-						logMessage(`[FREEPIK_AI] Full status response: ${JSON.stringify(statusResponse.data)}`);
-						
-						if (statusResponse.data?.data?.status === 'COMPLETED' && statusResponse.data?.data?.generated?.length > 0) {
-							allGeneratedImages = statusResponse.data.data.generated;
-							imageUrl = allGeneratedImages[0];
-							logMessage(`[FREEPIK_AI] Generated ${allGeneratedImages.length} images`);
-							logMessage(`[FREEPIK_AI] All image URLs: ${JSON.stringify(allGeneratedImages)}`);
-							logMessage(`[FREEPIK_AI] First image URL: ${imageUrl}`);
-							break;
-						} else if (statusResponse.data?.data?.status === 'FAILED') {
-							logMessage(`[FREEPIK_AI] Image generation failed: ${statusResponse.data?.data?.error || 'Unknown error'}`);
-							return { content: [{ type: 'text', text: `Image generation failed: ${statusResponse.data?.data?.error || 'Unknown error'}` }] } as const;
-						}
-					} catch (statusError: any) {
-						logMessage(`[FREEPIK_AI] Status check error: ${statusError?.message || statusError}`);
-					}
-				}
-				
-				if (!imageUrl) {
-					return { content: [{ type: 'text', text: 'Error: Image generation timed out or failed' }] } as const;
-				}
-				
-				// Return the direct Freepik URL - no need for additional upload
-				const timestamp = Date.now();
-				const sanitizedPrompt = prompt.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 50);
-				const filename = `freepik_${sanitizedPrompt}_${timestamp}.jpg`;
-				
-				logMessage(`[FREEPIK_AI] Image generation completed successfully!`);
-				logMessage(`[FREEPIK_AI] Direct image URL: ${imageUrl}`);
-				
-				// Cache the results for future use
-				try {
-					logMessage(`[FREEPIK_AI] Caching image generation results for prompt: ${prompt.substring(0, 50)}...`);
-					await cache.setImageGenerationResults(prompt, {
-						imageUrl: imageUrl,
-						allImages: allGeneratedImages,
-						metadata: {
-							aspectRatio: aspectRatio,
-							seed: seed,
-							taskId: taskId,
-							model: 'freepik-flux-dev',
-							generatedAt: new Date().toISOString()
-						},
-						ttl: 2592000 // 30 days
-					});
-				} catch (cacheError) {
-					logMessage(`[FREEPIK_AI] Failed to cache image generation results: ${cacheError}`);
-				}
-				
-				return { 
-					content: [{ 
-						type: 'text', 
-						text: JSON.stringify({
-							success: true,
-							imageUrl: imageUrl,
-							allImages: allGeneratedImages,
-							totalImages: allGeneratedImages.length,
-							filename: filename,
-							format: 'jpeg',
-							model: 'freepik-flux-dev',
-							hosting: 'Freepik CDN',
-							aspectRatio: aspectRatio,
-							seed: seed,
-							taskId: taskId,
-							cached: false
-						}, null, 2)
-					}] 
-				} as const;
-			} else {
-				console.error('[FREEPIK_AI] API returned error:', response.status, response.statusText);
-				return { content: [{ type: 'text', text: `Error: Freepik API returned ${response.status}` }] } as const;
+			// Convert aspect ratio to width/height (AI Horde requires multiples of 64)
+			let width = 512, height = 512;
+			switch (aspectRatio) {
+				case '1:1': width = 512; height = 512; break;
+				case '4:3': width = 512; height = 384; break;
+				case '3:4': width = 384; height = 512; break;
+				case '16:9': width = 576; height = 320; break;
+				case '9:16': width = 320; height = 576; break;
+				case '3:2': width = 512; height = 320; break;
+				case '2:3': width = 320; height = 512; break;
+				case '2:1': width = 512; height = 256; break;
+				case '1:2': width = 256; height = 512; break;
+				case '5:4': width = 512; height = 384; break;
+				case '4:5': width = 384; height = 512; break;
+				default: width = 512; height = 512; break;
 			}
 
+			logMessage(`[AI_HORDE] Dimensions: ${width}x${height}`);
+
+			// Start image generation using proper Stable Horde API parameters
+			const generation = await ai_horde.postAsyncImageGenerate({
+				prompt: contextualPrompt,
+				params: {
+					width: width,
+					height: height,
+					n: numImages,
+					seed: seed.toString(),
+					steps: steps,
+					cfg_scale: cfgScale,
+					sampler_name: samplerName
+				},
+				nsfw: false,
+				trusted_workers: trustedWorkers
+			});
+
+			logMessage(`[AI_HORDE] Generation started with ID: ${generation.id}`);
+			logMessage(`[AI_HORDE] Response data: ${JSON.stringify(generation)}`);
+
+			if (!generation.id) {
+				return { content: [{ type: 'text', text: 'Error: No generation ID returned from AI Horde API' }] } as const;
+			}
+
+			// Poll for job completion
+			let attempts = 0;
+			const maxAttempts = 60; // 60 attempts with 5 second intervals = 5 minutes max wait
+			let imageUrl = null;
+			let allGeneratedImages = [];
+
+			while (attempts < maxAttempts && !imageUrl) {
+				attempts++;
+				logMessage(`[AI_HORDE] Polling attempt ${attempts}/${maxAttempts}`);
+
+				await new Promise(resolve => setTimeout(resolve, 5000)); // Wait 5 seconds
+
+				try {
+					const check = await ai_horde.getImageGenerationCheck(generation.id);
+					logMessage(`[AI_HORDE] Status check ${attempts}: ${check.done ? 'COMPLETED' : 'PROCESSING'}`);
+					logMessage(`[AI_HORDE] Full status response: ${JSON.stringify(check)}`);
+
+					if (check.done && check.generations && check.generations.length > 0) {
+						allGeneratedImages = check.generations.map((gen: any) => gen.img);
+						imageUrl = allGeneratedImages[0];
+						logMessage(`[AI_HORDE] Generated ${allGeneratedImages.length} images`);
+						logMessage(`[AI_HORDE] All image URLs: ${JSON.stringify(allGeneratedImages)}`);
+						logMessage(`[AI_HORDE] First image URL: ${imageUrl}`);
+						break;
+					} else if (check.faulted) {
+						logMessage(`[AI_HORDE] Image generation failed: ${check.message || 'Unknown error'}`);
+						return { content: [{ type: 'text', text: `Image generation failed: ${check.message || 'Unknown error'}` }] } as const;
+					} else if (check.done && (!check.generations || check.generations.length === 0)) {
+						logMessage('[AI_HORDE] Generation marked as done but no images found - trying alternative status method');
+
+						// Try to get the status via different method
+						try {
+							const statusResp = await ai_horde.getImageGenerationStatus(generation.id);
+							logMessage(`[AI_HORDE] Alternative status check: ${JSON.stringify(statusResp)}`);
+
+							if (statusResp.generations && statusResp.generations.length > 0) {
+								allGeneratedImages = statusResp.generations.map((gen: any) => gen.img);
+								imageUrl = allGeneratedImages[0];
+								logMessage(`[AI_HORDE] SUCCESS via alternative method! Generated ${allGeneratedImages.length} images`);
+								logMessage(`[AI_HORDE] Image URL: ${imageUrl}`);
+								break;
+							}
+						} catch (altError: any) {
+							logMessage(`[AI_HORDE] Alternative status check failed: ${altError?.message || altError}`);
+						}
+					} else {
+						// Also try alternative method for processing status after some attempts
+						if (attempts >= 10 && attempts % 5 === 0) {
+							logMessage(`[AI_HORDE] Still processing after ${attempts} attempts - trying alternative status method`);
+							try {
+								const statusResp = await ai_horde.getImageGenerationStatus(generation.id);
+								logMessage(`[AI_HORDE] Alternative status check (processing): ${JSON.stringify(statusResp)}`);
+
+								if (statusResp.generations && statusResp.generations.length > 0) {
+									allGeneratedImages = statusResp.generations.map((gen: any) => gen.img);
+									imageUrl = allGeneratedImages[0];
+									logMessage(`[AI_HORDE] SUCCESS via alternative method (processing)! Generated ${allGeneratedImages.length} images`);
+									logMessage(`[AI_HORDE] Image URL: ${imageUrl}`);
+									break;
+								}
+							} catch (altError: any) {
+								logMessage(`[AI_HORDE] Alternative status check (processing) failed: ${altError?.message || altError}`);
+							}
+						}
+					}
+				} catch (statusError: any) {
+					logMessage(`[AI_HORDE] Status check error: ${statusError?.message || statusError}`);
+				}
+			}
+
+			if (!imageUrl) {
+				return { content: [{ type: 'text', text: 'Error: Image generation timed out or failed' }] } as const;
+			}
+				
+			// Return the direct AI Horde URL - no need for additional upload
+			const timestamp = Date.now();
+			const sanitizedPrompt = prompt.replace(/[^a-zA-Z0-9\s]/g, '').replace(/\s+/g, '_').substring(0, 50);
+			const filename = `ai_horde_${sanitizedPrompt}_${timestamp}.jpg`;
+
+			logMessage(`[AI_HORDE] Image generation completed successfully!`);
+			logMessage(`[AI_HORDE] Direct image URL: ${imageUrl}`);
+
+			// Cache the results for future use
+			try {
+				logMessage(`[AI_HORDE] Caching image generation results for prompt: ${prompt.substring(0, 50)}...`);
+				await cache.setImageGenerationResults(prompt, {
+					imageUrl: imageUrl,
+					allImages: allGeneratedImages,
+					metadata: {
+						aspectRatio: aspectRatio,
+						seed: seed,
+						taskId: generation.id,
+						model: 'ai-horde',
+						generatedAt: new Date().toISOString()
+					},
+					ttl: 2592000 // 30 days
+				});
+			} catch (cacheError) {
+				logMessage(`[AI_HORDE] Failed to cache image generation results: ${cacheError}`);
+			}
+
+			return { 
+				content: [{ 
+					type: 'text', 
+					text: JSON.stringify({
+						success: true,
+						imageUrl: imageUrl,
+						allImages: allGeneratedImages,
+						totalImages: allGeneratedImages.length,
+						filename: filename,
+						format: 'jpeg',
+						model: 'ai-horde',
+						hosting: 'AI Horde CDN',
+						aspectRatio: aspectRatio,
+						seed: seed,
+						taskId: generation.id,
+						cached: false
+					}, null, 2)
+				}] 
+			} as const;
+
 		} catch (error: any) {
-			console.error('[FREEPIK_AI] Error generating image:', error?.message || error);
-			logMessage(`[FREEPIK_AI] Full error details: ${JSON.stringify({
+			console.error('[AI_HORDE] Error generating image:', error?.message || error);
+			logMessage(`[AI_HORDE] Full error details: ${JSON.stringify({
 				message: error?.message,
 				status: error?.response?.status,
 				statusText: error?.response?.statusText,
@@ -1971,9 +2023,9 @@ async function main(): Promise<void> {
 	console.error('- netlify_deploy');
 	console.error('- color_palette_generator');
 	console.error('- puppeteer_search');
-	console.error('- freepik_ai_image_generator');
+	console.error('- ai_horde_image_generator');
 	console.error('- web_crawler');
-	console.error('- gemini_vision_analyzer');
+	console.error('- vision_analyzer');
 	console.error('- design_inspiration_analyzer');
 	console.error('- current_validation_status');
 	console.error('[MCP_SERVER] Process starting...');

@@ -21,6 +21,7 @@
     "@supabase/supabase-js": "^2.50.2",
     "@tavily/core": "^0.5.11",
     "@types/fluent-ffmpeg": "^2.1.27",
+    "@zeldafan0225/ai_horde": "^6.0.1",
     "axios": "^1.7.7",
     "body-parser": "^1.20.2",
     "chokidar": "^3.5.3",

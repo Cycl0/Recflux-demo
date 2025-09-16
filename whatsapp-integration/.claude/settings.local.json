@@ -12,7 +12,16 @@
       "Bash(npm run:*)",
       "Bash(docker cp:*)",
       "Bash(find:*)",
-      "Bash(sed:*)"
+      "Bash(sed:*)",
+      "Bash(export:*)",
+      "Bash(timeout:*)",
+      "Bash(cat:*)",
+      "Read(//c/Users/Lucas/.cline_cli/storage/tasks/1757813821156/**)",
+      "Bash(cp:*)",
+      "Bash(OPEN_AI_API_KEY=c06f84adf4904b84b508b16fb9dd1ae1.giekK3zZ6BDFHrnT node:*)",
+      "Bash(OPEN_AI_API_KEY=c06f84adf4904b84b508b16fb9dd1ae1.giekK3zZ6BDFHrnT timeout 15 node:*)",
+      "mcp__ide__getDiagnostics",
+      "Bash(OPEN_AI_API_KEY=c06f84adf4904b84b508b16fb9dd1ae1.giekK3zZ6BDFHrnT timeout:*)"
     ],
     "deny": [],
     "ask": []

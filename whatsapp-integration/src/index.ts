@@ -1314,14 +1314,7 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
  try { const st = await fs.stat(dir); if (!st.isDirectory()) throw new Error('not dir'); } catch { return { text: '⚠️ Projeto ausente. Use /login ou peça project_reset para recriar a pasta.' }; }
 	const system = `
 		🚨 CRITICAL REQUIREMENTS FOR COMPLETE WEBSITE 🚨
-		
-		📄 MANDATORY PAGE CREATION: You MUST create these missing pages:
-		✅ app/about/page.tsx - About page with theme content
-		✅ app/contact/page.tsx - Contact page with forms  
-		✅ app/pricing/page.tsx - Pricing page (if applicable to theme)
-		✅ app/blog/page.tsx - Blog listing page
-		✅ app/docs/page.tsx - Documentation page (if applicable)
-		
+
 		🎬 ANIMATION FIX REQUIREMENTS: Prevent elements being stuck in display:none
 		✅ Use initial={{ opacity: 1, y: 0 }} for motion components
 		✅ Add className="opacity-100" to ensure visibility
@@ -2264,19 +2257,6 @@ async function buildAndDeployFromPrompt(nlPrompt: string, whatsappFrom: string):
 		 ✅ REQUIRED: All features should be SIMULATED but FUNCTIONAL (working UI/UX)
 		 ✅ REQUIRED: Use local state management for cart/forms/interactions
 		 ✅ REQUIRED: Add realistic data and smooth user interactions
-
-		 📄 ADDITIONAL PAGES CREATION (MANDATORY):
-		 ✅ REQUIRED: Create ALL relevant pages for the business type:
-		 - /about: Company story, team, mission with real content
-		 - /contact: Contact form, location, support info
-		 - /services or /products: Detailed offerings with images
-		 - /marketplace or /shop: Product/service listings (if relevant)
-		 - /pricing: Pricing tiers with feature comparisons (if relevant)
-		 - /blog: Sample blog posts related to the business
-		 - /faq: Frequently asked questions with answers
-		 ✅ REQUIRED: Each page must have unique, theme-relevant content
-		 ✅ REQUIRED: All pages must be fully styled and functional
-		 ✅ REQUIRED: Add proper navigation between pages
 		
 		4) GERAÇÃO DE PALETA DE CORES TEMÁTICA AVANÇADA COM INSPIRAÇÃO - Execute estes passos:
 		 a) ANÁLISE DETALHADA DO TEMA: Identifique o tema específico e subtema (ex: gaming→RPG, business→fintech, food→italian)
@@ -3190,12 +3170,263 @@ app.get('/webhook', (req: Request, res: Response) => {
 	return res.sendStatus(403);
 });
 
+// Login route for both WhatsApp and Telegram users - redirects to Google OAuth
+app.get('/login', (req: Request, res: Response) => {
+	const userId = req.query.userId as string;
+	const platform = req.query.platform as string || 'whatsapp';
+	
+	if (!userId) {
+		return res.status(400).send('Missing userId parameter');
+	}
+	
+	console.log(`[LOGIN] User ${userId} from ${platform} accessing login - redirecting to Google OAuth`);
+	
+	// Create state parameter that includes both user ID and platform
+	const state = JSON.stringify({ userId, platform });
+	const encodedState = encodeURIComponent(state);
+	
+	// Redirect to Google OAuth with state containing user info
+	const googleAuthUrl = `/auth/google?state=${encodedState}`;
+	
+	console.log(`[LOGIN] Redirecting to Google OAuth: ${googleAuthUrl}`);
+	res.redirect(googleAuthUrl);
+});
+
+// Telegram message sending via GateKit API
+async function sendTelegramMessage(userId: string, text: string, botId: string) {
+	try {
+		console.log(`[TELEGRAM_API] Sending message to ${userId} via bot ${botId}: ${text.substring(0, 100)}...`);
+		
+		const response = await fetch('https://dev.gatekit.dev/api/v1/messages', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json',
+				'X-API-Key': process.env.GATE_KIT_API_KEY || ''
+			},
+			body: JSON.stringify({
+				"targets": [
+					{
+						"botId": botId,
+						"target": {
+							"type": "user",
+							"id": userId
+						}
+					}
+				],
+				"content": {
+					"text": text
+				}
+			})
+		});
+
+		// Handle different response types from GateKit API
+		let data;
+		const responseText = await response.text();
+		
+		try {
+			data = JSON.parse(responseText);
+		} catch (parseError) {
+			// If it's not JSON, treat as plain text
+			console.log(`[TELEGRAM_API] Non-JSON response:`, responseText);
+			data = { success: response.ok, rawResponse: responseText };
+		}
+		
+		if (response.ok) {
+			console.log(`[TELEGRAM_API] Message sent successfully, status: ${response.status}`);
+		} else {
+			console.error(`[TELEGRAM_API] API error, status: ${response.status}, response:`, data);
+		}
+		
+		return data;
+	} catch (err: any) {
+		console.error(`[TELEGRAM_API] Error sending message:`, err?.message || err);
+		// Don't throw error to avoid crashing webhook processing
+		return { success: false, error: err?.message || err };
+	}
+}
+
+// Process Telegram messages with same logic as WhatsApp
+async function processTelegramMessage(from: string, text: string, botId: string) {
+	let reply = '';
+	let wrapAsCode = true;
+	
+	if (text.toLowerCase().startsWith('/deploy ')) {
+		const reactCode = text.slice(8);
+		// Immediate feedback to user about expected duration
+		await sendTelegramMessage(from, '⚡ Iniciando deploy… Aguarde alguns minutos!', botId);
+		const dirFromEnv = process.env.CLONED_TEMPLATE_DIR;
+		if (!dirFromEnv) {
+			reply = '⚠️ Projeto não inicializado. Faça /login para criar o projeto a partir do template.';
+			wrapAsCode = false;
+			await sendTelegramMessage(from, reply, botId);
+			return;
+		}
+		const dir = dirFromEnv;
+		try { const st = await fs.stat(dir); if (!st.isDirectory()) throw new Error('not dir'); } catch {
+			reply = '⚠️ Projeto ausente. Use /login ou peça project_reset para recriar a pasta.';
+			wrapAsCode = false;
+			await sendTelegramMessage(from, reply, botId);
+			return;
+		}
+		const systemDeploy = `Você é um admin de código. Edite o projeto desta pasta conforme o pedido.`;
+		try {
+			// Clear all build caches before Cline execution to prevent stale deployments
+			console.log('[CACHE] Clearing build caches before Cline execution (deploy prompt)...');
+			const cacheDirectories = ['.next', 'out', 'node_modules/.cache', '.cache', 'build', 'dist'];
+			for (const cacheDir of cacheDirectories) {
+				try {
+					await fs.rm(path.join(dir, cacheDir), { recursive: true, force: true });
+					console.log(`[CACHE] ✅ Cleared ${cacheDir}`);
+				} catch (e) {
+					console.log(`[CACHE] ℹ️ ${cacheDir} not found (already clean)`);
+				}
+			}
+			
+			// Fix ownership after cache clearing to ensure build processes can write
+			try {
+				const { spawn } = await import('child_process');
+				await new Promise<void>((resolve) => {
+					const chownProcess = spawn('chown', ['-R', 'appuser:appuser', dir], { stdio: 'ignore' });
+					chownProcess.on('close', () => resolve());
+					chownProcess.on('error', () => resolve()); // Continue even if chown fails
+				});
+				console.log('[CACHE] ✅ Fixed ownership after cache clearing');
+			} catch (e) {
+				console.log('[CACHE] ℹ️ Could not fix ownership (might not be in container)');
+			}
+			
+			const before = await hashDirectory(dir);
+			const result = await runClineCLIInDirWithValidation(dir, reactCode, systemDeploy);
+			const stdout = result.stdout;
+			console.log('[CLINE][DEPLOY PROMPT] raw output length', stdout?.length || 0);
+			const after = await hashDirectory(dir);
+			let changed = false;
+			if (before.size !== after.size) changed = true;
+			else {
+				for (const [k, v] of after.entries()) { if (before.get(k) !== v) { changed = true; break; } }
+			}
+			
+			let deploymentResult: { deploymentUrl?: string; previewUrl?: string; adminUrl?: string } | null = null;
+			
+			if (changed) {
+				console.log('[DEPLOY] Changes detected, deploying to Netlify...');
+				try {
+					deploymentResult = await deployToNetlify(dir);
+					console.log('[DEPLOY] Netlify deployment completed:', deploymentResult);
+				} catch (deployError) {
+					console.error('[DEPLOY] Netlify deployment failed:', deployError);
+					reply = `❌ Deploy falhou: ${deployError}`;
+					wrapAsCode = false;
+					await sendTelegramMessage(from, reply, botId);
+					return;
+				}
+			} else {
+				console.log('[DEPLOY] No changes detected, deployment skipped.');
+				deploymentResult = { deploymentUrl: undefined, previewUrl: undefined, adminUrl: undefined };
+			}
+			
+			// 1. Send Cline's commentary first if available
+			if (stdout && stdout.trim().length > 0) {
+				console.log(`[WEBHOOK] Sending Cline commentary to ${from} for /deploy command`);
+				await sendTelegramMessage(from, stdout.trim(), botId);
+			}
+			
+			// 2. Prepare and send deployment link
+			if (deploymentResult?.deploymentUrl) {
+				reply = `✅ Site atualizado!\n🔗 ${deploymentResult.deploymentUrl}`;
+				
+				if (deploymentResult.adminUrl) {
+					reply += `\n\n📊 Admin: ${deploymentResult.adminUrl}`;
+				}
+				
+				await sendTelegramMessage(from, reply, botId);
+			} else if (deploymentResult) {
+				reply = '✅ Código modificado, mas sem deploy (sem mudanças)';
+				await sendTelegramMessage(from, reply, botId);
+			} else {
+				reply = '❌ Falha no deploy';
+				await sendTelegramMessage(from, reply, botId);
+			}
+			
+			return;
+		} catch (e: any) {
+			console.error('[DEPLOY PROMPT] Error:', e);
+			reply = `❌ Erro no deploy: ${e?.message || e}`;
+			wrapAsCode = false;
+		}
+	} else if (text.toLowerCase().startsWith('/login')) {
+		const base = (process.env.PUBLIC_BASE_URL && process.env.PUBLIC_BASE_URL.trim()) || `http://localhost:${process.env.PORT || 3000}`;
+		const normalizedBase = base.endsWith('/') ? base.slice(0, -1) : base;
+		reply = `🔗 Acesse: ${normalizedBase}/login?userId=${from}&platform=telegram`;
+		wrapAsCode = false;
+	} else if (text.toLowerCase().startsWith('/access ')) {
+		reply = 'O comando /access não está disponível nesta versão.';
+		wrapAsCode = false;
+	} else if (text.toLowerCase() === '/help' || text.toLowerCase() === '/start') {
+		reply = 'Envie um prompt em linguagem natural (ex.: "Crie um portfólio moderno") e eu vou gerar e publicar. Comandos: /login, /agentic, /access, /deploy';
+		wrapAsCode = false;
+	} else {
+		console.log(`[WEBHOOK] Processing deployment request from ${from}: "${text.substring(0, 100)}..."`);
+		// Immediate feedback to user about expected duration
+		await sendTelegramMessage(from, '⚡ Gerando e publicando… Aguarde alguns minutos!', botId);
+		const result = await buildAndDeployFromPrompt(text, from);
+		console.log('[WEBHOOK] Deployment result:', {
+			textLength: result.text.length,
+			hasDeploymentUrl: !!result.deploymentUrl,
+			hasClineOutput: !!result.clineOutput
+		});
+		
+		// 1. Send Cline's commentary first if available
+		if (result.clineOutput && result.clineOutput.trim().length > 0) {
+			console.log(`[WEBHOOK] Sending Cline commentary to ${from}`);
+			await sendTelegramMessage(from, result.clineOutput.trim(), botId);
+		}
+		
+		// 2. Send the link immediately when ready
+		console.log(`[WEBHOOK] Sending deployment result to ${from}`);
+		await sendTelegramMessage(from, result.text, botId);
+		
+		// Note: Telegram via GateKit doesn't support media uploads yet
+		// So we skip the screenshot/video functionality for now
+		return; // Early return to avoid sending additional reply
+	}
+
+	if (reply) {
+		if (wrapAsCode) {
+			reply = `\`\`\`\n${reply}\n\`\`\``;
+		}
+		await sendTelegramMessage(from, reply, botId);
+	}
+}
+
 app.post('/webhook', async (req: Request, res: Response) => {
 	try {
 		// Debug: print the incoming request
 		console.log('[WEBHOOK] method=POST path=/webhook');
 		console.log('[WEBHOOK] headers=', JSON.stringify(req.headers));
 		console.log('[WEBHOOK] body=', JSON.stringify(req.body));
+
+		// Check if this is a Telegram webhook (GateKit format)
+		if (req.body?.platform === 'telegram' && req.body?.event_type === 'message') {
+			const telegramData = req.body;
+			const from = telegramData.user?.id;
+			const text: string = (telegramData.message?.text || '').trim();
+			const uniqueId = telegramData.message?.id || `${from}:${telegramData.timestamp || Date.now()}`;
+			const botId = telegramData.bot_id;
+			
+			console.log(`[WEBHOOK] Telegram message from ${telegramData.user?.username || from}: "${text}"`);
+			
+			if (!(await ensureFirstProcessDistributed(uniqueId))) {
+				console.log(`[WEBHOOK] duplicate Telegram message detected, id=${uniqueId}, skipping`);
+				return res.sendStatus(200);
+			}
+
+			// Process Telegram message with the same logic as WhatsApp
+			await processTelegramMessage(from, text, botId);
+			return res.sendStatus(200);
+		}
+
+		// Original WhatsApp webhook handling
 		const entry = req.body?.entry?.[0];
 		const changes = entry?.changes?.[0];
 		const value = changes?.value;

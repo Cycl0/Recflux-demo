@@ -27,8 +27,8 @@ export const syntaxFixSystemPrompt = `You are a syntax error fixing specialist. 
 
 ## TOOL GUIDELINES:
 - **Read Tool**: MANDATORY before any edit
-- **Edit Tool**: For single, precise changes
-- **MultiEdit Tool**: For multiple related changes in one file (PREFERRED for complex fixes)
+- **MultiEdit Tool**: For single, precise changes and multiple related changes in one or more files (PREFERRED for complex fixes)
+- **replace_in_file Tool**: For larger structural changes requiring search/replace blocks
 - **Write Tool**: Use for complete file rewrites when necessary
 
 ## FIXING APPROACH WHEN TOOLS FAIL:
@@ -46,14 +46,14 @@ If you get file write errors or tool failures, use this systematic approach:
 - **write_to_file**: Use for complete file overwrites when needed
   - Examples: New components, config files, complete rewrites
   - See TOOL_USAGE_EXAMPLES.md for comprehensive examples
-- **replace_in_file**: Use for search-replace operations with diff format  
+- **replace_in_file**: Use for search-replace operations with diff format
   - Examples: Adding imports, updating JSX props, modifying functions
   - Fixed: No more stray code like BadgeContent corrupting files
   - See SYNTAX_FIX_EXAMPLES.md for specific syntax error scenarios
 - **execute_command**: Use for running build/validation commands
   - Examples: npm commands, git operations, file system tasks
   - Fixed: Proper error logging with OutputChannel messages
-- **Read, Edit, MultiEdit**: Primary tools for targeted file modifications
+- **Read, MultiEdit**: Primary tools for targeted file modifications
 - All tools have been fixed and work reliably in the container environment
 
 ## COMPREHENSIVE EXAMPLES AVAILABLE:
@@ -156,13 +156,12 @@ export function getFixTaskSystemPrompt(): string {
 
 ## CRITICAL EDITING RULES:
 🚨 **NEVER use replace_in_file with large diffs** 🚨
-🚨 **ALWAYS use edit_file tool for single-line or small changes** 🚨  
+🚨 **ALWAYS use multi_edit_file tool for single-line or small changes** 🚨
 🚨 **Use multi_edit_file tool for multiple small, related changes** 🚨
 🚨 **Make MINIMAL changes - fix ONLY the specific error** 🚨
 
 ## TOOL SELECTION BASED ON ERROR SCOPE:
-- **edit_file**: Character/line level fixes (preferred for TypeScript errors)
-- **multi_edit_file**: Multiple related fixes in same file (2-5 changes)
+- **multi_edit_file**: Character/line level fixes and multiple related fixes in same file (2-5 changes) (preferred for TypeScript errors)
 - **replace_in_file**: Only for complex structural changes
 - **write_to_file**: Only for complete rewrites
 
@@ -170,7 +169,7 @@ export function getFixTaskSystemPrompt(): string {
 1. **Start every turn** with: Use current_validation_status MCP tool to get current error list
 2. **Read the error report** to understand what needs fixing
 3. **Read the relevant files** using Read tool - focus on the EXACT line numbers mentioned in errors
-4. **Apply MINIMAL, TARGETED fixes** using Edit tool for small changes
+4. **Apply MINIMAL, TARGETED fixes** using multi_edit_file tool for small changes
 5. **Check progress** with current_validation_status again after changes
 6. **Continue until no errors remain**
 
@@ -190,35 +189,36 @@ export function getFixTaskSystemPrompt(): string {
 
 ✅ GOOD (Minimal Edit):
 \`\`\`
-<edit_file>
+<multi_edit_file>
+<edits>
+<edit>
 <path>components/NavBar.tsx</path>
 <old_string>export const NavBar = () => {</old_string>
 <new_string>export const NavBar = ({ brandName, brandUrl, navigationItems, rightSideItems }: {
   brandName: string;
-  brandUrl: string; 
+  brandUrl: string;
   navigationItems: Array<{ type: string; label: string; href: string }>;
   rightSideItems: Array<{ type: string; label: string; href: string; variant: string }>;
 }) => {</new_string>
-</edit_file>
+</edit>
+</edits>
+</multi_edit_file>
 \`\`\`
 
 ✅ GOOD (Multiple Fixes):
 \`\`\`
 <multi_edit_file>
-<path>app/page.tsx</path>
 <edits>
-[
-  {
-    "old_string": "color={primaryColor}",
-    "new_string": "color=\"primary\"",
-    "line_number": 219
-  },
-  {
-    "old_string": "color={secondaryColor}",
-    "new_string": "color=\"secondary\"", 
-    "line_number": 228
-  }
-]
+<edit>
+<path>app/page.tsx</path>
+<old_string>color={primaryColor}</old_string>
+<new_string>color="primary"</new_string>
+</edit>
+<edit>
+<path>app/page.tsx</path>
+<old_string>color={secondaryColor}</old_string>
+<new_string>color="secondary"</new_string>
+</edit>
 </edits>
 </multi_edit_file>
 \`\`\`
@@ -234,8 +234,7 @@ export function getFixTaskSystemPrompt(): string {
 ## TOOL USAGE:
 - current_validation_status: Get current errors (use at start of each turn)
 - read_file: Examine files with errors (focus on exact line numbers)
-- **edit_file: Apply single, precise fixes (PREFERRED for TypeScript errors)**
-- **multi_edit_file: Apply multiple small fixes to same file (when needed)**
+- **multi_edit_file: Apply single, precise fixes and multiple small fixes to same file (PREFERRED for TypeScript errors)**
 - current_validation_status: Verify fixes worked
 
 Your instructions and error context will be provided with each task start.`;
