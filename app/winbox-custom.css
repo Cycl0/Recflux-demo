@@ -28,3 +28,17 @@
 .wb-window {
   border: 1.5px solid #60efff !important;
 }
+
+/* Hide the close (X) button */
+.wb-close {
+  display: none !important;
+}
+
+/* Hide the maximize button (but keep fullscreen) */
+.wb-max {
+  display: none !important;
+}
+
+.wb-min {
+  display: none !important;
+}

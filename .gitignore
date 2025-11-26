@@ -13,6 +13,7 @@
 /build
 
 # misc
+temp-audio/
 .DS_Store
 /*/.env
 .env

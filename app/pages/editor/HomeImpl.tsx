@@ -61,7 +61,7 @@ import { supabase } from '@/utils/supabaseClient';
 import { useSupabaseUser } from '@/utils/useSupabaseUser';
 import { useChat } from "@ai-sdk/react";
 import CopyButton from '@/components/CopyButton'
-import { Bot, User, Moon, Sun } from 'lucide-react'
+import { Bot, User, Moon, Sun, Mic, MicOff } from 'lucide-react'
 import ReactMarkdown from 'react-markdown';
 import rehypePrism from 'rehype-prism-plus';
 import remarkGfm from 'remark-gfm';
@@ -408,8 +408,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
     if (messages.length > MAX_MESSAGES) {
       setMessages(prev => {
         const cleaned = prev.slice(-MAX_MESSAGES);
-        console.log(`[PERFORMANCE] Cleaned message history: ${prev.length} -> ${cleaned.length}`);
-        return cleaned;
+                return cleaned;
       });
     }
   }, [messages.length]);
@@ -440,10 +439,172 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
 
   const [creditError, setCreditError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [audioTranscript, setAudioTranscript] = useState('');
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const audioStreamRef = useRef<MediaStream | null>(null);
 
-  // Helper function to call the agentic API
+  // Audio recording and transcription functions
+  const startRecording = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+          echoCancellation: true,
+          noiseSuppression: true,
+          sampleRate: 16000
+        }
+      });
+
+      // Store stream in ref for cleanup
+      audioStreamRef.current = stream;
+
+      // Try to get supported MIME types
+      let mimeType = 'audio/webm';
+      if (MediaRecorder.isTypeSupported('audio/wav')) {
+        mimeType = 'audio/wav';
+      } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+        mimeType = 'audio/mp4';
+      }
+
+      console.log('Using MIME type:', mimeType);
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
+      mediaRecorderRef.current = mediaRecorder;
+      const audioChunks: Blob[] = [];
+
+      mediaRecorder.ondataavailable = (event) => {
+        if (event.data.size > 0) {
+          audioChunks.push(event.data);
+          console.log('Audio chunk received:', event.data.size, 'bytes');
+        }
+      };
+
+      mediaRecorder.onstop = async () => {
+        console.log('Recording stopped, processing audio chunks...');
+        console.log('Total chunks:', audioChunks.length);
+
+        // Create blob with detected MIME type
+        const audioBlob = new Blob(audioChunks, { type: mimeType });
+        console.log('Final audio blob:', audioBlob.size, 'bytes, type:', audioBlob.type);
+
+        // Convert to WAV if needed
+        let blobToTranscribe = audioBlob;
+        if (mimeType !== 'audio/wav') {
+          // Keep original format, most Whisper servers accept multiple formats
+          blobToTranscribe = audioBlob;
+        }
+
+        await transcribeAudio(blobToTranscribe);
+        cleanupRecording();
+      };
+
+      mediaRecorder.start(1000); // Collect data every second
+      setIsRecording(true);
+      console.log('Recording started...');
+
+      // Stop recording after 30 seconds max
+      setTimeout(() => {
+        if (mediaRecorder.state === 'recording') {
+          console.log('Auto-stopping recording after 30 seconds');
+          stopRecording();
+        }
+      }, 30000);
+    } catch (error) {
+      console.error('Error accessing microphone:', error);
+      alert('Não foi possível acessar o microfone. Por favor, verifique as permissões.');
+    }
+  };
+
+  const stopRecording = () => {
+    console.log('Manual stopRecording called');
+
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'recording') {
+      console.log('Stopping MediaRecorder');
+      mediaRecorderRef.current.stop();
+    }
+
+    setIsRecording(false);
+  };
+
+  const cleanupRecording = () => {
+    console.log('Cleaning up recording resources');
+
+    // Stop all audio tracks
+    if (audioStreamRef.current) {
+      audioStreamRef.current.getTracks().forEach(track => track.stop());
+      audioStreamRef.current = null;
+    }
+
+    // Clear recorder reference
+    mediaRecorderRef.current = null;
+
+    setIsRecording(false);
+  };
+
+  const transcribeAudio = async (audioBlob: Blob) => {
+    try {
+      // Debug: Check audio blob
+      console.log('Audio blob size:', audioBlob.size, 'type:', audioBlob.type);
+
+      const formData = new FormData();
+
+      // Try different field names that Whisper APIs commonly use
+      formData.append('audio', audioBlob, 'recording.wav');
+      formData.append('file', audioBlob, 'recording.wav');
+
+      console.log('Sending request to /api/transcribe proxy');
+
+      const response = await fetch('/api/transcribe', {
+        method: 'POST',
+        body: formData,
+      });
+
+      console.log('Response status:', response.status);
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Transcription failed with status:', response.status, 'Error:', errorText);
+        throw new Error(`Transcription failed: ${response.status} - ${errorText}`);
+      }
+
+      const result = await response.json();
+      console.log('Transcription response:', result);
+
+      // Try different possible response formats
+      const transcript = result.text || result.transcript || result.result || result.output || '';
+
+      if (transcript && transcript.trim()) {
+        console.log('Transcription successful:', transcript);
+        setAudioTranscript(transcript);
+        setInput(prev => prev + (prev ? ' ' : '') + transcript);
+      } else {
+        console.warn('No transcript found in response:', result);
+        alert('Nenhuma transcrição encontrada na resposta.');
+      }
+    } catch (error) {
+      console.error('Error transcribing audio:', error);
+      alert(`Erro na transcrição do áudio: ${error.message}. Verifique se o servidor Whisper está rodando em localhost:8089`);
+    }
+  };
+
+  const toggleRecording = () => {
+    if (isRecording) {
+      stopRecording();
+    } else {
+      startRecording();
+    }
+  };
+
+  // Cleanup recording when component unmounts
+  useEffect(() => {
+    return () => {
+      cleanupRecording();
+    };
+  }, []);
+
+// Helper function to call the agentic API
   async function callAgenticApi(payload: any) {
-    const response = await fetch('/api/agentic-structured', {
+        const response = await fetch('/api/agentic-structured', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -467,10 +628,12 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    
-    if (isSubmitting || currentLoading || !input) return;
+  
+    if (isSubmitting || currentLoading || !input) {
+        return;
+    }
     if (!user || !user.email) {
-      setCreditError('Você precisa estar logado para enviar prompts.');
+        setCreditError('Você precisa estar logado para enviar prompts.');
       return;
     }
     
@@ -482,6 +645,14 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
     const userInput = input; // Capture input before clearing
     setInput('');
 
+    // Check for /clear command
+    if (userInput.trim() === '/clear') {
+      setMessages([]);
+      setIsSubmitting(false);
+      setIsLoading(false);
+      return;
+    }
+
     const userMessage = { id: Date.now().toString(), role: "user" as const, content: userInput };
     const assistantMessageId = (Date.now() + 1).toString();
     const skeletonMessage = { id: assistantMessageId, role: "assistant" as const, content: "", isLoading: true };
@@ -489,6 +660,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
     setMessages(prev => [...prev, userMessage, skeletonMessage]);
 
     try {
+      
       // Prepare and send the API request
       const actionPrompts = {
         'GERAR': userInput,
@@ -513,6 +685,7 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
         onCreditsUpdate(); // Refresh credits on any successful response
       }
 
+  
       const actionIcons = { 'GERAR': '🚀', 'EDITAR': '✏️', 'FOCAR': '🎯', 'CHAT': '💬' };
       const actionMessages = {
         'GERAR': 'Código gerado com sucesso!',
@@ -529,13 +702,13 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
       };
 
       if (data.changes && data.changes.length > 0) {
-        const { oldCode, newCode } = applyAgenticChanges(data.changes);
-        (finalAssistantMessage as any).diffData = { oldCode, newCode, changes: data.changes };
+                const { oldCode, newCode } = applyAgenticChanges(data.changes);
+                (finalAssistantMessage as any).diffData = { oldCode, newCode, changes: data.changes };
         finalAssistantMessage.content = `${actionIcons[chatAction.value]} **${actionMessages[chatAction.value]}**\n\n${data.explanation}`;
       } else if (data.error) {
-        finalAssistantMessage.content = `❌ Erro: ${data.error}\n\n${data.explanation || ''}`;
+                finalAssistantMessage.content = `❌ Erro: ${data.error}\n\n${data.explanation || ''}`;
       } else {
-        finalAssistantMessage.content = `${actionIcons[chatAction.value]} ${data.explanation || 'Nenhuma mudança necessária.'}`;
+                finalAssistantMessage.content = `${actionIcons[chatAction.value]} ${data.explanation || 'Nenhuma mudança necessária.'}`;
       }
       
       setMessages(prev => prev.map(m => m.id === assistantMessageId ? finalAssistantMessage : m));
@@ -791,14 +964,31 @@ function Chat({ onPromptSubmit, theme, appendRef, user, onCreditsUpdate, publicU
           }}
           menuPlacement="top"
         />
-        <div className="flex gap-2 items-center">
+        <div className="flex gap-2 items-center relative">
           <TextareaAutosize
             value={input}
             onChange={handleInputChange}
             placeholder="Digite o que deseja fazer..."
-            className="flex-1 resize-none p-2 bg-gray-100 dark:bg-[#1a1d22] backdrop-blur-md text-gray-900 dark:text-gray-100 focus:bg-gray-200 dark:focus:bg-[#1a1d22] border-none placeholder-gray-900 dark:placeholder-gray-100 rounded-xl shadow-[0_4px_32px_0_rgba(34,211,238,0.18)] outline-none focus:ring-2 focus:ring-cyan-200/40 transition-all duration-300 ease-in-out"
+            className="flex-1 resize-none p-2 pr-14 bg-gray-100 dark:bg-[#1a1d22] backdrop-blur-md text-gray-900 dark:text-gray-100 focus:bg-gray-200 dark:focus:bg-[#1a1d22] border-none placeholder-gray-900 dark:placeholder-gray-100 rounded-xl shadow-[0_4px_32px_0_rgba(34,211,238,0.18)] outline-none focus:ring-2 focus:ring-cyan-200/40 transition-all duration-300 ease-in-out"
             rows={1}
           />
+          <button
+            type="button"
+            onClick={toggleRecording}
+            disabled={currentLoading || isSubmitting}
+            className={`absolute right-16 top-1/2 transform -translate-y-1/2 p-1 rounded-full transition-all duration-300 z-10 border-2 border-blue-400 ${
+              isRecording
+                ? 'bg-red-500 text-white hover:bg-red-600 animate-pulse'
+                : 'bg-blue-400 text-white hover:bg-blue-500 shadow-lg'
+            } disabled:opacity-50 disabled:cursor-not-allowed`}
+            title={isRecording ? 'Parar gravação' : 'Iniciar gravação de áudio'}
+          >
+            {isRecording ? (
+              <MicOff className="w-4 h-4" />
+            ) : (
+              <Mic className="w-4 h-4" />
+            )}
+          </button>
           {sendingToEditor && (
             <span className="animate-spin text-cyan-700" title="Enviando para o Editor">
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" className="w-6 h-6">
@@ -1294,12 +1484,35 @@ function Home({ onLayoutChange = () => {}, ...props }) {
   // Track project loading state to avoid race condition
   const [loadingProject, setLoadingProject] = useState(false);
 
+  // Track if auto-save is in progress to avoid race conditions with project loading
+  const [autoSaveInProgress, setAutoSaveInProgress] = useState(false);
+
+  // Track the last projectId that was loaded to avoid redundant loads
+  const lastLoadedProjectIdRef = useRef<string | null>(null);
+
   // Load code for the selected project whenever it changes
   useEffect(() => {
     if (!selectedProjectId) {
       console.warn('[LOAD] Skipped: selectedProjectId is falsy', selectedProjectId);
       return;
     }
+
+    // ABSOLUTE BLOCK: Skip loading if auto-save is in progress to prevent overwriting
+    if (autoSaveInProgress) {
+        return;
+    }
+
+    // Skip if we just loaded this project
+    if (lastLoadedProjectIdRef.current === selectedProjectId) {
+          return;
+    }
+
+    // Skip loading if we just switched projects (avoid race conditions)
+    if (loadingProject) {
+            return;
+    }
+
+      lastLoadedProjectIdRef.current = selectedProjectId;
     setLoadingProject(true);
     // Always try to load from DB for existing projects
     (async () => {
@@ -1362,8 +1575,7 @@ function Home({ onLayoutChange = () => {}, ...props }) {
       return;
     }
     if (loadingProject) {
-      console.log('[SAVE] Skipped: loadingProject is true');
-      return;
+            return;
     }
     const storageKey = `editorCode_${selectedProjectId}`;
     if (typeof window !== 'undefined') {
@@ -1378,11 +1590,15 @@ function Home({ onLayoutChange = () => {}, ...props }) {
   type EditorFile = { value?: string; [key: string]: any };
 
 
-  // Save project files to Supabase DB (skip if unchanged)
-  const saveProjectFilesToDB = useCallback(async () => {
-    if (!selectedProjectId || !publicUserId) return;
-    const filesToSave: Record<string, EditorFile> = allFilesCurrent[selectedProjectId] || {};
+  // Save project files to Supabase DB (force save for auto-save)
+  const saveProjectFilesToDB = useCallback(async (forceSave: boolean = false) => {
+    if (!selectedProjectId || !publicUserId) {
+      console.log('[DB SAVE] Missing project ID or user ID, skipping save');
+      return;
+    }
 
+    const filesToSave: Record<string, EditorFile> = allFilesCurrent[selectedProjectId] || {};
+    
     // Build a map of { fileName: code } for current in-memory code
     const currentFilesCode: Record<string, string> = {};
     for (const [fileName, fileObj] of Object.entries(filesToSave)) {
@@ -1408,11 +1624,13 @@ function Home({ onLayoutChange = () => {}, ...props }) {
       }
     }
 
-    // Skip save if previous code from localStorage is the same as current
-    if (JSON.stringify(previousFilesCode) === JSON.stringify(currentFilesCode)) {
-      // No code changes, skip save
+    // Skip save if previous code from localStorage is the same as current (unless forced)
+    if (!forceSave && JSON.stringify(previousFilesCode) === JSON.stringify(currentFilesCode)) {
+      console.log('[DB SAVE] No changes detected, skipping save');
       return;
     }
+
+    console.log('[DB SAVE] Changes detected, proceeding with save...');
 
     const now = new Date().toISOString();
     // Track if any file failed to save
@@ -1553,10 +1771,8 @@ const throttledSaveEditorCode = useMemo(() => throttle(() => {
 
 function GoogleSignInButton() {
   const handleGoogleLogin = () => {
-    console.log('Opening login popup from origin:', window.location.origin);
-    const popup = window.open('/login', 'supabase-login', 'width=500,height=600');
-    console.log('Popup opened:', popup);
-  };
+      const popup = window.open('/login', 'supabase-login', 'width=500,height=600');
+      };
   return (
     <Button
       onClick={handleGoogleLogin}
@@ -1564,11 +1780,15 @@ function GoogleSignInButton() {
       color="primary"
       size="small"
       startIcon={<PersonIcon />}
-      sx={{ 
+      sx={{
         borderRadius: 3,
         minWidth: 120,
         textTransform: 'none',
-        fontWeight: 600
+        fontWeight: 600,
+        backgroundColor: 'primary.main', // Explicitly set solid background color
+        '&:hover': {
+          backgroundColor: 'primary.dark', // Darker on hover
+        }
       }}
     >
       Sign in
@@ -1614,18 +1834,19 @@ function GoogleSignInButton() {
       console.error('No selected file to apply changes to');
       return { oldCode: '', newCode: '' };
     }
-    
+
+    // CRITICAL: Capture oldCode BEFORE applying any changes
     const oldCode = selectedFile.value || '';
     
     const lines = oldCode.split('\n');
-    
+
     // Sort changes by line number in reverse order to maintain line positions
     const sortedChanges = [...changes].sort((a, b) => (b.startLine || 0) - (a.startLine || 0));
 
     sortedChanges.forEach((change) => {
       const startLineIndex = change.startLine - 1; // Convert to 0-based index
       const endLineIndex = (change.endLine || change.startLine) - 1;
-      
+
       switch (change.type) {
         case 'insert':
           const insertLines = change.code.split('\n');
@@ -1646,12 +1867,118 @@ function GoogleSignInButton() {
     });
 
     const newCode = lines.join('\n');
-    
+
+        
     // Apply the changes to the editor
     setFilesCurrentHandler(selectedFile.name, newCode);
+
+    // Set auto-save flag and wait for state to be fully updated
+    setAutoSaveInProgress(true);
     
-    return { oldCode, newCode };
-  }, [selectedFile, setFilesCurrentHandler]);
+    setTimeout(async () => {
+      if (selectedFile?.name && selectedProjectId && publicUserId) {
+        
+        // Always use the newCode that was generated to ensure we save the latest version
+        const codeToSave = newCode;
+
+        
+        setSaveStatus('saving');
+
+        try {
+          const now = new Date().toISOString();
+
+          // 1. Update file metadata
+          const { error: fileError } = await supabase
+            .from('files_metadata')
+            .upsert([{
+              project_id: selectedProjectId,
+              name: selectedFile.name,
+              updated_at: now,
+            }], { onConflict: 'project_id,name' });
+
+          if (fileError) {
+            console.error('[AUTO-SAVE] Error updating file metadata:', fileError);
+            setSaveStatus('idle');
+            return;
+          }
+
+          // 2. Get file ID
+          const { data: fileRows, error: fetchError } = await supabase
+            .from('files_metadata')
+            .select('id')
+            .eq('project_id', selectedProjectId)
+            .eq('name', selectedFile.name)
+            .single();
+
+          if (fetchError || !fileRows) {
+            console.error('[AUTO-SAVE] Error fetching file ID:', fetchError);
+            setSaveStatus('idle');
+            return;
+          }
+
+          const fileId = fileRows.id;
+
+          // 3. Get current version number
+          const { data: versionRows } = await supabase
+            .from('file_versions')
+            .select('version')
+            .eq('file_id', fileId)
+            .order('version', { ascending: false })
+            .limit(1);
+
+          const nextVersion = versionRows && versionRows.length > 0 ? versionRows[0].version + 1 : 1;
+
+          // 4. Save new version with the updated code
+          const { error: versionError } = await supabase
+            .from('file_versions')
+            .insert([{
+              file_id: fileId,
+              code: codeToSave, // Use the updated code from state
+              version: nextVersion,
+              created_at: now,
+            }]);
+
+          if (versionError) {
+            console.error('[AUTO-SAVE] Error saving version:', versionError);
+            setSaveStatus('idle');
+            return;
+          }
+
+          // 5. Update localStorage for comparison
+          if (typeof window !== 'undefined') {
+            const storageKey = `files_${publicUserId}_${selectedProjectId}`;
+            const currentFilesForStorage = allFilesCurrent[selectedProjectId] || {};
+            localStorage.setItem(storageKey, JSON.stringify(currentFilesForStorage));
+          }
+
+          setSaveStatus('saved');
+          setTimeout(() => setSaveStatus('idle'), 1500);
+          
+        } catch (error) {
+          console.error('[AUTO-SAVE] Error in direct save:', error);
+          setSaveStatus('idle');
+        }
+      } else {
+        console.log('[AUTO-SAVE] Missing required data, skipping save');
+      }
+
+      // Reset auto-save flag
+      setAutoSaveInProgress(false);
+      console.log('[AUTO-SAVE] ✅ RELEASED BLOCK: Auto-save completed, allowing project loading');
+
+      // Reset the loaded project ref to allow future loads if needed
+      // This prevents the load effect from being blocked indefinitely
+      setTimeout(() => {
+        if (lastLoadedProjectIdRef.current === selectedProjectId) {
+          lastLoadedProjectIdRef.current = null;
+          console.log('[AUTO-SAVE] 🔄 RESET: Cleared loaded project ref for future loads');
+        }
+      }, 1000);
+    }, 800); // Increased delay to ensure state is fully updated
+
+    const result = { oldCode, newCode };
+        return result;
+  }, [selectedFile, setFilesCurrentHandler, saveProjectFilesToDB, setSaveStatus, allFilesCurrent, selectedProjectId, publicUserId, setAutoSaveInProgress]);
 
   // State for throttled preview code
   const [previewCode, setPreviewCode] = useState(selectedFile?.value || '');
@@ -2097,7 +2424,8 @@ Faça APENAS as mudanças mínimas necessárias para corrigir este erro específ
       if (data.changes && data.changes.length > 0) {
         // Apply changes and get new/old code for diff
         const { oldCode, newCode } = applyAgenticChanges(data.changes);
-        
+        console.log('[FIX] Received diff - oldCode length:', oldCode.length, 'newCode length:', newCode.length);
+
         // Generate diff and show success message in chat
         if (chatAppendRef.current && typeof chatAppendRef.current === 'function') {
           const diffData = {
