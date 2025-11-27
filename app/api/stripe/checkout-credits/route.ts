@@ -7,7 +7,7 @@ export async function POST(req: NextRequest) {
   const { customerId, priceId = 'price_1RbW0F2LODbcMK9PyEJ0ySCO' } = await req.json();
 
   // Get the origin from the request headers, fallback to localhost
-  const origin = req.headers.get('origin') || 'http://localhost:3000';
+  const origin = req.headers.get('origin') || 'https://recflux.com.br/';
 
   try {
     const session = await stripe.checkout.sessions.create({

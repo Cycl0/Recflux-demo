@@ -20,7 +20,7 @@ export default function LoginPage() {
       if (isLocalhost) {
         redirectUrl = 'http://localhost:3000/auth/callback';
       } else if (isProduction) {
-        redirectUrl = 'https://recflux.vercel.app/auth/callback';
+        redirectUrl = 'https://recflux.com.br/auth/callback';
       }
       
       console.log('Current origin:', currentOrigin);
