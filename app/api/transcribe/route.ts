@@ -122,6 +122,10 @@ async function processTranscription(
 export async function POST(request: NextRequest) {
   console.log('[Transcription API] ===== NEW REQUEST =====');
 
+  let finalFilePath: string | undefined;
+  let filePath: string | undefined;
+  let dockerVolumePath: string | undefined;
+
   try {
     // Get the form data from the request
     const formData = await request.formData();
@@ -223,7 +227,8 @@ export async function POST(request: NextRequest) {
         await copyFile(filePath, fallbackFilePath);
         console.log(`[Transcription API] Created fallback file: ${fallbackFilePath}`);
 
-        return processTranscription(fallbackFileName, fallbackFilePath, dockerHostAudioPath);
+        const transcriptionResult = await processTranscription(fallbackFileName, fallbackFilePath, dockerHostAudioPath);
+        return NextResponse.json(transcriptionResult.result);
       } catch (copyError) {
         throw new Error(`FFmpeg conversion failed and fallback copy also failed: ${copyError.message}`);
       }
@@ -231,7 +236,8 @@ export async function POST(request: NextRequest) {
 
     
     // Process transcription with converted file
-    const { result, dockerVolumePath } = await processTranscription(finalFileName, finalFilePath, dockerHostAudioPath);
+    const transcriptionResult = await processTranscription(finalFileName, finalFilePath, dockerHostAudioPath);
+    const { result, dockerVolumePath } = transcriptionResult;
 
     console.log(`[Transcription API] Transcription successful`);
     console.log(`[Transcription API] Result: ${JSON.stringify(result, null, 2)}`);
